@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"github.com/snowyyj001/github.com/snowyyj001/loumiao/message"
 	"net"
+
+	"github.com/snowyyj001/loumiao/message"
 )
 
 type IClientSocket interface {

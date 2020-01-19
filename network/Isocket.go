@@ -2,10 +2,11 @@ package network
 
 import (
 	"encoding/binary"
-	"github.com/snowyyj001/github.com/snowyyj001/loumiao/config"
-	"github.com/snowyyj001/github.com/snowyyj001/loumiao/log"
-	"github.com/snowyyj001/github.com/snowyyj001/loumiao/util"
 	"net"
+
+	"github.com/snowyyj001/loumiao/config"
+	"github.com/snowyyj001/loumiao/log"
+	"github.com/snowyyj001/loumiao/util"
 
 	"github.com/gorilla/websocket"
 )

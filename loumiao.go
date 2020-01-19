@@ -1,12 +1,13 @@
 package loumiao
 
 import (
-	"github.com/snowyyj001/loumiao/log"
 	"os"
 	"os/signal"
 	"syscall"
 
-	"github.com/snowyyj001/github.com/snowyyj001/loumiao/gorpc"
+	"github.com/snowyyj001/loumiao/log"
+
+	"github.com/snowyyj001/loumiao/gorpc"
 )
 
 //开启一个任务
