@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
+
 	"github.com/snowyyj001/loumiao/config"
 	"github.com/snowyyj001/loumiao/log"
 	"github.com/snowyyj001/loumiao/util"
@@ -124,7 +125,7 @@ func DecodeJson(buff []byte, length int) (error, string, interface{}) {
 	return nil, name, packet
 }
 
-func init() {
+func DoInit() {
 	if config.NET_PROTOCOL == "JSON" {
 		Encode = EncodeJson
 		Decode = DecodeJson

@@ -5,9 +5,9 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/snowyyj001/loumiao/log"
-
 	"github.com/snowyyj001/loumiao/gorpc"
+	"github.com/snowyyj001/loumiao/log"
+	"github.com/snowyyj001/loumiao/message"
 )
 
 //开启一个任务
@@ -17,6 +17,8 @@ func Prepare(igo gorpc.IGoRoutine, name string, sync bool) {
 }
 
 func Run() {
+
+	message.DoInit()
 
 	gorpc.GetGoRoutineMgr().DoStart()
 

@@ -16,60 +16,60 @@ type WebSocketClient struct {
 	m_pServer *WebSocket
 }
 
-func (this *WebSocketClient) Start() bool {
-	if this.m_nState != SSF_SHUT_DOWN {
+func (self *WebSocketClient) Start() bool {
+	if self.m_nState != SSF_SHUT_DOWN {
 		return false
 	}
 
-	if this.m_pServer == nil {
+	if self.m_pServer == nil {
 		return false
 	}
 
-	this.m_nState = SSF_ACCEPT
+	self.m_nState = SSF_ACCEPT
 
-	//this.OnNetConn()
-	go wserverclientRoutine(this)
-	//wserverclientRoutine(this)
+	//self.OnNetConn()
+	go wserverclientRoutine(self)
+	//wserverclientRoutine(self)
 	return true
 }
 
-func (this *WebSocketClient) Send(buff []byte) int {
+func (self *WebSocketClient) Send(buff []byte) int {
 	defer func() {
 		if err := recover(); err != nil {
 			log.Errorf("WebSocketClient Send", err)
 		}
 	}()
 
-	if this.m_WsConn == nil {
+	if self.m_WsConn == nil {
 		return 0
 	}
 
-	err := this.m_WsConn.WriteMessage(websocket.BinaryMessage, buff)
+	err := self.m_WsConn.WriteMessage(websocket.BinaryMessage, buff)
 	handleError(err)
 	return 0
 }
 
-func (this *WebSocketClient) OnNetConn() {
+func (self *WebSocketClient) OnNetConn() {
 	buff, nLen := message.Encode("CONNECT", nil)
 	//bufflittle := common.BigEngianToLittle(buff, nLen)
-	this.HandlePacket(this.m_ClientId, buff, nLen)
+	self.HandlePacket(self.m_ClientId, buff, nLen)
 }
 
-func (this *WebSocketClient) OnNetFail(error int) {
-	this.Stop()
+func (self *WebSocketClient) OnNetFail(error int) {
+	self.Stop()
 	buff, nLen := message.Encode("DISCONNECT", nil)
 	//bufflittle := common.BigEngianToLittle(buff, nLen)
-	this.HandlePacket(this.m_ClientId, buff, nLen)
+	self.HandlePacket(self.m_ClientId, buff, nLen)
 }
 
-func (this *WebSocketClient) Close() {
-	if this.m_WsConn != nil {
-		this.m_WsConn.Close()
+func (self *WebSocketClient) Close() {
+	if self.m_WsConn != nil {
+		self.m_WsConn.Close()
 	}
-	this.m_WsConn = nil
-	this.Socket.Close()
-	if this.m_pServer != nil {
-		this.m_pServer.DelClinet(this)
+	self.m_WsConn = nil
+	self.Socket.Close()
+	if self.m_pServer != nil {
+		self.m_pServer.DelClinet(self)
 	}
 }
 
