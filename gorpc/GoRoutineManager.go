@@ -6,6 +6,8 @@ import (
 
 type GoRoutineMgr struct {
 	go_name_Map map[string]IGoRoutine
+	go_name_Tmp map[string]IGoRoutine
+	is_starting bool
 }
 
 var (
@@ -17,13 +19,17 @@ func GetGoRoutineMgr() *GoRoutineMgr {
 	once.Do(func() {
 		inst = &GoRoutineMgr{}
 		inst.go_name_Map = make(map[string]IGoRoutine)
-
+		inst.go_name_Tmp = make(map[string]IGoRoutine)
 	})
 	return inst
 }
 
 func (self *GoRoutineMgr) AddRoutine(rou IGoRoutine, name string) {
-	self.go_name_Map[name] = rou
+	if self.is_starting {
+		self.go_name_Tmp[name] = rou
+	} else {
+		self.go_name_Map[name] = rou
+	}
 }
 
 func (self *GoRoutineMgr) GetRoutine(name string) IGoRoutine {
@@ -34,6 +40,7 @@ func (self *GoRoutineMgr) GetRoutine(name string) IGoRoutine {
 	return nil
 }
 
+//关闭所有服务
 func (self *GoRoutineMgr) CloseAll() {
 	for _, igo := range self.go_name_Map {
 		igo.DoDestory()
@@ -43,7 +50,7 @@ func (self *GoRoutineMgr) CloseAll() {
 	}
 }
 
-//创建任务
+//创建初始化服务
 func (self *GoRoutineMgr) Start(igo IGoRoutine, name string) {
 
 	//GoRoutineLogic
@@ -58,9 +65,31 @@ func (self *GoRoutineMgr) Start(igo IGoRoutine, name string) {
 	self.AddRoutine(igo, name)
 }
 
-//开启任务
+//开启服务
+//开启所有服务
 func (self *GoRoutineMgr) DoStart() {
+	self.is_starting = true
 	for _, igo := range self.go_name_Map {
 		igo.Run()
+	}
+	for _, igo := range self.go_name_Map {
+		igo.DoStart()
+	}
+	for name, igo := range self.go_name_Tmp {
+		igo.Run()
+		igo.DoStart()
+		self.go_name_Map[name] = igo
+	}
+	self.go_name_Tmp = nil
+	self.is_starting = false
+}
+
+//开启服务
+//启动单个服务
+func (self *GoRoutineMgr) DoSingleStart(name string) {
+	igo, has := self.go_name_Map[name]
+	if has {
+		igo.Run()
+		igo.DoStart()
 	}
 }

@@ -10,12 +10,19 @@ import (
 	"github.com/snowyyj001/loumiao/message"
 )
 
-//开启一个任务
+//创建一个服务，稍后开启
 func Prepare(igo gorpc.IGoRoutine, name string, sync bool) {
 	igo.SetSync(sync)
 	gorpc.GetGoRoutineMgr().Start(igo, name)
 }
 
+//创建一个服务,立即开启
+func Start(igo gorpc.IGoRoutine, name string, sync bool) {
+	Prepare(igo, name, sync)
+	gorpc.GetGoRoutineMgr().DoSingleStart(name)
+}
+
+//开启游戏
 func Run() {
 
 	message.DoInit()
@@ -49,6 +56,7 @@ func SendClient(igo gorpc.IGoRoutine, clientid int, data interface{}) {
 	igo.Send("GateServer", "SendClient", gorpc.SimpleNet(clientid, "", data))
 }
 
+//根据名字发送给客户端消息
 func WriteSocket(name string, clientid int, data interface{}) {
 	igo := gorpc.GetGoRoutineMgr().GetRoutine(name)
 	SendClient(igo, clientid, data)

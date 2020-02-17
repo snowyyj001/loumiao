@@ -11,10 +11,10 @@ type HanlderNetFunc func(igo IGoRoutine, clientid int, data interface{}) interfa
 type M map[string]interface{}
 
 type ChannelContext struct {
-	Handler  string               //处理函数名字
-	Data     interface{}          //传送携带数据
-	ReadChan chan *ChannelContext //读取chan
-	Cb       HanlderFunc          //回调
+	Handler  string              //处理函数名字
+	Data     interface{}         //传送携带数据
+	ReadChan chan ChannelContext //读取chan
+	Cb       HanlderFunc         //回调
 }
 
 func SimpleM(b bool) M {

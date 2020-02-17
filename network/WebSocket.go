@@ -2,10 +2,11 @@ package network
 
 import (
 	"fmt"
-	"github.com/snowyyj001/loumiao/log"
 	"net/http"
 	"sync"
 	"sync/atomic"
+
+	"github.com/snowyyj001/loumiao/log"
 
 	"github.com/gorilla/websocket"
 )
@@ -108,7 +109,7 @@ func (self *WebSocket) AddClinet(wConn *websocket.Conn, addr string, connectType
 		self.m_ClientLocker.Unlock()
 		pClient.Start()
 		self.m_nClientCount++
-		log.Debugf("客户端：%s已连接[%d]！\n", wConn.RemoteAddr().String(), pClient.m_ClientId)
+		log.Debugf("客户端：%s已连接[%d]！", wConn.RemoteAddr().String(), pClient.m_ClientId)
 		return pClient
 	} else {
 		log.Errorf("%s", "无法创建客户端连接对象")
@@ -120,7 +121,7 @@ func (self *WebSocket) DelClinet(pClient *WebSocketClient) bool {
 	self.m_Pool.Put(pClient)
 	self.m_ClientLocker.Lock()
 	delete(self.m_ClientList, pClient.m_ClientId)
-	log.Debugf("客户端：已断开连接[%d]！\n", pClient.m_ClientId)
+	log.Debugf("客户端：已断开连接[%d]！", pClient.m_ClientId)
 	self.m_ClientLocker.Unlock()
 	self.m_nClientCount--
 	return true
@@ -185,7 +186,7 @@ func (self *WebSocket) SetMaxClients(maxnum int) {
 }
 
 func serveWs(w http.ResponseWriter, r *http.Request) {
-	log.Infof("客户端：%s已连接！\n", r.RemoteAddr)
+	log.Infof("客户端：%s已连接！", r.RemoteAddr)
 	c, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Errorf("serveWs upgrade:", err)

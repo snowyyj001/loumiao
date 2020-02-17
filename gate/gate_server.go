@@ -35,19 +35,23 @@ func (self *GateServer) DoInit() {
 	self.pService.SetConnectType(network.CLIENT_CONNECT)
 	self.pService.BindPacketFunc(PacketFunc)
 
-	self.pService.Start()
-
 	handler_Map = make(map[string]string)
 }
 
 func (self *GateServer) DoRegsiter() {
+	log.Info("GateServer DoRegsiter")
 	self.Register("RegisterNet", RegisterNet)
 	self.Register("UnRegisterNet", UnRegisterNet)
 	self.Register("SendClient", SendClient)
 }
 
+func (self *GateServer) DoStart() {
+	log.Info("GateServer DoStart")
+	self.pService.Start()
+}
+
 func (self *GateServer) DoDestory() {
-	log.Info("GateServer destory")
+	log.Info("GateServer DoDestory")
 }
 
 func PacketFunc(socketid int, buff []byte, nlen int) bool {
