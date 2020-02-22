@@ -52,12 +52,8 @@ func UnRegisterNetHandler(igo gorpc.IGoRoutine, name string) {
 }
 
 //发送给客户端消息
-func SendClient(igo gorpc.IGoRoutine, clientid int, data interface{}) {
-	igo.Send("GateServer", "SendClient", gorpc.SimpleNet(clientid, "", data))
-}
-
-//根据名字发送给客户端消息
-func WriteSocket(name string, clientid int, data interface{}) {
-	igo := gorpc.GetGoRoutineMgr().GetRoutine(name)
-	SendClient(igo, clientid, data)
+func SendClient(clientid int, data interface{}) {
+	server := gorpc.GetGoRoutineMgr().GetRoutine("GateServer")
+	job := gorpc.ChannelContext{"SendClient", gorpc.SimpleNet(clientid, "", data), nil, nil}
+	server.GetJobChan() <- job
 }

@@ -87,6 +87,16 @@ func (self *GoRoutineLogic) RunTimer(delat int, f HanlderFunc) {
 	self.Ticker = Timer.NewTimer(delat, cb, true)
 }
 
+//同步定时任务
+func (self *GoRoutineLogic) RunTicker(delat int, f HanlderFunc) {
+	// callback
+	var cb = func(dt int64) {
+		job := ChannelContext{"", dt, nil, f}
+		self.JobChan <- job
+	}
+	self.Ticker = Timer.NewTicker(delat, cb)
+}
+
 //工作队列
 func (self *GoRoutineLogic) woker() {
 	defer self.wg.Done()
