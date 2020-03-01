@@ -22,10 +22,15 @@ func Start(igo gorpc.IGoRoutine, name string, sync bool) {
 	gorpc.GetGoRoutineMgr().DoSingleStart(name)
 }
 
+//最开始的初始化
+func DoInit() {
+	message.DoInit()
+}
+
 //开启游戏
 func Run() {
 
-	message.DoInit()
+	DoInit()
 
 	gorpc.GetGoRoutineMgr().DoStart()
 
@@ -55,5 +60,19 @@ func UnRegisterNetHandler(igo gorpc.IGoRoutine, name string) {
 func SendClient(clientid int, data interface{}) {
 	server := gorpc.GetGoRoutineMgr().GetRoutine("GateServer")
 	job := gorpc.ChannelContext{"SendClient", gorpc.SimpleNet(clientid, "", data), nil, nil}
+	server.GetJobChan() <- job
+}
+
+//发送给客户端消息
+func SendMulClient(clientids []int, data interface{}) {
+	server := gorpc.GetGoRoutineMgr().GetRoutine("GateServer")
+	job := gorpc.ChannelContext{"SendClient", gorpc.SimpleMNet(clientids, "", data), nil, nil}
+	server.GetJobChan() <- job
+}
+
+//发送给remote消息
+func SendRpcClient(uid int, data interface{}) {
+	server := gorpc.GetGoRoutineMgr().GetRoutine("GateServer")
+	job := gorpc.ChannelContext{"SendRpcClient", gorpc.SimpleNet(uid, "", data), nil, nil}
 	server.GetJobChan() <- job
 }

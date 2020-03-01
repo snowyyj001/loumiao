@@ -138,6 +138,15 @@ func (self *Socket) SendMsgById(int, string, ...interface{}) {
 func (self *Socket) SetClientId(cid int) {
 	self.m_ClientId = cid
 }
+func (self *Socket) GetClientId() int {
+	return self.m_ClientId
+}
+func (self *Socket) GetIP() string {
+	return self.m_sIP
+}
+func (self *Socket) GetPort() int {
+	return self.m_nPort
+}
 
 func (self *Socket) Clear() {
 	self.m_nState = SSF_SHUT_DOWN

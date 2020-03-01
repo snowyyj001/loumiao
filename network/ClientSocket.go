@@ -3,8 +3,9 @@ package network
 import (
 	"fmt"
 	"io"
-	"log"
 	"net"
+
+	"github.com/snowyyj001/loumiao/log"
 
 	"github.com/snowyyj001/loumiao/message"
 )
@@ -17,103 +18,107 @@ type ClientSocket struct {
 	Socket
 	m_nMaxClients int
 	m_nMinClients int
+	Uuid          string
+	Uid           int
 }
 
-func (this *ClientSocket) Init(ip string, port int) bool {
-	if this.m_nPort == port || this.m_sIP == ip {
+func (self *ClientSocket) Init(ip string, port int) bool {
+	if self.m_nPort == port || self.m_sIP == ip {
 		return false
 	}
 
-	this.Socket.Init(ip, port)
-	fmt.Println("ClientSocket", ip, port)
+	self.Socket.Init(ip, port)
 	return true
 }
-func (this *ClientSocket) Start() bool {
-	this.m_bShuttingDown = false
+func (self *ClientSocket) Start() bool {
+	self.m_bShuttingDown = false
 
-	if this.m_sIP == "" {
-		this.m_sIP = "127.0.0.1"
+	if self.m_sIP == "" {
+		self.m_sIP = "127.0.0.1"
 	}
 
-	if this.Connect() {
-		this.m_Conn.(*net.TCPConn).SetNoDelay(true)
-		go clientRoutine(this)
+	if self.Connect() {
+		self.m_Conn.(*net.TCPConn).SetNoDelay(true)
+		go clientRoutine(self)
+		return true
 	}
-	//延迟，监听关闭
-	//defer ln.Close()
-	return true
+	return false
 }
 
-func (this *ClientSocket) Stop() bool {
-	if this.m_bShuttingDown {
+func (self *ClientSocket) Stop() bool {
+	if self.m_bShuttingDown {
 		return true
 	}
 
-	this.m_bShuttingDown = true
+	self.m_bShuttingDown = true
 	return true
 }
 
-func (this *ClientSocket) SendMsg(name string, msg interface{}) {
+func (self *ClientSocket) SendMsg(name string, msg interface{}) {
 	buff, _ := message.Encode(name, msg)
-	this.Send(buff)
+	self.Send(buff)
 }
 
-func (this *ClientSocket) Send(buff []byte) int {
+func (self *ClientSocket) Send(buff []byte) int {
 	defer func() {
 		if err := recover(); err != nil {
 			fmt.Println("ClientSocket Send", err)
 		}
 	}()
 
-	if this.m_Conn == nil {
+	if self.m_Conn == nil {
 		return 0
 	}
-	n, err := this.m_Conn.Write(buff)
+	n, err := self.m_Conn.Write(buff)
 	handleError(err)
 	if n > 0 {
 		return n
 	}
-	//this.m_Writer.Flush()
+	//self.m_Writer.Flush()
 	return 0
 }
 
-func (this *ClientSocket) Restart() bool {
+func (self *ClientSocket) Restart() bool {
 	return true
 }
 
-func (this *ClientSocket) Connect() bool {
-	if this.m_nState == SSF_CONNECT {
+func (self *ClientSocket) Connect() bool {
+	if self.m_nState == SSF_CONNECT {
 		return false
 	}
 
-	var strRemote = fmt.Sprintf("%s:%d", this.m_sIP, this.m_nPort)
+	var strRemote = fmt.Sprintf("%s:%d", self.m_sIP, self.m_nPort)
 	tcpAddr, err := net.ResolveTCPAddr("tcp4", strRemote)
 	if err != nil {
-		log.Printf("%v", err)
-	}
-	ln, err1 := net.DialTCP("tcp4", nil, tcpAddr)
-	if err1 != nil {
+		log.Warningf("ClientSocket address error", strRemote)
 		return false
 	}
 
-	this.m_nState = SSF_CONNECT
-	this.SetTcpConn(ln)
-	this.OnNetConn()
+	ln, err1 := net.DialTCP("tcp4", nil, tcpAddr)
+	if err1 != nil {
+		log.Errorf("ClientSocket DialTCP  %v", err1)
+		return false
+	}
+
+	self.m_nState = SSF_CONNECT
+	self.SetTcpConn(ln)
+	self.OnNetConn()
+
 	return true
 }
 
-func (this *ClientSocket) OnDisconnect() {
+func (self *ClientSocket) OnDisconnect() {
 }
 
-func (this *ClientSocket) OnNetConn() {
+func (self *ClientSocket) OnNetConn() {
 	buff, nLen := message.Encode("CONNECT", nil)
-	this.HandlePacket(this.m_ClientId, buff, nLen)
+	self.HandlePacket(self.m_ClientId, buff, nLen)
 }
 
-func (this *ClientSocket) OnNetFail(int) {
-	this.Stop()
+func (self *ClientSocket) OnNetFail(int) {
+	self.Stop()
 	buff, nLen := message.Encode("DISCONNECT", nil)
-	this.HandlePacket(this.m_ClientId, buff, nLen)
+	self.HandlePacket(self.m_ClientId, buff, nLen)
 }
 
 func clientRoutine(pClient *ClientSocket) bool {

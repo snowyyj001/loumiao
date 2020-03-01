@@ -63,3 +63,14 @@ func SimpleGNet(m M) (int, string, interface{}) {
 	cid, _ := m["cid"].(int)
 	return cid, name, data
 }
+
+func SimpleMNet(clientid []int, name string, data interface{}) M {
+	return M{"cid": clientid, "pname": name, "data": data}
+}
+
+func SimpleGMNet(m M) ([]int, string, interface{}) {
+	name, _ := m["pname"].(string)
+	data, _ := m["data"]
+	cid, _ := m["cid"].([]int)
+	return cid, name, data
+}
