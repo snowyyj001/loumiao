@@ -15,11 +15,11 @@ func init() {
 //注册网络消息
 func RegisterPacket(packet interface{}) {
 	packetName := GetMessageName(packet)
+	pt := reflect.TypeOf(packet).Elem()
 	packetFunc := func() interface{} {
-		packet := reflect.New(reflect.ValueOf(packet).Elem().Type()).Interface()
+		packet := reflect.New(pt).Interface()
 		return packet
 	}
-
 	Packet_CreateFactorStringMap[packetName] = packetFunc
 }
 
