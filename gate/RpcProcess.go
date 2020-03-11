@@ -8,32 +8,27 @@ import (
 
 func RegisterNet(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	m := data.(gorpc.M)
-	name := gorpc.SimpleGK(m, "name")
-	receiver := gorpc.SimpleGK(m, "receiver")
-	handler_Map[name.(string)] = receiver.(string)
+	handler_Map[m.Name] = m.Data.(string)
 	return nil
 }
 
 func UnRegisterNet(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	m := data.(gorpc.M)
-	name := gorpc.SimpleGK(m, "name")
-	delete(handler_Map, name.(string))
+	delete(handler_Map, m.Name)
 	return "success"
 }
 
 func SendClient(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	m := data.(gorpc.M)
-	cid, name, pd := gorpc.SimpleGNet(m)
-	buff, _ := message.Encode(name, pd)
-	This.pService.SendById(cid, buff)
+	buff, _ := message.Encode(m.Name, m.Data)
+	This.pService.SendById(m.Id, buff)
 	return nil
 }
 
 func SendMulClient(igo gorpc.IGoRoutine, data interface{}) interface{} {
-	m := data.(gorpc.M)
-	cid, name, pd := gorpc.SimpleGMNet(m)
-	buff, _ := message.Encode(name, pd)
-	for _, clientid := range cid {
+	m := data.(gorpc.MS)
+	buff, _ := message.Encode(m.Name, m.Data)
+	for _, clientid := range m.Ids {
 		This.pService.SendById(clientid, buff)
 	}
 	return nil
@@ -41,21 +36,20 @@ func SendMulClient(igo gorpc.IGoRoutine, data interface{}) interface{} {
 
 func SendRpcClient(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	m := data.(gorpc.M)
-	cid, name, pd := gorpc.SimpleGNet(m)
 	if This.IsChild() {
-		client := This.GetClientByUid(cid)
+		client := This.GetClientByUid(m.Id)
 		if client != nil {
-			client.SendMsg(name, pd)
+			client.SendMsg(m.Name, m.Data)
 		} else {
-			log.Warningf("0.SendRpcClient dest id not exist %d %s", cid, name)
+			log.Warningf("0.SendRpcClient dest id not exist %d %s", m.Id, m.Name)
 		}
 	} else {
-		clientid := This.GetRpcClientId(cid)
+		clientid := This.GetRpcClientId(m.Id)
 		if clientid > 0 {
-			buff, _ := message.Encode(name, pd)
+			buff, _ := message.Encode(m.Name, m.Data)
 			This.pService.SendById(clientid, buff)
 		} else {
-			log.Warningf("1.SendRpcClient dest id not exist %d %s", cid, name)
+			log.Warningf("1.SendRpcClient dest id not exist %d %s", m.Id, m.Name)
 		}
 	}
 	return nil

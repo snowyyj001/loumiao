@@ -73,8 +73,7 @@ func (self *GoRoutineLogic) SetSync(sync bool) {
 
 func (self *GoRoutineLogic) CallNetFunc(data interface{}) {
 	m := data.(M)
-	cid, name, pd := SimpleGNet(m)
-	self.NetHandler[name](self, int(cid), pd)
+	self.NetHandler[m.Name](self, m.Id, m.Data)
 }
 
 //同步定时任务

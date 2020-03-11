@@ -80,13 +80,15 @@ func PacketFunc(socketid int, buff []byte, nlen int) bool {
 	}()
 
 	err, name, pm := message.Decode(buff, nlen)
+	//log.Debugf("PacketFunc %s %v",name, pm)
 	if err != nil {
 		return false
 	}
 
 	handler, ok := handler_Map[name]
 	if ok {
-		This.Send(handler, "NetRpC", gorpc.SimpleNet(socketid, name, pm))
+		m := gorpc.M{Id: socketid, Name: name, Data: pm}
+		This.Send(handler, "NetRpC", m)
 	} else {
 		if !This.IsChild() {
 			index := strings.Index(name, "$shakehand&")

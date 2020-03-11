@@ -37,7 +37,11 @@ type WebSocket struct {
 	m_Lock          sync.Mutex
 }
 
-var upgrader = websocket.Upgrader{} // use default options
+var upgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool {
+		return true
+	},
+} // use default options
 var This *WebSocket
 
 func (self *WebSocket) Init(ip string, port int) bool {
@@ -72,7 +76,7 @@ func (self *WebSocket) Start() bool {
 			return
 		}
 	}()
-	log.Infof("启动监听，等待链接！%s", strRemote)
+	log.Infof("websocket 启动监听，等待链接！%s", strRemote)
 
 	//延迟，监听关闭
 	//defer ln.Close()

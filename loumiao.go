@@ -47,32 +47,35 @@ func Run() {
 //向网关注册网络消息
 func RegisterNetHandler(igo gorpc.IGoRoutine, name string, call gorpc.HanlderNetFunc) {
 	igo.Register("NetRpC", gorpc.NetRpC)
-	igo.Send("GateServer", "RegisterNet", gorpc.M{"name": name, "receiver": igo.GetName()})
+	igo.Send("GateServer", "RegisterNet", gorpc.M{Name: name, Data: igo.GetName()})
 	igo.RegisterGate(name, call)
 }
 
 func UnRegisterNetHandler(igo gorpc.IGoRoutine, name string) {
-	igo.Send("GateServer", "UnRegisterNet", gorpc.M{"name": name})
+	igo.Send("GateServer", "UnRegisterNet", gorpc.M{Name: name})
 	igo.UnRegisterGate(name)
 }
 
 //发送给客户端消息
 func SendClient(clientid int, data interface{}) {
 	server := gorpc.GetGoRoutineMgr().GetRoutine("GateServer")
-	job := gorpc.ChannelContext{"SendClient", gorpc.SimpleNet(clientid, "", data), nil, nil}
+	m := gorpc.M{Id: clientid, Data: data}
+	job := gorpc.ChannelContext{"SendClient", m, nil, nil}
 	server.GetJobChan() <- job
 }
 
 //发送给客户端消息
 func SendMulClient(clientids []int, data interface{}) {
 	server := gorpc.GetGoRoutineMgr().GetRoutine("GateServer")
-	job := gorpc.ChannelContext{"SendClient", gorpc.SimpleMNet(clientids, "", data), nil, nil}
+	ms := gorpc.MS{Ids: clientids, Data: data}
+	job := gorpc.ChannelContext{"SendClient", ms, nil, nil}
 	server.GetJobChan() <- job
 }
 
 //发送给remote消息
 func SendRpcClient(uid int, data interface{}) {
 	server := gorpc.GetGoRoutineMgr().GetRoutine("GateServer")
-	job := gorpc.ChannelContext{"SendRpcClient", gorpc.SimpleNet(uid, "", data), nil, nil}
+	m := gorpc.M{Id: uid, Data: data}
+	job := gorpc.ChannelContext{"SendRpcClient", m, nil, nil}
 	server.GetJobChan() <- job
 }

@@ -29,7 +29,6 @@ func (self *WebSocketClient) Start() bool {
 
 	//self.OnNetConn()
 	go wserverclientRoutine(self)
-	//wserverclientRoutine(self)
 	return true
 }
 

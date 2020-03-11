@@ -214,6 +214,7 @@ func (self *Socket) ReceivePacket(Id int, dat []byte) bool {
 			log.Errorf("ReceivePacket", err) // 接受包错误
 		}
 	}()
+	//log.Debugf("收到消息包 %v", dat)
 	self.m_pInBufferLen += len(dat)
 	self.m_pInBuffer = append(self.m_pInBuffer, dat...)
 	for {
