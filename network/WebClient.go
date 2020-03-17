@@ -2,8 +2,9 @@ package network
 
 import (
 	"fmt"
-	"github.com/snowyyj001/loumiao/message"
 	"net/url"
+
+	"github.com/snowyyj001/loumiao/message"
 
 	"github.com/gorilla/websocket"
 )
@@ -140,6 +141,5 @@ func wsclientRoutine(pClient *WebClient) bool {
 	}
 
 	pClient.Close()
-	fmt.Printf("%s关闭连接", pClient.m_sIP)
 	return true
 }

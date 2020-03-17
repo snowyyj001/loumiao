@@ -159,6 +159,5 @@ func clientRoutine(pClient *ClientSocket) bool {
 	}
 
 	pClient.Close()
-	fmt.Printf("%s关闭连接", pClient.m_sIP)
 	return true
 }

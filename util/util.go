@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"math"
 	rand2 "math/rand"
 	"time"
 )
@@ -40,4 +41,14 @@ func BytesToUInt16(buff []byte, order binary.ByteOrder) uint16 {
 	var data uint16
 	binary.Read(bytebuff, order, &data)
 	return data
+}
+
+func FloorInt(v int) int {
+	nv := math.Floor(float64(v))
+	return int(nv)
+}
+
+func FloorInt64(v int64) int64 {
+	nv := math.Floor(float64(v))
+	return int64(nv)
 }

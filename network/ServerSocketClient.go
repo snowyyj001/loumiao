@@ -2,9 +2,10 @@ package network
 
 import (
 	"io"
+	"net"
+
 	"github.com/snowyyj001/loumiao/log"
 	"github.com/snowyyj001/loumiao/message"
-	"net"
 )
 
 type IServerSocketClient interface {
@@ -115,6 +116,5 @@ func serverclientRoutine(pClient *ServerSocketClient) bool {
 	}
 
 	pClient.Close()
-	log.Debugf("%s关闭连接\n", pClient.m_sIP)
 	return true
 }

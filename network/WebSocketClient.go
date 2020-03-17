@@ -101,6 +101,5 @@ func wserverclientRoutine(pClient *WebSocketClient) bool {
 	}
 
 	pClient.Close()
-	log.Infof("%s关闭连接", pClient.m_sIP)
 	return true
 }

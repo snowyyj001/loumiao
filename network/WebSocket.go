@@ -190,7 +190,6 @@ func (self *WebSocket) SetMaxClients(maxnum int) {
 }
 
 func serveWs(w http.ResponseWriter, r *http.Request) {
-	log.Infof("客户端：%s已连接！", r.RemoteAddr)
 	c, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Errorf("serveWs upgrade:", err)
