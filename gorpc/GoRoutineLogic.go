@@ -48,7 +48,7 @@ type GoRoutineLogic struct {
 	NetHandler map[string]HanlderNetFunc //net hanlder
 	GoFun      bool                      //true:使用go执行Cmd,GoRoutineLogic非协程安全;false:协程安全
 	wg         sync.WaitGroup
-	Ticker     *Timer.Timer
+	Ticker     *timer.Timer
 }
 
 func (self *GoRoutineLogic) DoInit() {
@@ -83,7 +83,7 @@ func (self *GoRoutineLogic) RunTimer(delat int, f HanlderFunc) {
 		job := ChannelContext{"", dt, nil, f}
 		self.JobChan <- job
 	}
-	self.Ticker = Timer.NewTimer(delat, cb, true)
+	self.Ticker = timer.NewTimer(delat, cb, true)
 }
 
 //同步定时任务
@@ -93,7 +93,7 @@ func (self *GoRoutineLogic) RunTicker(delat int, f HanlderFunc) {
 		job := ChannelContext{"", dt, nil, f}
 		self.JobChan <- job
 	}
-	self.Ticker = Timer.NewTicker(delat, cb)
+	self.Ticker = timer.NewTicker(delat, cb)
 }
 
 //工作队列
@@ -230,7 +230,7 @@ func (self *GoRoutineLogic) Init(name string) {
 }
 
 func NetRpC(igo IGoRoutine, data interface{}) interface{} {
-	m := data.(M)
+	m := data.(*M)
 	igo.CallNetFunc(m)
 	return nil
 }

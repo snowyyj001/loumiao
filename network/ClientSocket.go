@@ -20,6 +20,7 @@ type ClientSocket struct {
 	m_nMinClients int
 	Uuid          string
 	Uid           int
+	SendTimes     int
 }
 
 func (self *ClientSocket) Init(ip string, port int) bool {

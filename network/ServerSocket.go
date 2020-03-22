@@ -2,10 +2,11 @@ package network
 
 import (
 	"fmt"
-	"github.com/snowyyj001/loumiao/log"
 	"net"
 	"sync"
 	"sync/atomic"
+
+	"github.com/snowyyj001/loumiao/log"
 )
 
 type IServerSocket interface {

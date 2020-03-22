@@ -20,6 +20,7 @@ const (
 const (
 	CLIENT_CONNECT = iota //对外
 	SERVER_CONNECT        //对内
+	CHILD_CONNECT         //client
 )
 
 const (
