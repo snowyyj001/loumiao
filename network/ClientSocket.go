@@ -95,8 +95,10 @@ func (self *ClientSocket) Connect() bool {
 		return false
 	}
 
+Label:
 	ln, err1 := net.DialTCP("tcp4", nil, tcpAddr)
 	if err1 != nil {
+		goto Label
 		log.Errorf("ClientSocket DialTCP  %v", err1)
 		return false
 	}

@@ -230,7 +230,7 @@ func (self *GoRoutineLogic) Init(name string) {
 }
 
 func NetRpC(igo IGoRoutine, data interface{}) interface{} {
-	m := data.(*M)
+	m := data.(M)
 	igo.CallNetFunc(m)
 	return nil
 }

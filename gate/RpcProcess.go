@@ -1,6 +1,8 @@
 package gate
 
 import (
+	"fmt"
+
 	"github.com/snowyyj001/loumiao/config"
 	"github.com/snowyyj001/loumiao/gorpc"
 	"github.com/snowyyj001/loumiao/log"
@@ -9,6 +11,7 @@ import (
 )
 
 func InnerRpcMsg(igo gorpc.IGoRoutine, socketId int, data interface{}) interface{} {
+	fmt.Println("InnerRpcMsg", socketId, data)
 	resp := data.(*LouMiaoRpcMsg)
 	if This.ServerType == network.SERVER_CONNECT {
 		err, name, pm := message.Decode(resp.Buffer, len(resp.Buffer))
@@ -42,6 +45,7 @@ func InnerDisConnect(igo gorpc.IGoRoutine, socketId int, data interface{}) inter
 
 //do bind
 func InnerHandShake(igo gorpc.IGoRoutine, socketId int, data interface{}) interface{} {
+	//fmt.Println("InnerHandShake", data)
 	req := data.(*LouMiaoHandShake)
 	uid := req.Uid
 	This.serverMap[uid] = socketId
@@ -52,10 +56,10 @@ func InnerHandShake(igo gorpc.IGoRoutine, socketId int, data interface{}) interf
 func InnerHeartBeat(igo gorpc.IGoRoutine, socketId int, data interface{}) interface{} {
 	req := data.(*LouMiaoHeartBeat)
 	uid := req.Uid
-	if This.ServerType == network.SERVER_CONNECT {
+	if config.NET_BE_CHILD == 2 {
 		req := &LouMiaoHeartBeat{Uid: uid}
 		buff, _ := message.Encode("LouMiaoHeartBeat", req)
-		This.pService.SendById(socketId, buff)
+		This.pInnerService.SendById(socketId, buff)
 	} else {
 		client := This.GetRpcClient(uid)
 		client.SendTimes = 0 //reset flag
@@ -83,7 +87,7 @@ func SendClient(igo gorpc.IGoRoutine, data interface{}) interface{} {
 }
 
 func SendMulClient(igo gorpc.IGoRoutine, data interface{}) interface{} {
-	m := data.(gorpc.MS)
+	m := data.(*gorpc.MS)
 	buff, _ := message.Encode(m.Name, m.Data)
 	for _, clientid := range m.Ids {
 		This.pService.SendById(clientid, buff)
@@ -92,7 +96,7 @@ func SendMulClient(igo gorpc.IGoRoutine, data interface{}) interface{} {
 }
 
 func SendRpc(igo gorpc.IGoRoutine, data interface{}) interface{} {
-	m := data.(*gorpc.M)
+	/*m := data.(gorpc.M)
 	if config.NET_BE_CHILD {
 		client := This.GetRpcClient(m.Id)
 		if client != nil {
@@ -109,5 +113,7 @@ func SendRpc(igo gorpc.IGoRoutine, data interface{}) interface{} {
 			log.Warningf("1.SendRpcClient dest id not exist %d %s", m.Id, m.Name)
 		}
 	}
+	*/
 	return nil
+
 }
