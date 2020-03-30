@@ -2,6 +2,8 @@
 package gate
 
 import (
+	"fmt"
+
 	"github.com/snowyyj001/loumiao/config"
 	"github.com/snowyyj001/loumiao/gorpc"
 	"github.com/snowyyj001/loumiao/log"
@@ -19,11 +21,13 @@ var (
 type GateServer struct {
 	gorpc.GoRoutineLogic
 
-	pService      network.ISocket
-	clients       map[int]*network.ClientSocket
-	pInnerService network.ISocket
-	serverMap     map[int]int
-	ServerType    int
+	pService          network.ISocket
+	clients           map[int]*network.ClientSocket
+	pInnerService     network.ISocket
+	serverMap         map[int]int
+	ServerType        int
+	OnServerConnected func(int)
+	OnClientConnected func(int)
 }
 
 func (self *GateServer) DoInit() {
@@ -67,24 +71,7 @@ func (self *GateServer) DoRegsiter() {
 	self.Register("UnRegisterNet", UnRegisterNet)
 	self.Register("SendClient", SendClient)
 	self.Register("SendMulClient", SendMulClient)
-}
-
-func (self *GateServer) DoStart() {
-	log.Info("GateServer DoStart")
-	if self.pService != nil {
-		self.pService.Start()
-	}
-	if self.pInnerService != nil {
-		self.pInnerService.Start()
-	}
-	if config.NET_BE_CHILD == 1 {
-		for _, cfg := range config.ServerCfg.ServerNodes {
-			client := self.BuildRpc(cfg.Ip, cfg.Port, cfg.Id, cfg.Name)
-			if self.EnableRpcClient(client) {
-				self.clients[client.Uid] = client
-			}
-		}
-	}
+	self.Register("SendRpc", SendRpc)
 
 	if config.NET_BE_CHILD == 1 {
 		handler_Map["DISCONNECT"] = "GateServer"
@@ -102,12 +89,34 @@ func (self *GateServer) DoStart() {
 	}
 }
 
+func (self *GateServer) DoStart() {
+	log.Info("GateServer DoStart")
+
+	if self.pService != nil {
+		self.pService.Start()
+	}
+	if self.pInnerService != nil {
+		self.pInnerService.Start()
+	}
+	if config.NET_BE_CHILD == 1 {
+		for _, cfg := range config.ServerCfg.ServerNodes {
+			client := self.BuildRpc(cfg.Ip, cfg.Port, cfg.Id, cfg.Name)
+			if self.EnableRpcClient(client) {
+				self.clients[client.Uid] = client
+				if self.OnServerConnected != nil {
+					self.OnServerConnected(client.Uid)
+				}
+			}
+		}
+	}
+}
+
 func (self *GateServer) EnableRpcClient(client *network.ClientSocket) bool {
 	log.Info("GateServer EnableRpcClient")
 	if client.Start() {
 		log.Infof("GateServer rpc connected %s:%d", client.GetIP(), client.GetPort())
 
-		req := LouMiaoHeartBeat{Uid: client.Uid}
+		req := &LouMiaoHeartBeat{Uid: client.Uid}
 		client.SendMsg("LouMiaoHandShake", req)
 
 		timer.NewTimer(3000, func(dt int64) { //heart beat
@@ -164,7 +173,6 @@ func RpcClientPacketFunc(socketid int, buff []byte, nlen int) bool {
 	}()
 
 	err, name, pm := message.Decode(buff, nlen)
-	log.Debugf("RpcClientPacketFunc %s %v", name, pm)
 	if err != nil {
 		return false
 	}
@@ -183,6 +191,7 @@ func RpcClientPacketFunc(socketid int, buff []byte, nlen int) bool {
 				This.Send(handler, "NetRpC", m)
 			}
 		} else {
+			fmt.Println(handler_Map)
 			log.Warningf("rpc client hanlder[%d] is nil, drop msg[%s]", uid, name)
 		}
 	}

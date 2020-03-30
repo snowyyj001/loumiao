@@ -25,8 +25,8 @@ func RegisterPacket(packet interface{}) {
 
 func GetMessageName(packet interface{}) string {
 	typeOfStruct := reflect.TypeOf(packet)
-	typeOfStruct = typeOfStruct.Elem()
-	return typeOfStruct.Name()
+	elem := typeOfStruct.Elem()
+	return elem.Name()
 }
 
 func GetPakcet(name string) interface{} {
@@ -34,6 +34,5 @@ func GetPakcet(name string) interface{} {
 	if exist {
 		return packetFunc()
 	}
-
 	return nil
 }

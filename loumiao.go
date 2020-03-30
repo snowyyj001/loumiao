@@ -59,7 +59,8 @@ func UnRegisterNetHandler(igo gorpc.IGoRoutine, name string) {
 //发送给客户端消息
 func SendClient(clientid int, data interface{}) {
 	server := gorpc.GetGoRoutineMgr().GetRoutine("GateServer")
-	m := gorpc.M{Id: clientid, Data: data}
+	buff, _ := message.Encode("", data)
+	m := gorpc.M{Id: clientid, Data: buff}
 	job := gorpc.ChannelContext{"SendClient", m, nil, nil}
 	server.GetJobChan() <- job
 }
@@ -67,15 +68,17 @@ func SendClient(clientid int, data interface{}) {
 //发送给客户端消息
 func SendMulClient(clientids []int, data interface{}) {
 	server := gorpc.GetGoRoutineMgr().GetRoutine("GateServer")
-	ms := gorpc.MS{Ids: clientids, Data: data}
+	buff, _ := message.Encode("", data)
+	ms := gorpc.MS{Ids: clientids, Data: buff}
 	job := gorpc.ChannelContext{"SendClient", ms, nil, nil}
 	server.GetJobChan() <- job
 }
 
 //发送给remote消息
-func SendRpcClient(uid int, data interface{}) {
+func SendRpc(uid int, data interface{}) {
 	server := gorpc.GetGoRoutineMgr().GetRoutine("GateServer")
-	m := gorpc.M{Id: uid, Data: data}
-	job := gorpc.ChannelContext{"SendRpcClient", m, nil, nil}
+	buff, _ := message.Encode("", data)
+	m := gorpc.M{Id: uid, Data: buff}
+	job := gorpc.ChannelContext{"SendRpc", m, nil, nil}
 	server.GetJobChan() <- job
 }

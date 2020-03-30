@@ -7,27 +7,29 @@ import (
 	"github.com/snowyyj001/loumiao/gorpc"
 	"github.com/snowyyj001/loumiao/log"
 	"github.com/snowyyj001/loumiao/message"
-	"github.com/snowyyj001/loumiao/network"
 )
 
 func InnerRpcMsg(igo gorpc.IGoRoutine, socketId int, data interface{}) interface{} {
 	fmt.Println("InnerRpcMsg", socketId, data)
 	resp := data.(*LouMiaoRpcMsg)
-	if This.ServerType == network.SERVER_CONNECT {
-		err, name, pm := message.Decode(resp.Buffer, len(resp.Buffer))
-		if err != nil {
-			log.Warningf("InnerRpcMsg hanlder[%d] decode error", socketId)
-			return nil
-		}
-		handler, ok := handler_Map[name]
-		if ok {
-			This.Send(handler, "NetRpC", pm)
-		} else {
-			log.Warningf("InnerRpcMsg hanlder[%d] is nil, drop msg[%s]", socketId, name)
+
+	err, name, pm := message.Decode(resp.Buffer, len(resp.Buffer))
+	if err != nil {
+		log.Warningf("InnerRpcMsg hanlder[%d] decode error", socketId)
+		return nil
+	}
+	handler, ok := handler_Map[name]
+	if ok {
+		m := gorpc.M{Id: socketId, Name: name, Data: pm}
+		if handler == "GateServer" { //msg to gate server
+			This.CallNetFunc(m)
+		} else { //to local rpc
+			This.Send(handler, "NetRpC", m)
 		}
 	} else {
-		This.pService.SendById(resp.ClientId, resp.Buffer)
+		log.Warningf("InnerRpcMsg hanlder[%d] is nil, drop msg[%s]", socketId, name)
 	}
+
 	return nil
 }
 
@@ -45,10 +47,12 @@ func InnerDisConnect(igo gorpc.IGoRoutine, socketId int, data interface{}) inter
 
 //do bind
 func InnerHandShake(igo gorpc.IGoRoutine, socketId int, data interface{}) interface{} {
-	//fmt.Println("InnerHandShake", data)
 	req := data.(*LouMiaoHandShake)
 	uid := req.Uid
 	This.serverMap[uid] = socketId
+	if This.OnClientConnected != nil {
+		This.OnClientConnected(uid)
+	}
 	return nil
 }
 
@@ -81,39 +85,35 @@ func UnRegisterNet(igo gorpc.IGoRoutine, data interface{}) interface{} {
 
 func SendClient(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	m := data.(gorpc.M)
-	buff, _ := message.Encode(m.Name, m.Data)
-	This.pService.SendById(m.Id, buff)
+	This.pService.SendById(m.Id, m.Data.([]byte))
 	return nil
 }
 
 func SendMulClient(igo gorpc.IGoRoutine, data interface{}) interface{} {
-	m := data.(*gorpc.MS)
-	buff, _ := message.Encode(m.Name, m.Data)
+	m := data.(gorpc.MS)
 	for _, clientid := range m.Ids {
-		This.pService.SendById(clientid, buff)
+		This.pService.SendById(clientid, m.Data.([]byte))
 	}
 	return nil
 }
 
 func SendRpc(igo gorpc.IGoRoutine, data interface{}) interface{} {
-	/*m := data.(gorpc.M)
-	if config.NET_BE_CHILD {
+	m := data.(gorpc.M)
+	if config.NET_BE_CHILD == 1 {
 		client := This.GetRpcClient(m.Id)
 		if client != nil {
-			client.SendMsg(m.Name, m.Data)
+			client.Send(m.Data.([]byte))
 		} else {
-			log.Warningf("0.SendRpcClient dest id not exist %d %s", m.Id, m.Name)
+			log.Warningf("0.SendRpc dest id not exist %d %s", m.Id, m.Name)
 		}
 	} else {
 		clientid := This.serverMap[m.Id]
 		if clientid > 0 {
-			buff, _ := message.Encode(m.Name, m.Data)
-			This.pService.SendById(clientid, buff)
+			This.pInnerService.SendById(clientid, m.Data.([]byte))
 		} else {
-			log.Warningf("1.SendRpcClient dest id not exist %d %s", m.Id, m.Name)
+			log.Warningf("1.SendRpc dest id not exist %d %s", m.Id, m.Name)
 		}
 	}
-	*/
 	return nil
 
 }
