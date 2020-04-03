@@ -7,6 +7,7 @@ import (
 )
 
 var (
+	NET_NODE_ID   = -1          //节点id
 	NET_GATE_IP   = "127.0.0.1" //网关监听地址
 	NET_GATE_PORT = 6789        //网关监听端口
 	NET_BE_CHILD  = 0           //作为分布式子网节点[0：单节点，1：分布式节点client，2：分布式节点server]
@@ -21,6 +22,7 @@ var (
 )
 
 type SelfNetCfg struct {
+	Id        int    `json:"id"`
 	Ip        string `json:"ip"`
 	Port      int    `json:"port"`
 	BeChild   int    `json:"bechild"` //0:single,1:client,2:server
@@ -56,6 +58,7 @@ func init() {
 		return
 	}
 
+	NET_NODE_ID = ServerCfg.NetCfg.Id
 	NET_PROTOCOL = ServerCfg.NetCfg.Protocol
 	NET_WEBSOCKET = ServerCfg.NetCfg.WebSocket == 1
 	NET_GATE_PORT = ServerCfg.NetCfg.Port

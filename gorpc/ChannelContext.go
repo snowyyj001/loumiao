@@ -9,6 +9,7 @@ type HanlderNetFunc func(igo IGoRoutine, clientid int, data interface{}) interfa
 
 // 声明一个数据类型
 type M struct {
+	Type int
 	Id   int
 	Name string
 	Data interface{}

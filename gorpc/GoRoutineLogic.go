@@ -79,9 +79,10 @@ func (self *GoRoutineLogic) CallNetFunc(data interface{}) {
 //同步定时任务
 func (self *GoRoutineLogic) RunTimer(delat int, f HanlderFunc) {
 	// callback
-	var cb = func(dt int64) {
+	var cb = func(dt int64) bool {
 		job := ChannelContext{"", dt, nil, f}
 		self.JobChan <- job
+		return true
 	}
 	self.Ticker = timer.NewTimer(delat, cb, true)
 }
@@ -89,9 +90,10 @@ func (self *GoRoutineLogic) RunTimer(delat int, f HanlderFunc) {
 //同步定时任务
 func (self *GoRoutineLogic) RunTicker(delat int, f HanlderFunc) {
 	// callback
-	var cb = func(dt int64) {
+	var cb = func(dt int64) bool {
 		job := ChannelContext{"", dt, nil, f}
 		self.JobChan <- job
+		return true
 	}
 	self.Ticker = timer.NewTicker(delat, cb)
 }

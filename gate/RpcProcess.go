@@ -1,49 +1,12 @@
 package gate
 
 import (
-	"fmt"
-
 	"github.com/snowyyj001/loumiao/config"
 	"github.com/snowyyj001/loumiao/gorpc"
 	"github.com/snowyyj001/loumiao/log"
 	"github.com/snowyyj001/loumiao/message"
+	"github.com/snowyyj001/loumiao/network"
 )
-
-func InnerRpcMsg(igo gorpc.IGoRoutine, socketId int, data interface{}) interface{} {
-	fmt.Println("InnerRpcMsg", socketId, data)
-	resp := data.(*LouMiaoRpcMsg)
-
-	err, name, pm := message.Decode(resp.Buffer, len(resp.Buffer))
-	if err != nil {
-		log.Warningf("InnerRpcMsg hanlder[%d] decode error", socketId)
-		return nil
-	}
-	handler, ok := handler_Map[name]
-	if ok {
-		m := gorpc.M{Id: socketId, Name: name, Data: pm}
-		if handler == "GateServer" { //msg to gate server
-			This.CallNetFunc(m)
-		} else { //to local rpc
-			This.Send(handler, "NetRpC", m)
-		}
-	} else {
-		log.Warningf("InnerRpcMsg hanlder[%d] is nil, drop msg[%s]", socketId, name)
-	}
-
-	return nil
-}
-
-func InnerDisConnect(igo gorpc.IGoRoutine, socketId int, data interface{}) interface{} {
-	for _, client := range This.clients {
-		if client.GetClientId() == socketId {
-			delete(This.clients, client.Uid)
-			//remote rpc断开，这里自动重新连接
-			This.BuildRpc(client.GetIP(), client.GetPort(), client.Uid, client.Uuid)
-			break
-		}
-	}
-	return nil
-}
 
 //do bind
 func InnerHandShake(igo gorpc.IGoRoutine, socketId int, data interface{}) interface{} {
@@ -71,6 +34,33 @@ func InnerHeartBeat(igo gorpc.IGoRoutine, socketId int, data interface{}) interf
 	return nil
 }
 
+//register rpc
+func InnerRegisterRpc(igo gorpc.IGoRoutine, socketId int, data interface{}) interface{} {
+	m := data.(*LouMiaoRegisterRpc)
+	This.RegisterRpc(m.Name, m.Uid)
+
+	return nil
+}
+
+//login gate
+func InnerLoginGate(igo gorpc.IGoRoutine, socketId int, data interface{}) interface{} {
+	m := data.(*LouMiaoLoginGate)
+	old_socketid, ok := This.tokens_u[m.UserId]
+	if ok {
+		req := &LouMiaoKickOut{}
+		buff, _ := message.Encode("LouMiaoKickOut", req)
+		This.pService.SendById(old_socketid, buff)
+		if config.NET_WEBSOCKET {
+			This.pService.(*network.WebSocket).StopClient(old_socketid)
+		} else {
+			This.pService.(*network.ServerSocket).StopClient(old_socketid)
+		}
+	}
+	This.tokens[socketId] = &Token{TokenId: m.TokenId, UserId: m.UserId}
+	This.tokens_u[m.UserId] = socketId
+	return nil
+}
+
 func RegisterNet(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	m := data.(gorpc.M)
 	handler_Map[m.Name] = m.Data.(string)
@@ -85,14 +75,25 @@ func UnRegisterNet(igo gorpc.IGoRoutine, data interface{}) interface{} {
 
 func SendClient(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	m := data.(gorpc.M)
-	This.pService.SendById(m.Id, m.Data.([]byte))
+	var buff []byte = m.Data.([]byte)
+	if This.pService != nil {
+		This.pService.SendById(m.Id, buff)
+	} else {
+		req := &LouMiaoRpcMsg{ClientId: m.Id, Buffer: m.Data.([]byte)}
+		buff, _ = message.Encode("LouMiaoRpcMsg", req)
+		This.pInnerService.SendById(This.tokens[m.Id].TokenId, buff)
+	}
 	return nil
 }
 
 func SendMulClient(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	m := data.(gorpc.MS)
 	for _, clientid := range m.Ids {
-		This.pService.SendById(clientid, m.Data.([]byte))
+		if This.pService != nil {
+			This.pService.SendById(clientid, m.Data.([]byte))
+		} else {
+			This.pInnerService.SendById(clientid, m.Data.([]byte))
+		}
 	}
 	return nil
 }

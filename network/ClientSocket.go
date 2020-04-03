@@ -143,18 +143,20 @@ func clientRoutine(pClient *ClientSocket) bool {
 		var buff = make([]byte, pClient.m_MaxReceiveBufferSize)
 		n, err := pClient.m_Conn.Read(buff)
 		if err == io.EOF {
-			fmt.Printf("远程链接：%s已经关闭！\n", pClient.m_Conn.RemoteAddr().String())
+			fmt.Printf("0.远程链接：%s已经关闭！\n", pClient.m_Conn.RemoteAddr().String())
 			pClient.OnNetFail(0)
 			break
 		}
 		if err != nil {
 			handleError(err)
+			fmt.Printf("1.远程链接：%s已经关闭！\n", pClient.m_Conn.RemoteAddr().String())
 			pClient.OnNetFail(1)
 			break
 		}
 		if n > 0 {
 			ok := pClient.ReceivePacket(pClient.m_ClientId, buff[:n])
 			if !ok {
+				fmt.Printf("2.远程链接：%s已经关闭！\n", pClient.m_Conn.RemoteAddr().String())
 				pClient.OnNetFail(2)
 				break
 			}

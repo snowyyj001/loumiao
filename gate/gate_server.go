@@ -2,8 +2,6 @@
 package gate
 
 import (
-	"fmt"
-
 	"github.com/snowyyj001/loumiao/config"
 	"github.com/snowyyj001/loumiao/gorpc"
 	"github.com/snowyyj001/loumiao/log"
@@ -18,14 +16,22 @@ var (
 	rpc_Map     map[string]int    //rpc消息报接受者
 )
 
+type Token struct {
+	UserId  int
+	TokenId int
+}
+
 type GateServer struct {
 	gorpc.GoRoutineLogic
 
+	Id                int
 	pService          network.ISocket
 	clients           map[int]*network.ClientSocket
 	pInnerService     network.ISocket
 	serverMap         map[int]int
 	ServerType        int
+	tokens            map[int]*Token
+	tokens_u          map[int]int
 	OnServerConnected func(int)
 	OnClientConnected func(int)
 }
@@ -34,6 +40,7 @@ func (self *GateServer) DoInit() {
 	log.Infof("%s DoInit", self.Name)
 	This = self
 
+	self.Id = config.NET_NODE_ID
 	if self.ServerType == network.CLIENT_CONNECT { //对外
 		if config.NET_WEBSOCKET {
 			self.pService = new(network.WebSocket)
@@ -43,9 +50,9 @@ func (self *GateServer) DoInit() {
 			self.pService.(*network.ServerSocket).SetMaxClients(config.NET_MAX_CONNS)
 		}
 		self.pService.Init(config.NET_GATE_IP, config.NET_GATE_PORT)
-		if config.NET_BE_CHILD == 1 { //对内作为client
+		if config.NET_BE_CHILD == 1 { //对内作为client(gate)
 			self.pService.BindPacketFunc(RpcServerPacketFunc)
-		} else {
+		} else { //(login)
 			self.pService.BindPacketFunc(PacketFunc)
 		}
 		self.pService.SetConnectType(network.CLIENT_CONNECT)
@@ -53,15 +60,17 @@ func (self *GateServer) DoInit() {
 
 	if config.NET_BE_CHILD == 1 { //对内作为client
 		self.clients = make(map[int]*network.ClientSocket)
-	} else if config.NET_BE_CHILD == 2 { //对内作为server
+	} else if config.NET_BE_CHILD == 2 { //对内作为server(world)
 		self.pInnerService = new(network.ServerSocket)
 		self.pInnerService.(*network.ServerSocket).SetMaxClients(config.NET_MAX_RPC_CONNS)
 		self.pInnerService.Init(config.NET_RPC_IP, config.NET_RPC_PORT)
-		self.pInnerService.BindPacketFunc(PacketFunc)
+		self.pInnerService.BindPacketFunc(RpcInnerPacketFunc)
 		self.pInnerService.SetConnectType(network.SERVER_CONNECT)
 	}
 
 	self.serverMap = make(map[int]int)
+	self.tokens = make(map[int]*Token)
+	self.tokens_u = make(map[int]int)
 }
 
 func (self *GateServer) DoRegsiter() {
@@ -73,20 +82,14 @@ func (self *GateServer) DoRegsiter() {
 	self.Register("SendMulClient", SendMulClient)
 	self.Register("SendRpc", SendRpc)
 
-	if config.NET_BE_CHILD == 1 {
-		handler_Map["DISCONNECT"] = "GateServer"
-		self.RegisterGate("DISCONNECT", InnerDisConnect)
-	}
-	if config.NET_BE_CHILD == 2 {
-		handler_Map["LouMiaoHandShake"] = "GateServer"
-		self.RegisterGate("LouMiaoHandShake", InnerHandShake)
-	}
-	if config.NET_BE_CHILD != 0 {
-		handler_Map["LouMiaoRpcMsg"] = "GateServer"
-		self.RegisterGate("LouMiaoRpcMsg", InnerRpcMsg)
-		handler_Map["LouMiaoHeartBeat"] = "GateServer"
-		self.RegisterGate("LouMiaoHeartBeat", InnerHeartBeat)
-	}
+	handler_Map["LouMiaoHandShake"] = "GateServer"
+	self.RegisterGate("LouMiaoHandShake", InnerHandShake)
+	handler_Map["LouMiaoHeartBeat"] = "GateServer"
+	self.RegisterGate("LouMiaoHeartBeat", InnerHeartBeat)
+	handler_Map["LouMiaoRegisterRpc"] = "GateServer"
+	self.RegisterGate("LouMiaoRegisterRpc", InnerRegisterRpc)
+	handler_Map["LouMiaoLoginGate"] = "GateServer"
+	self.RegisterGate("LouMiaoLoginGate", InnerLoginGate)
 }
 
 func (self *GateServer) DoStart() {
@@ -115,18 +118,19 @@ func (self *GateServer) EnableRpcClient(client *network.ClientSocket) bool {
 	log.Info("GateServer EnableRpcClient")
 	if client.Start() {
 		log.Infof("GateServer rpc connected %s:%d", client.GetIP(), client.GetPort())
-
-		req := &LouMiaoHeartBeat{Uid: client.Uid}
+		req := &LouMiaoHandShake{Uid: client.Uid}
 		client.SendMsg("LouMiaoHandShake", req)
-
-		timer.NewTimer(3000, func(dt int64) { //heart beat
+		timer.NewTimer(5000, func(dt int64) bool { //heart beat
 			client.SendTimes++
-			if client.SendTimes > 3 { //time out?
+			if client.SendTimes > 2 { //time out?
+				log.Warningf("[%d] to rpc server heartbeat timeout", client.Uid)
 				client.Close()
+				return false
 			} else {
 				req := &LouMiaoHeartBeat{Uid: client.Uid}
 				client.SendMsg("LouMiaoHeartBeat", req)
 			}
+			return true
 		}, true)
 		return true
 	} else {
@@ -165,7 +169,7 @@ func PacketFunc(socketid int, buff []byte, nlen int) bool {
 	return true
 }
 
-func RpcClientPacketFunc(socketid int, buff []byte, nlen int) bool {
+func RpcInnerPacketFunc(socketid int, buff []byte, nlen int) bool {
 	defer func() {
 		if err := recover(); err != nil {
 			log.Errorf("RpcClientPacketFunc self: %v", err)
@@ -177,22 +181,65 @@ func RpcClientPacketFunc(socketid int, buff []byte, nlen int) bool {
 		return false
 	}
 
-	uid, ok := rpc_Map[name]
-	if ok { //msg to client
+	if name == "LouMiaoRpcMsg" {
 		resp := pm.(*LouMiaoRpcMsg)
-		This.pService.SendById(resp.ClientId, resp.Buffer)
-	} else { //msg to local service
+		err, name, pm = message.Decode(resp.Buffer, len(resp.Buffer))
+		if err != nil {
+			return false
+		}
+		if This.tokens[resp.ClientId] == nil {
+			This.tokens[resp.ClientId] = &Token{TokenId: socketid, UserId: resp.ClientId}
+		}
+		socketid = resp.ClientId
+	}
+
+	{
 		handler, ok := handler_Map[name]
 		if ok {
-			m := gorpc.M{Id: uid, Name: name, Data: pm}
+			m := gorpc.M{Id: socketid, Name: name, Data: pm}
 			if handler == "GateServer" { //msg to gate server
 				This.CallNetFunc(m)
 			} else { //to local rpc
 				This.Send(handler, "NetRpC", m)
 			}
 		} else {
-			fmt.Println(handler_Map)
-			log.Warningf("rpc client hanlder[%d] is nil, drop msg[%s]", uid, name)
+			log.Warningf("rpc client hanlder[%d] is nil, drop msg[%s]", socketid, name)
+		}
+	}
+	return true
+}
+
+func RpcClientPacketFunc(socketid int, buff []byte, nlen int) bool {
+	defer func() {
+		if err := recover(); err != nil {
+			log.Errorf("RpcClientPacketFunc self: %v", err)
+		}
+	}()
+
+	err, name, pm := message.Decode(buff, nlen)
+	if err != nil {
+		return false
+	}
+	//fmt.Println("RpcClientPacketFunc ", name, pm)
+
+	if name == "LouMiaoRpcMsg" {
+		resp := pm.(*LouMiaoRpcMsg)
+		clientid, ok := This.tokens_u[resp.ClientId]
+		if ok {
+			This.pService.SendById(clientid, resp.Buffer)
+		}
+	} else { //msg to local service
+		//uid, ok := rpc_Map[name]
+		handler, ok := handler_Map[name]
+		if ok {
+			m := gorpc.M{Id: socketid, Name: name, Data: pm}
+			if handler == "GateServer" { //msg to gate server
+				This.CallNetFunc(m)
+			} else { //to local rpc
+				This.Send(handler, "NetRpC", m)
+			}
+		} else {
+			log.Warningf("rpc client hanlder[%d] is nil, drop msg[%s]", socketid, name)
 		}
 	}
 	return true
@@ -206,16 +253,21 @@ func RpcServerPacketFunc(socketid int, buff []byte, nlen int) bool {
 	}()
 
 	err, name, pm := message.Decode(buff, nlen)
-	log.Debugf("RpcServerPacketFunc %s %v", name, pm)
+	//log.Debugf("RpcServerPacketFunc %s %v", name, pm)
 	if err != nil {
-		return false
+		return true
 	}
 
 	uid, ok := rpc_Map[name]
 	if ok { //msg to other rpc node
 		client := This.GetRpcClient(uid)
 		if client != nil {
-			req := &LouMiaoRpcMsg{ClientId: socketid, Buffer: buff}
+			token, ok := This.tokens[socketid]
+			if !ok {
+				log.Warningf("RpcServerPacketFunc[%d] tokens nil, drop msg[%s]", uid, name)
+				return true
+			}
+			req := &LouMiaoRpcMsg{ClientId: token.UserId, Buffer: buff}
 			client.SendMsg("LouMiaoRpcMsg", req)
 		} else {
 			log.Warningf("RpcServerPacketFunc[%d] lost, drop msg[%s]", uid, name)
@@ -230,7 +282,12 @@ func RpcServerPacketFunc(socketid int, buff []byte, nlen int) bool {
 				This.Send(handler, "NetRpC", m)
 			}
 		} else {
-			if name != "CONNECT" && name != "DISCONNECT" {
+			if name == "CONNECT" {
+			} else if name == "DISCONNECT" {
+				userid := This.tokens[socketid].UserId
+				This.tokens[socketid] = nil
+				This.tokens_u[userid] = 0
+			} else {
 				log.Noticef("RpcServerPacketFunc msg handler is nil, drop it[%s]", name)
 			}
 		}

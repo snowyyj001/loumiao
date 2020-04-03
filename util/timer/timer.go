@@ -11,15 +11,17 @@ type Timer struct {
 	t2   *time.Timer
 	done chan bool
 	loop bool
+	over bool
 }
 
-func NewTimer(dt int, cb func(dt int64), repeat bool) *Timer {
+func NewTimer(dt int, cb func(dt int64) bool, repeat bool) *Timer {
 	delat := time.Duration(dt) * time.Millisecond
 
 	t := new(Timer)
 	t.t2 = time.NewTimer(delat)
 	t.done = make(chan bool)
 	t.loop = repeat
+	t.over = true
 
 	go func(t *Timer) {
 		defer t.t2.Stop()
@@ -28,8 +30,14 @@ func NewTimer(dt int, cb func(dt int64), repeat bool) *Timer {
 		for {
 			select {
 			case <-t.t2.C:
+				if !t.over {
+					return
+				}
 				utmPre = util.TimeStamp()
-				cb(utmPre - utm)
+				t.over = cb(utmPre - utm)
+				if !t.over {
+					return
+				}
 				utm = utmPre
 				if t.loop {
 					t.t2.Reset(delat)
@@ -44,7 +52,7 @@ func NewTimer(dt int, cb func(dt int64), repeat bool) *Timer {
 	return t
 }
 
-func NewTicker(dt int, cb func(dt int64)) *Timer {
+func NewTicker(dt int, cb func(dt int64) bool) *Timer {
 
 	t := new(Timer)
 	ticker := time.NewTicker(time.Duration(dt) * time.Millisecond)
@@ -60,8 +68,14 @@ func NewTicker(dt int, cb func(dt int64)) *Timer {
 		for {
 			select {
 			case <-timer.t1.C:
+				if !t.over {
+					return
+				}
 				utmPre = util.TimeStamp()
-				cb(utmPre - utm)
+				t.over = cb(utmPre - utm)
+				if !t.over {
+					return
+				}
 				utm = utmPre
 			case <-timer.done:
 				return
@@ -73,5 +87,6 @@ func NewTicker(dt int, cb func(dt int64)) *Timer {
 }
 
 func (self *Timer) Stop() {
+	self.over = false
 	self.done <- true
 }

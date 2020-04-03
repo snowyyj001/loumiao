@@ -5,6 +5,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/snowyyj001/loumiao/gate"
 	"github.com/snowyyj001/loumiao/gorpc"
 	"github.com/snowyyj001/loumiao/log"
 	"github.com/snowyyj001/loumiao/message"
@@ -72,6 +73,11 @@ func SendMulClient(clientids []int, data interface{}) {
 	ms := gorpc.MS{Ids: clientids, Data: buff}
 	job := gorpc.ChannelContext{"SendClient", ms, nil, nil}
 	server.GetJobChan() <- job
+}
+
+//向rpc注册网络消息
+func RegisterRpcHandler(uid int, name string) {
+	SendRpc(uid, &gate.LouMiaoRegisterRpc{Uid: uid, Name: name})
 }
 
 //发送给remote消息

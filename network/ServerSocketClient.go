@@ -55,7 +55,6 @@ func (this *ServerSocketClient) Send(buff []byte) int {
 	if n > 0 {
 		return n
 	}
-	//this.m_Writer.Flush()
 	return 0
 }
 

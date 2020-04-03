@@ -40,7 +40,6 @@ type (
 		m_MaxSendBufferSize    int
 
 		m_ClientId int
-		m_Seq      int64
 
 		m_TotalNum     int
 		m_AcceptedNum  int
@@ -224,7 +223,7 @@ func (self *Socket) ReceivePacket(Id int, dat []byte) bool {
 		}
 		mbuff1 := self.m_pInBuffer[0:2]
 		nLen1 := int(util.BytesToUInt16(mbuff1, binary.BigEndian)) //消息总长度
-		if nLen1 < self.m_pInBufferLen {
+		if nLen1 > self.m_pInBufferLen {
 			break
 		}
 		if nLen1 > self.m_MaxReceiveBufferSize {
@@ -236,10 +235,9 @@ func (self *Socket) ReceivePacket(Id int, dat []byte) bool {
 		if ok == false {
 			return false
 		}
-
 		self.m_pInBufferLen -= int(nLen1)
 		if self.m_pInBufferLen > 0 {
-			self.m_pInBuffer = self.m_pInBuffer[int(nLen1)+1:]
+			self.m_pInBuffer = self.m_pInBuffer[int(nLen1):]
 		} else {
 			self.m_pInBuffer = []byte{}
 		}
