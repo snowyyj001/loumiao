@@ -20,6 +20,7 @@ type ClientSocket struct {
 	m_nMinClients int
 	Uuid          string
 	Uid           int
+	Type          int
 	SendTimes     int
 }
 

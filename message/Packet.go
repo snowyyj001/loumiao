@@ -65,7 +65,7 @@ func DecodeProBuff(buff []byte, length int) (error, string, interface{}) {
 	}
 	packet := GetPakcet(name)
 	if packet == nil {
-		log.Warningf("Decode: packet[%s] may not registered", name)
+		//log.Warningf("Decode: packet[%s] may not registered", name)
 		return nil, name, nil
 	}
 	err := proto.Unmarshal(buff[4+nLen1:length], packet.(proto.Message))
@@ -115,7 +115,7 @@ func DecodeJson(buff []byte, length int) (error, string, interface{}) {
 	}
 	packet := GetPakcet(name)
 	if packet == nil {
-		log.Warningf("Decode: packet[%s] may not registered", name)
+		//log.Warningf("Decode: packet[%s] may not registered", name)
 		return nil, name, nil
 	}
 	err := json.Unmarshal(buff[4+nLen1:length], packet)

@@ -52,3 +52,9 @@ func FloorInt64(v int64) int64 {
 	nv := math.Floor(float64(v))
 	return int64(nv)
 }
+
+func CopyArray(dst []int, src []int, size int) {
+	for i := 0; i < size; i++ {
+		dst[i] = src[i]
+	}
+}

@@ -30,7 +30,6 @@ func DoInit() {
 
 //开启游戏
 func Run() {
-
 	DoInit()
 
 	gorpc.GetGoRoutineMgr().DoStart()
@@ -71,7 +70,7 @@ func SendMulClient(clientids []int, data interface{}) {
 	server := gorpc.GetGoRoutineMgr().GetRoutine("GateServer")
 	buff, _ := message.Encode("", data)
 	ms := gorpc.MS{Ids: clientids, Data: buff}
-	job := gorpc.ChannelContext{"SendClient", ms, nil, nil}
+	job := gorpc.ChannelContext{"SendMulClient", ms, nil, nil}
 	server.GetJobChan() <- job
 }
 

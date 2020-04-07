@@ -31,11 +31,15 @@ type LouMiaoRpcMsg struct {
 type LouMiaoKickOut struct {
 }
 
+type LouMiaoClientOffline struct {
+	ClientId int
+}
+
 func init() {
 	message.RegisterPacket(&LouMiaoHeartBeat{})
 	message.RegisterPacket(&LouMiaoHandShake{})
 	message.RegisterPacket(&LouMiaoRpcMsg{})
 	message.RegisterPacket(&LouMiaoRegisterRpc{})
 	message.RegisterPacket(&LouMiaoLoginGate{})
-
+	message.RegisterPacket(&LouMiaoClientOffline{})
 }
