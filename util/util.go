@@ -43,6 +43,13 @@ func BytesToUInt16(buff []byte, order binary.ByteOrder) uint16 {
 	return data
 }
 
+func BytesToUInt32(buff []byte, order binary.ByteOrder) uint32 {
+	bytebuff := bytes.NewBuffer(buff)
+	var data uint32
+	binary.Read(bytebuff, order, &data)
+	return data
+}
+
 func FloorInt(v int) int {
 	nv := math.Floor(float64(v))
 	return int(nv)

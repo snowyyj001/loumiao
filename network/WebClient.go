@@ -15,93 +15,87 @@ type WebClient struct {
 	m_nMinClients int
 }
 
-func (this *WebClient) Init(ip string, port int) bool {
-	if this.m_nPort == port || this.m_sIP == ip {
+func (self *WebClient) Init(saddr string) bool {
+	if self.m_sAddr == saddr {
 		return false
 	}
 
-	this.Socket.Init(ip, port)
-	fmt.Println("ClientSocket", ip, port)
+	self.Socket.Init(saddr)
+	fmt.Println("ClientSocket", saddr)
 	return true
 }
-func (this *WebClient) Start() bool {
-	this.m_bShuttingDown = false
+func (self *WebClient) Start() bool {
+	self.m_bShuttingDown = false
 
-	if this.m_sIP == "" {
-		this.m_sIP = "127.0.0.1"
+	if self.m_sAddr == "" {
+		return false
 	}
 
-	if this.Connect() {
-		go wsclientRoutine(this)
+	if self.Connect() {
+		go wsclientRoutine(self)
 	}
 	//延迟，监听关闭
 	//defer ln.Close()
 	return true
 }
 
-func (this *WebClient) Stop() bool {
-	if this.m_bShuttingDown {
+func (self *WebClient) Stop() bool {
+	if self.m_bShuttingDown {
 		return true
 	}
 
-	this.m_bShuttingDown = true
+	self.m_bShuttingDown = true
 	return true
 }
 
-func (this *WebClient) SendMsg(name string, msg interface{}) {
-	buff, _ := message.Encode(name, msg)
-	this.Send(buff)
-}
-
-func (this *WebClient) Send(buff []byte) int {
+func (self *WebClient) Send(buff []byte) int {
 	defer func() {
 		if err := recover(); err != nil {
 			fmt.Println("WebClient Send", err)
 		}
 	}()
 
-	if this.m_WsConn == nil {
+	if self.m_WsConn == nil {
 		return 0
 	}
-	err := this.m_WsConn.WriteMessage(websocket.BinaryMessage, buff)
+	err := self.m_WsConn.WriteMessage(websocket.BinaryMessage, buff)
 	handleError(err)
-	//this.m_Writer.Flush()
+	//self.m_Writer.Flush()
 	return 0
 }
 
-func (this *WebClient) Restart() bool {
+func (self *WebClient) Restart() bool {
 	return true
 }
 
-func (this *WebClient) Connect() bool {
-	if this.m_nState == SSF_CONNECT {
+func (self *WebClient) Connect() bool {
+	if self.m_nState == SSF_CONNECT {
 		return false
 	}
 
-	var strRemote string = fmt.Sprintf("%s:%d", this.m_sIP, this.m_nPort)
-	wsAddr := url.URL{Scheme: "ws", Host: strRemote, Path: "/ws"}
+	wsAddr := url.URL{Scheme: "ws", Host: self.m_sAddr, Path: "/ws"}
 	conn, _, err := websocket.DefaultDialer.Dial(wsAddr.String(), nil)
 	if err != nil {
 		return false
 	}
-	this.m_nState = SSF_CONNECT
-	this.SetWsConn(conn)
-	this.OnNetConn()
+	self.m_nState = SSF_CONNECT
+	self.SetWsConn(conn)
+	self.OnNetConn()
 	return true
 }
 
-func (this *WebClient) OnDisconnect() {
+func (self *WebClient) OnDisconnect() {
 }
 
-func (this *WebClient) OnNetConn() {
-	buff, nLen := message.Encode("CONNECT", nil)
-	this.HandlePacket(this.m_ClientId, buff, nLen)
+func (self *WebClient) OnNetConn() {
+	buff, nLen := message.Encode(-1, 0, "CONNECT", nil)
+	self.HandlePacket(self.m_ClientId, buff, nLen)
 }
 
-func (this *WebClient) OnNetFail(int) {
-	this.Stop()
-	buff, nLen := message.Encode("DISCONNECT", nil)
-	this.HandlePacket(this.m_ClientId, buff, nLen)
+func (self *WebClient) OnNetFail(int) {
+	self.Stop()
+	buff, nLen := message.Encode(-1, 0, "DISCONNECT", nil)
+	self.HandlePacket(self.m_ClientId, buff, nLen)
 }
 
 func wsclientRoutine(pClient *WebClient) bool {

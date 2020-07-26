@@ -1,0 +1,195 @@
+package etcd
+
+import (
+	"context"
+	"fmt"
+	"sync"
+	"time"
+
+	"github.com/coreos/etcd/clientv3"
+	"github.com/coreos/etcd/mvcc/mvccpb"
+)
+
+//创建租约注册服务
+type ServiceReg struct {
+	client        *clientv3.Client
+	lease         clientv3.Lease
+	leaseResp     *clientv3.LeaseGrantResponse
+	canclefunc    func()
+	keepAliveChan <-chan *clientv3.LeaseKeepAliveResponse
+	key           string
+}
+
+//timeNum 租约心跳间隔
+func NewServiceReg(addr []string, timeNum int64) (*ServiceReg, error) {
+	conf := clientv3.Config{
+		Endpoints:   addr,
+		DialTimeout: time.Duration(timeNum) * time.Second,
+	}
+
+	var (
+		client *clientv3.Client
+	)
+
+	if clientTem, err := clientv3.New(conf); err == nil {
+		client = clientTem
+	} else {
+		return nil, err
+	}
+
+	ser := &ServiceReg{
+		client: client,
+	}
+
+	if err := ser.setLease(timeNum); err != nil {
+		return nil, err
+	}
+	go ser.ListenLeaseRespChan()
+	return ser, nil
+}
+
+//设置租约
+func (self *ServiceReg) setLease(timeNum int64) error {
+	lease := clientv3.NewLease(self.client)
+
+	//设置租约时间
+	leaseResp, err := lease.Grant(context.TODO(), timeNum)
+	if err != nil {
+		return err
+	}
+
+	//设置续租
+	ctx, cancelFunc := context.WithCancel(context.TODO())
+	leaseRespChan, err := lease.KeepAlive(ctx, leaseResp.ID)
+
+	if err != nil {
+		return err
+	}
+
+	self.lease = lease
+	self.leaseResp = leaseResp
+	self.canclefunc = cancelFunc
+	self.keepAliveChan = leaseRespChan
+	return nil
+}
+
+//监听 续租情况
+func (self *ServiceReg) ListenLeaseRespChan() {
+	for {
+		select {
+		case leaseKeepResp := <-self.keepAliveChan:
+			if leaseKeepResp == nil {
+				fmt.Printf("已经关闭续租功能\n")
+				return
+			} else {
+				fmt.Printf("续租成功\n")
+			}
+		}
+	}
+}
+
+//通过租约 注册服务
+func (self *ServiceReg) PutService(key, val string) error {
+	kv := clientv3.NewKV(self.client)
+	_, err := kv.Put(context.TODO(), key, val, clientv3.WithLease(self.leaseResp.ID))
+	return err
+}
+
+//撤销租约
+func (self *ServiceReg) RevokeLease() error {
+	self.canclefunc()
+	time.Sleep(2 * time.Second)
+	_, err := self.lease.Revoke(context.TODO(), self.leaseResp.ID)
+	return err
+}
+
+type ClientDis struct {
+	client     *clientv3.Client
+	serverList map[string]string
+	CallBack   func(string, string, bool)
+	lock       sync.Mutex
+}
+
+func NewClientDis(addr []string) (*ClientDis, error) {
+	conf := clientv3.Config{
+		Endpoints:   addr,
+		DialTimeout: 5 * time.Second,
+	}
+	if client, err := clientv3.New(conf); err == nil {
+		return &ClientDis{
+			client:     client,
+			serverList: make(map[string]string),
+		}, nil
+	} else {
+		return nil, err
+	}
+}
+
+func (self *ClientDis) Watch(prefix string, hanlder func(string, string, bool)) ([]string, error) {
+	resp, err := self.client.Get(context.Background(), prefix, clientv3.WithPrefix())
+	if err != nil {
+		return nil, err
+	}
+	addrs := self.extractAddrs(resp)
+	self.CallBack = hanlder
+
+	go self.watcher(prefix)
+	return addrs, nil
+}
+
+func (self *ClientDis) watcher(prefix string) {
+	rch := self.client.Watch(context.Background(), prefix, clientv3.WithPrefix())
+	for wresp := range rch {
+		for _, ev := range wresp.Events {
+			switch ev.Type {
+			case mvccpb.PUT:
+				self.SetServiceList(string(ev.Kv.Key), string(ev.Kv.Value))
+			case mvccpb.DELETE:
+				self.DelServiceList(string(ev.Kv.Key))
+			}
+		}
+	}
+}
+
+func (self *ClientDis) extractAddrs(resp *clientv3.GetResponse) []string {
+	addrs := make([]string, 0)
+	if resp == nil || resp.Kvs == nil {
+		return addrs
+	}
+	for i := range resp.Kvs {
+		if v := resp.Kvs[i].Value; v != nil {
+			self.SetServiceList(string(resp.Kvs[i].Key), string(resp.Kvs[i].Value))
+			addrs = append(addrs, string(v))
+		}
+	}
+	return addrs
+}
+
+func (self *ClientDis) SetServiceList(key, val string) {
+	self.lock.Lock()
+	defer self.lock.Unlock()
+	self.serverList[key] = string(val)
+	if self.CallBack != nil {
+		self.CallBack(key, val, true)
+	}
+}
+
+func (self *ClientDis) DelServiceList(key string) {
+	self.lock.Lock()
+	defer self.lock.Unlock()
+	delete(self.serverList, key)
+	if self.CallBack != nil {
+		self.CallBack(key, "", true)
+	}
+}
+
+func (self *ClientDis) SerList2Array() []string {
+	self.lock.Lock()
+	defer self.lock.Unlock()
+	addrs := make([]string, 0)
+
+	for _, v := range self.serverList {
+		addrs = append(addrs, v)
+	}
+	return addrs
+}

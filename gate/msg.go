@@ -9,11 +9,6 @@ type LouMiaoRegisterRpc struct {
 	Name string
 }
 
-type LouMiaoHeartBeat struct {
-	Uid   int
-	Child int
-}
-
 type LouMiaoHandShake struct {
 	Uid int
 }
@@ -36,7 +31,6 @@ type LouMiaoClientOffline struct {
 }
 
 func init() {
-	message.RegisterPacket(&LouMiaoHeartBeat{})
 	message.RegisterPacket(&LouMiaoHandShake{})
 	message.RegisterPacket(&LouMiaoRpcMsg{})
 	message.RegisterPacket(&LouMiaoRegisterRpc{})

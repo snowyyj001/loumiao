@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 
 	"github.com/snowyyj001/loumiao/config"
 	"github.com/snowyyj001/loumiao/log"
@@ -14,16 +15,24 @@ import (
 
 //消息pack,unpack格式
 //消息buffer以大端传输
-//2+2+name+msg
+//2+4+4+2+name+msg
 //1，2字节代表消息报总长度
-//3，4字节代表消息名长度
-//name：消息名
-//msg具体的消息包
+//3，4，5，6字节代表目标服务器id
+//7，8，9，10字节保留字段
+//11，12字节代表消息名长度
 
-var Encode func(name string, packet interface{}) ([]byte, int)
-var Decode func(buff []byte, length int) (error, string, interface{})
+//target: 目标服务器id
+//flag: 服务器标识参数
+//name: 消息名
+//msg: 具体的消息包
+var Encode func(target int, flag int, name string, packet interface{}) ([]byte, int)
 
-func EncodeProBuff(name string, packet interface{}) ([]byte, int) {
+//uid: 服务器id
+//buff: 消息包
+//length: 包长度
+var Decode func(uid int, buff []byte, length int) (error, int, string, interface{})
+
+func EncodeProBuff(target int, flag int, name string, packet interface{}) ([]byte, int) {
 	var pd proto.Message
 	if name == "" {
 		pd = packet.(proto.Message)
@@ -41,41 +50,56 @@ func EncodeProBuff(name string, packet interface{}) ([]byte, int) {
 	}
 
 	pLen := len(name)
-	nLen := 4 + pLen + len(buff)
+	nLen := 12 + pLen + len(buff)
 
 	binary.Write(bytesBuffer, binary.BigEndian, int16(nLen))
+	binary.Write(bytesBuffer, binary.BigEndian, int32(target))
+	binary.Write(bytesBuffer, binary.BigEndian, int32(flag))
 	binary.Write(bytesBuffer, binary.BigEndian, int16(pLen))
 	binary.Write(bytesBuffer, binary.BigEndian, []byte(name))
+
 	if buff != nil {
 		binary.Write(bytesBuffer, binary.BigEndian, buff)
 	}
 	return bytesBuffer.Bytes(), nLen
 }
 
-func DecodeProBuff(buff []byte, length int) (error, string, interface{}) {
-	mbuff1 := buff[2:4]
-	nLen1 := util.BytesToUInt16(mbuff1, binary.BigEndian)
-	if nLen1 <= 0 {
-		log.Warning("Decode: packet name length is 0")
-		return nil, "", nil
+func DecodeProBuff(uid int, buff []byte, length int) (error, int, string, interface{}) {
+	mbuff1 := buff[2:6]
+	target := int(util.BytesToUInt32(mbuff1, binary.BigEndian))
+
+	if target != -1 && target != uid { //do not need decode anymore
+		return nil, target, "", nil
 	}
-	name := string(buff[4 : 4+nLen1])
-	if length == 4+int(nLen1) { //just for on CONNECT/DISCONNECT
-		return nil, name, nil
+	mbuff1 = buff[6:10]
+	flag := util.BytesToUInt32(mbuff1, binary.BigEndian)
+	if flag <= 0 {
+		return fmt.Errorf("DecodeProBuff: flag is illegal: %d", flag), 0, "", nil
 	}
-	packet := GetPakcet(name)
+
+	mbuff1 = buff[10:12]
+	nameLen := util.BytesToUInt16(mbuff1, binary.BigEndian)
+	if nameLen <= 0 {
+		return fmt.Errorf("DecodeProBuff: msgname len is illegal: %d", nameLen), 0, "", nil
+	}
+
+	msgName := string(buff[12 : 12+nameLen])
+	if length == 12+int(nameLen) { //just for on CONNECT/DISCONNECT
+		return nil, target, msgName, nil
+	}
+	packet := GetPakcet(msgName)
 	if packet == nil {
-		//log.Warningf("Decode: packet[%s] may not registered", name)
-		return nil, name, nil
+		return fmt.Errorf("DecodeProBuff: packet[%s] may not registered", msgName), 0, "", nil
 	}
-	err := proto.Unmarshal(buff[4+nLen1:length], packet.(proto.Message))
+	err := proto.Unmarshal(buff[12+nameLen:length], packet.(proto.Message))
 	if util.CheckErr(err) {
-		return err, name, nil
+		log.Warningf("DecodeProBuff: Unmarshal[%s] error", msgName)
+		return err, target, "", nil
 	}
-	return nil, name, packet
+	return nil, target, msgName, packet
 }
 
-func EncodeJson(name string, packet interface{}) ([]byte, int) {
+func EncodeJson(target int, flag int, name string, packet interface{}) ([]byte, int) {
 	if name == "" {
 		name = GetMessageName(packet)
 	}
@@ -91,10 +115,12 @@ func EncodeJson(name string, packet interface{}) ([]byte, int) {
 	}
 
 	pLen := len(name)
-	nLen := 4 + pLen + len(buff)
+	nLen := 12 + pLen + len(buff)
 
 	binary.Write(bytesBuffer, binary.BigEndian, int16(nLen))
 	binary.Write(bytesBuffer, binary.BigEndian, int16(pLen))
+	binary.Write(bytesBuffer, binary.BigEndian, int32(target))
+	binary.Write(bytesBuffer, binary.BigEndian, int32(flag))
 	binary.Write(bytesBuffer, binary.BigEndian, []byte(name))
 	if buff != nil {
 		binary.Write(bytesBuffer, binary.BigEndian, buff)
@@ -102,27 +128,42 @@ func EncodeJson(name string, packet interface{}) ([]byte, int) {
 	return bytesBuffer.Bytes(), nLen
 }
 
-func DecodeJson(buff []byte, length int) (error, string, interface{}) {
-	mbuff1 := buff[2:4]
-	nLen1 := util.BytesToUInt16(mbuff1, binary.BigEndian)
-	if nLen1 <= 0 {
-		log.Warning("Decode: packet name length is 0")
-		return nil, "", nil
+func DecodeJson(uid int, buff []byte, length int) (error, int, string, interface{}) {
+	mbuff1 := buff[2:6]
+	target := int(util.BytesToUInt32(mbuff1, binary.BigEndian))
+	if target <= 0 {
+		return fmt.Errorf("DecodeJson: target is illegal: %d", target), 0, "", nil
 	}
-	name := string(buff[4 : 4+nLen1])
-	if length == 4+int(nLen1) { //just for on CONNECT/DISCONNECT
-		return nil, name, nil
+
+	if target != -1 && target != uid { //do not need decode anymore
+		return nil, target, "", nil
 	}
-	packet := GetPakcet(name)
+
+	mbuff1 = buff[6:10]
+	flag := util.BytesToUInt32(mbuff1, binary.BigEndian)
+	if flag <= 0 {
+		return fmt.Errorf("DecodeJson: flag is illegal: %d", flag), 0, "", nil
+	}
+	mbuff1 = buff[10:12]
+	nameLen := util.BytesToUInt16(mbuff1, binary.BigEndian)
+	if nameLen <= 0 {
+		return fmt.Errorf("DecodeJson: msgname len is illegal: %d", nameLen), 0, "", nil
+	}
+	msgName := string(buff[12 : 12+nameLen])
+	if length == 12+int(nameLen) { //just for on CONNECT/DISCONNECT
+		return nil, target, msgName, nil
+	}
+
+	packet := GetPakcet(msgName)
 	if packet == nil {
-		//log.Warningf("Decode: packet[%s] may not registered", name)
-		return nil, name, nil
+		return fmt.Errorf("DecodeJson: packet[%s] may not registered", msgName), 0, "", nil
 	}
-	err := json.Unmarshal(buff[4+nLen1:length], packet)
+	err := json.Unmarshal(buff[12+nameLen:length], packet)
 	if util.CheckErr(err) {
-		return err, name, nil
+		log.Warningf("DecodeJson: Unmarshal[%s] error", msgName)
+		return err, target, "", nil
 	}
-	return nil, name, packet
+	return nil, target, msgName, packet
 }
 
 func DoInit() {

@@ -32,8 +32,7 @@ type (
 	Socket     struct {
 		m_Conn                 net.Conn
 		m_WsConn               *websocket.Conn
-		m_nPort                int
-		m_sIP                  string
+		m_sAddr                string
 		m_nState               int
 		m_nConnectType         int
 		m_MaxReceiveBufferSize int
@@ -55,7 +54,7 @@ type (
 	}
 
 	ISocket interface {
-		Init(string, int) bool
+		Init(string) bool
 		Start() bool
 		Stop() bool
 		Restart() bool
@@ -67,8 +66,6 @@ type (
 		Close()
 		Send([]byte) int
 		SendById(int, []byte) int
-		SendMsg(string, ...interface{})
-		SendMsgById(int, string, ...interface{})
 
 		GetState() int
 		SetMaxSendBufferSize(int)
@@ -84,9 +81,8 @@ type (
 )
 
 // virtual
-func (self *Socket) Init(ip string, port int) bool {
-	self.m_nPort = port
-	self.m_sIP = ip
+func (self *Socket) Init(saddr string) bool {
+	self.m_sAddr = saddr
 	self.m_nState = SSF_SHUT_DOWN
 	self.m_MaxSendBufferSize = config.NET_BUFFER_SIZE
 	self.m_MaxReceiveBufferSize = config.NET_BUFFER_SIZE
@@ -129,23 +125,14 @@ func (self *Socket) SendById(int, []byte) int {
 	return 0
 }
 
-func (self *Socket) SendMsg(funcName string, params ...interface{}) {
-}
-
-func (self *Socket) SendMsgById(int, string, ...interface{}) {
-}
-
 func (self *Socket) SetClientId(cid int) {
 	self.m_ClientId = cid
 }
 func (self *Socket) GetClientId() int {
 	return self.m_ClientId
 }
-func (self *Socket) GetIP() string {
-	return self.m_sIP
-}
-func (self *Socket) GetPort() int {
-	return self.m_nPort
+func (self *Socket) GetSAddr() string {
+	return self.m_sAddr
 }
 
 func (self *Socket) Clear() {
@@ -218,7 +205,7 @@ func (self *Socket) ReceivePacket(Id int, dat []byte) bool {
 	self.m_pInBufferLen += len(dat)
 	self.m_pInBuffer = append(self.m_pInBuffer, dat...)
 	for {
-		if self.m_pInBufferLen < 4 {
+		if self.m_pInBufferLen < 12 {
 			break
 		}
 		mbuff1 := self.m_pInBuffer[0:2]
@@ -228,11 +215,13 @@ func (self *Socket) ReceivePacket(Id int, dat []byte) bool {
 		}
 		if nLen1 > self.m_MaxReceiveBufferSize {
 			log.Errorf("ReceivePacket: 包长度越界[%d][%d]", nLen1, self.m_MaxReceiveBufferSize) // 接受包错误
+			self.Close()
 			return false
 		}
 
 		ok := self.HandlePacket(Id, self.m_pInBuffer, int(nLen1))
 		if ok == false {
+			log.Warningf("ReceivePacket HandlePacket error")
 			return false
 		}
 		self.m_pInBufferLen -= int(nLen1)

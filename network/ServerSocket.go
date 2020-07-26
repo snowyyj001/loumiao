@@ -1,7 +1,6 @@
 package network
 
 import (
-	"fmt"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -36,8 +35,8 @@ type ServerSocket struct {
 	m_Lock          sync.Mutex
 }
 
-func (self *ServerSocket) Init(ip string, port int) bool {
-	self.Socket.Init(ip, port)
+func (self *ServerSocket) Init(saddr string) bool {
+	self.Socket.Init(saddr)
 	self.m_ClientList = make(map[int]*ServerSocketClient)
 	self.m_ClientLocker = &sync.RWMutex{}
 	self.m_Pool = sync.Pool{
@@ -51,12 +50,11 @@ func (self *ServerSocket) Init(ip string, port int) bool {
 func (self *ServerSocket) Start() bool {
 	self.m_bShuttingDown = false
 
-	if self.m_sIP == "" {
-		self.m_sIP = "127.0.0.1"
+	if self.m_sAddr == "" {
+		return false
 	}
 
-	var strRemote = fmt.Sprintf("%s:%d", self.m_sIP, self.m_nPort)
-	tcpAddr, err := net.ResolveTCPAddr("tcp4", strRemote)
+	tcpAddr, err := net.ResolveTCPAddr("tcp4", self.m_sAddr)
 	if err != nil {
 		log.Errorf("%v", err)
 	}
@@ -66,7 +64,7 @@ func (self *ServerSocket) Start() bool {
 		return false
 	}
 
-	log.Infof("启动监听，等待链接！%s %d", self.m_sIP, self.m_nPort)
+	log.Infof("启动监听，等待链接！%s", self.m_sAddr)
 
 	self.m_Listen = ln
 	//延迟，监听关闭
@@ -94,7 +92,7 @@ func (self *ServerSocket) GetClientById(id int) *ServerSocketClient {
 func (self *ServerSocket) AddClinet(tcpConn *net.TCPConn, addr string, connectType int) *ServerSocketClient {
 	pClient := self.LoadClient()
 	if pClient != nil {
-		pClient.Socket.Init(addr, 0)
+		pClient.Socket.Init(addr)
 		pClient.m_pServer = self
 		pClient.m_ClientId = self.AssignClientId()
 		pClient.SetConnectType(connectType)

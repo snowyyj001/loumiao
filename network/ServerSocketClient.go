@@ -24,33 +24,33 @@ func handleError(err error) {
 	log.Errorf("错误：%s\n", err.Error())
 }
 
-func (this *ServerSocketClient) Start() bool {
-	if this.m_nState != SSF_SHUT_DOWN {
+func (self *ServerSocketClient) Start() bool {
+	if self.m_nState != SSF_SHUT_DOWN {
 		return false
 	}
 
-	if this.m_pServer == nil {
+	if self.m_pServer == nil {
 		return false
 	}
 
-	this.m_nState = SSF_CONNECT
-	this.m_Conn.(*net.TCPConn).SetNoDelay(true)
-	//this.m_Conn.SetKeepAlive(true)
-	//this.m_Conn.SetKeepAlivePeriod(5*time.Second)
-	this.OnNetConn()
-	go serverclientRoutine(this)
+	self.m_nState = SSF_CONNECT
+	self.m_Conn.(*net.TCPConn).SetNoDelay(true)
+	//self.m_Conn.SetKeepAlive(true)
+	//self.m_Conn.SetKeepAlivePeriod(5*time.Second)
+	self.OnNetConn()
+	go serverclientRoutine(self)
 
 	return true
 }
 
-func (this *ServerSocketClient) Send(buff []byte) int {
+func (self *ServerSocketClient) Send(buff []byte) int {
 	defer func() {
 		if err := recover(); err != nil {
 			log.Errorf("ServerSocketClient Send", err)
 		}
 	}()
 
-	n, err := this.m_Conn.Write(buff)
+	n, err := self.m_Conn.Write(buff)
 	handleError(err)
 	if n > 0 {
 		return n
@@ -58,23 +58,23 @@ func (this *ServerSocketClient) Send(buff []byte) int {
 	return 0
 }
 
-func (this *ServerSocketClient) OnNetConn() {
-	buff, nLen := message.Encode("CONNECT", nil)
+func (self *ServerSocketClient) OnNetConn() {
+	buff, nLen := message.Encode(-1, 0, "CONNECT", nil)
 	//bufflittle := common.BigEngianToLittle(buff, nLen)
-	this.HandlePacket(this.m_ClientId, buff, nLen)
+	self.HandlePacket(self.m_ClientId, buff, nLen)
 }
 
-func (this *ServerSocketClient) OnNetFail(error int) {
-	this.Stop()
-	buff, nLen := message.Encode("DISCONNECT", nil)
+func (self *ServerSocketClient) OnNetFail(error int) {
+	self.Stop()
+	buff, nLen := message.Encode(-1, 0, "DISCONNECT", nil)
 	//bufflittle := common.BigEngianToLittle(buff, nLen)
-	this.HandlePacket(this.m_ClientId, buff, nLen)
+	self.HandlePacket(self.m_ClientId, buff, nLen)
 }
 
-func (this *ServerSocketClient) Close() {
-	this.Socket.Close()
-	if this.m_pServer != nil {
-		this.m_pServer.DelClinet(this)
+func (self *ServerSocketClient) Close() {
+	self.Socket.Close()
+	if self.m_pServer != nil {
+		self.m_pServer.DelClinet(self)
 	}
 }
 

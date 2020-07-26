@@ -15,15 +15,15 @@ func InnerConnect(igo gorpc.IGoRoutine, socketId int, data interface{}) interfac
 
 //client disconnect
 func InnerDisConnect(igo gorpc.IGoRoutine, socketId int, data interface{}) interface{} {
+	log.Info("InnerDisConnect")
 	if config.NET_NODE_TYPE != config.ServerType_Gate {
 		return nil
 	}
-	userid := This.tokens[socketId].UserId
-	client := This.GetRpcClient(1)
-	if client != nil {
-		req := &LouMiaoClientOffline{ClientId: userid}
-		client.SendMsg("LouMiaoClientOffline", req)
+	if socketId <= 0 {
+		return nil
 	}
+	userid := This.tokens[socketId].UserId
+
 	This.tokens[socketId] = nil
 	This.tokens_u[userid] = 0
 
@@ -41,28 +41,13 @@ func InnerHandShake(igo gorpc.IGoRoutine, socketId int, data interface{}) interf
 	return nil
 }
 
-//server node heart beat
-func InnerHeartBeat(igo gorpc.IGoRoutine, socketId int, data interface{}) interface{} {
-	req := data.(*LouMiaoHeartBeat)
-	uid := req.Uid
-	if config.NET_NODE_TYPE != config.ServerType_Gate {
-		req := &LouMiaoHeartBeat{Uid: uid}
-		buff, _ := message.Encode("LouMiaoHeartBeat", req)
-		This.pInnerService.SendById(socketId, buff)
-	} else {
-		client := This.GetRpcClient(uid)
-		client.SendTimes = 0 //reset flag
-	}
-	return nil
-}
-
 //login gate
 func InnerLoginGate(igo gorpc.IGoRoutine, socketId int, data interface{}) interface{} {
 	m := data.(*LouMiaoLoginGate)
 	old_socketid, ok := This.tokens_u[m.UserId]
 	if ok {
 		req := &LouMiaoKickOut{}
-		buff, _ := message.Encode("LouMiaoKickOut", req)
+		buff, _ := message.Encode(This.Id, 0, "LouMiaoKickOut", req)
 		This.pService.SendById(old_socketid, buff)
 		if config.NET_WEBSOCKET {
 			This.pService.(*network.WebSocket).StopClient(old_socketid)
@@ -92,10 +77,6 @@ func SendClient(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	var buff []byte = m.Data.([]byte)
 	if This.pService != nil {
 		This.pService.SendById(m.Id, buff)
-	} else {
-		req := &LouMiaoRpcMsg{ClientId: m.Id, Buffer: m.Data.([]byte)}
-		buff, _ = message.Encode("LouMiaoRpcMsg", req)
-		This.pInnerService.SendById(This.tokens[m.Id].TokenId, buff)
 	}
 	return nil
 }
@@ -105,10 +86,6 @@ func SendMulClient(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	for _, clientid := range m.Ids {
 		if This.pService != nil {
 			This.pService.SendById(clientid, m.Data.([]byte))
-		} else {
-			req := &LouMiaoRpcMsg{ClientId: clientid, Buffer: m.Data.([]byte)}
-			buff, _ := message.Encode("LouMiaoRpcMsg", req)
-			This.pInnerService.SendById(This.tokens[clientid].TokenId, buff)
 		}
 	}
 	return nil
@@ -121,14 +98,14 @@ func SendRpc(igo gorpc.IGoRoutine, data interface{}) interface{} {
 		if client != nil {
 			client.Send(m.Data.([]byte))
 		} else {
-			log.Warningf("0.SendRpc dest id not exist %d %s", m.Id, m.Name)
+			log.Warningf("0.SendRpc dest uid not exist %ld ", m.Id)
 		}
 	} else {
 		clientid := This.serverMap[m.Id]
 		if clientid > 0 {
 			This.pInnerService.SendById(clientid, m.Data.([]byte))
 		} else {
-			log.Warningf("1.SendRpc dest id not exist %d %s", m.Id, m.Name)
+			log.Warningf("1.SendRpc dest id not exist %ld", m.Id)
 		}
 	}
 	return nil

@@ -5,10 +5,12 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/snowyyj001/loumiao/config"
 	"github.com/snowyyj001/loumiao/gate"
 	"github.com/snowyyj001/loumiao/gorpc"
 	"github.com/snowyyj001/loumiao/log"
 	"github.com/snowyyj001/loumiao/message"
+	"github.com/snowyyj001/loumiao/nsq"
 )
 
 //创建一个服务，稍后开启
@@ -26,6 +28,7 @@ func Start(igo gorpc.IGoRoutine, name string, sync bool) {
 //最开始的初始化
 func DoInit() {
 	message.DoInit()
+	nsq.Init(config.Cfg.NsqAddr)
 }
 
 //开启游戏
@@ -59,7 +62,7 @@ func UnRegisterNetHandler(igo gorpc.IGoRoutine, name string) {
 //发送给客户端消息
 func SendClient(clientid int, data interface{}) {
 	server := gorpc.GetGoRoutineMgr().GetRoutine("GateServer")
-	buff, _ := message.Encode("", data)
+	buff, _ := message.Encode(-1, 0, "", data)
 	m := gorpc.M{Id: clientid, Data: buff}
 	job := gorpc.ChannelContext{"SendClient", m, nil, nil}
 	server.GetJobChan() <- job
@@ -68,7 +71,7 @@ func SendClient(clientid int, data interface{}) {
 //发送给客户端消息
 func SendMulClient(clientids []int, data interface{}) {
 	server := gorpc.GetGoRoutineMgr().GetRoutine("GateServer")
-	buff, _ := message.Encode("", data)
+	buff, _ := message.Encode(-1, 0, "", data)
 	ms := gorpc.MS{Ids: clientids, Data: buff}
 	job := gorpc.ChannelContext{"SendMulClient", ms, nil, nil}
 	server.GetJobChan() <- job
@@ -82,7 +85,7 @@ func RegisterRpcHandler(uid int, name string) {
 //发送给remote消息
 func SendRpc(uid int, data interface{}) {
 	server := gorpc.GetGoRoutineMgr().GetRoutine("GateServer")
-	buff, _ := message.Encode("", data)
+	buff, _ := message.Encode(uid, 0, "", data)
 	m := gorpc.M{Id: uid, Data: buff}
 	job := gorpc.ChannelContext{"SendRpc", m, nil, nil}
 	server.GetJobChan() <- job

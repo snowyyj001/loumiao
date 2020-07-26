@@ -1,7 +1,6 @@
 package network
 
 import (
-	"fmt"
 	"net/http"
 	"sync"
 	"sync/atomic"
@@ -44,13 +43,11 @@ var upgrader = websocket.Upgrader{
 } // use default options
 var This *WebSocket
 
-func (self *WebSocket) Init(ip string, port int) bool {
+func (self *WebSocket) Init(saddr string) bool {
 	This = self
-	self.Socket.Init(ip, port)
+	self.Socket.Init(saddr)
 	self.m_ClientList = make(map[int]*WebSocketClient)
 	self.m_ClientLocker = &sync.RWMutex{}
-	self.m_sIP = ip
-	self.m_nPort = port
 	self.m_Pool = sync.Pool{
 		New: func() interface{} {
 			var s = &WebSocketClient{}
@@ -62,21 +59,20 @@ func (self *WebSocket) Init(ip string, port int) bool {
 func (self *WebSocket) Start() bool {
 	self.m_bShuttingDown = false
 
-	if self.m_sIP == "" {
-		self.m_sIP = "127.0.0.1"
+	if self.m_sAddr == "" {
+		return false
 	}
 
-	var strRemote = fmt.Sprintf("%s:%d", self.m_sIP, self.m_nPort)
 	http.HandleFunc("/", serveHome)
 	http.HandleFunc("/ws", serveWs)
 	go func() {
-		err := http.ListenAndServe(strRemote, nil)
+		err := http.ListenAndServe(self.m_sAddr, nil)
 		if err != nil {
 			log.Errorf("WebSocket ListenAndServe: %v", err)
 			return
 		}
 	}()
-	log.Infof("websocket 启动监听，等待链接！%s", strRemote)
+	log.Infof("websocket 启动监听，等待链接！%s", self.m_sAddr)
 
 	//延迟，监听关闭
 	//defer ln.Close()
@@ -102,7 +98,7 @@ func (self *WebSocket) GetClientById(id int) *WebSocketClient {
 func (self *WebSocket) AddClinet(wConn *websocket.Conn, addr string, connectType int) *WebSocketClient {
 	pClient := self.LoadClient()
 	if pClient != nil {
-		pClient.Socket.Init(addr, 0)
+		pClient.Socket.Init(addr)
 		pClient.m_pServer = self
 		pClient.m_ClientId = self.AssignClientId()
 		pClient.SetConnectType(connectType)
@@ -160,7 +156,7 @@ func (self *WebSocket) SendById(id int, buff []byte) int {
 	if pClient != nil {
 		pClient.Send(buff)
 	} else {
-		log.Warningf("ServerSocket发送数据失败[%d]", id)
+		log.Warningf("WebSocket发送数据失败[%d]", id)
 	}
 	return 0
 }

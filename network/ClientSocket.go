@@ -18,25 +18,22 @@ type ClientSocket struct {
 	Socket
 	m_nMaxClients int
 	m_nMinClients int
-	Uuid          string
 	Uid           int
-	Type          int
 	SendTimes     int
 }
 
-func (self *ClientSocket) Init(ip string, port int) bool {
-	if self.m_nPort == port || self.m_sIP == ip {
+func (self *ClientSocket) Init(saddr string) bool {
+	if self.m_sAddr == saddr {
 		return false
 	}
-
-	self.Socket.Init(ip, port)
+	self.Socket.Init(saddr)
 	return true
 }
 func (self *ClientSocket) Start() bool {
 	self.m_bShuttingDown = false
 
-	if self.m_sIP == "" {
-		self.m_sIP = "127.0.0.1"
+	if self.m_sAddr == "" {
+		return false
 	}
 
 	if self.Connect() {
@@ -54,11 +51,6 @@ func (self *ClientSocket) Stop() bool {
 
 	self.m_bShuttingDown = true
 	return true
-}
-
-func (self *ClientSocket) SendMsg(name string, msg interface{}) {
-	buff, _ := message.Encode(name, msg)
-	self.Send(buff)
 }
 
 func (self *ClientSocket) Send(buff []byte) int {
@@ -89,10 +81,9 @@ func (self *ClientSocket) Connect() bool {
 		return false
 	}
 
-	var strRemote = fmt.Sprintf("%s:%d", self.m_sIP, self.m_nPort)
-	tcpAddr, err := net.ResolveTCPAddr("tcp4", strRemote)
+	tcpAddr, err := net.ResolveTCPAddr("tcp4", self.m_sAddr)
 	if err != nil {
-		log.Warningf("ClientSocket address error", strRemote)
+		log.Warningf("ClientSocket address error", self.m_sAddr)
 		return false
 	}
 
@@ -115,13 +106,13 @@ func (self *ClientSocket) OnDisconnect() {
 }
 
 func (self *ClientSocket) OnNetConn() {
-	buff, nLen := message.Encode("CONNECT", nil)
+	buff, nLen := message.Encode(-1, 0, "CONNECT", nil)
 	self.HandlePacket(self.m_ClientId, buff, nLen)
 }
 
 func (self *ClientSocket) OnNetFail(int) {
 	self.Stop()
-	buff, nLen := message.Encode("DISCONNECT", nil)
+	buff, nLen := message.Encode(-1, 0, "DISCONNECT", nil)
 	self.HandlePacket(self.m_ClientId, buff, nLen)
 }
 

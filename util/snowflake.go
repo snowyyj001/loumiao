@@ -91,7 +91,6 @@ func (s *Snowflake) Generate() int64 {
 func UUID() int64 {
 	if SnowFlakeInst == nil {
 		NewSnowflake(int64(config.NET_NODE_ID))
-		return 0
 	}
 	return SnowFlakeInst.Generate()
 }
