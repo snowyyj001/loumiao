@@ -4,8 +4,11 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"log"
 	"math"
 	rand2 "math/rand"
+	"md5"
+	"strconv"
 	"time"
 )
 
@@ -64,4 +67,27 @@ func CopyArray(dst []int, src []int, size int) {
 	for i := 0; i < size; i++ {
 		dst[i] = src[i]
 	}
+}
+
+func Md5(str string) {
+	data := []byte(str)
+	has := md5.Sum(data)
+	md5str := fmt.Sprintf("%x", has)
+	return md5str
+}
+
+func Atoi(num string) int {
+	val, err := strconv.Atoi(num)
+	if err {
+		log.Fatal("Atoi strconv.Atoi failed " + err.Error())
+	}
+	return val
+}
+
+func HasBit(val int, flag int) bool {
+	return (val & flag) != 0
+}
+
+func EqualBit(val int, flag int) bool {
+	return (val & flag) == flag
 }

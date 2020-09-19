@@ -61,7 +61,7 @@ func PacketFunc(socketid int, buff []byte, nlen int) bool {
 	handler, ok := handler_Map[name]
 	if ok {
 		m := gorpc.M{id: socketid, name: name, data: pm}
-		This.Send(handler, "NetRpC", m)
+		This.Send(handler, "ServiceHandler", m)
 	} else {
 		if name != "CONNECT" && name != "DISCONNECT" {
 			log.Noticef("MsgProcess PacketFunc handler is nil, drop it[%s]", name)

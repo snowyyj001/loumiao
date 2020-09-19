@@ -30,8 +30,8 @@ func RegisterTpoic(topic string, channel string, recv Consumer) {
 	c.AddHandler(recv) // 添加消费者接口
 
 	//建立NSQLookupd连接
-	//if err := c.ConnectToNSQDs(nsqdAddress); err != nil {
-	if err := c.ConnectToNSQLookupd("127.0.0.1:4160"); err != nil {
+	if err := c.ConnectToNSQDs(nsqdAddress); err != nil {
+	//if err := c.ConnectToNSQLookupd("127.0.0.1:4160"); err != nil {
 		panic(err)
 	}
 }

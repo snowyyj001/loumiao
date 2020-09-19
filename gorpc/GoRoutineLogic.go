@@ -231,7 +231,7 @@ func (self *GoRoutineLogic) Init(name string) {
 	self.NetHandler = make(map[string]HanlderNetFunc)
 }
 
-func NetRpC(igo IGoRoutine, data interface{}) interface{} {
+func ServiceHandler(igo IGoRoutine, data interface{}) interface{} {
 	m := data.(M)
 	igo.CallNetFunc(m)
 	return nil

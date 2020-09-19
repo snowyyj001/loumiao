@@ -1,9 +1,10 @@
 package log
 
 import (
-	"github.com/snowyyj001/loumiao/config"
+	"log"
 
 	"github.com/phachon/go-logger"
+	"github.com/snowyyj001/loumiao/config"
 )
 
 var (
@@ -116,4 +117,14 @@ func Debug(msg string) {
 //log debug format
 func Debugf(format string, a ...interface{}) {
 	logger.Debugf(format, a...)
+}
+
+//log Fatal
+func Fatal(msg string) {
+	log.Fatal(msg)
+}
+
+//log Fatal
+func Fatalf(msg string, err error) {
+	log.Fatal(msg + err.Error())
 }

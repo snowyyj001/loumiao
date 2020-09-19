@@ -12,7 +12,7 @@ const (
 	ServerType_Gate  = 2 //网关服-->集群
 	ServerType_Login = 3 //登录服-->集群
 	ServerType_DB    = 4 //数据库服-->集群
-	ServerType_Zoon  = 5 //地图服-->集群
+	ServerType_Zone  = 5 //地图服-->集群
 	ServerType_IM    = 6 //聊天服-->集群
 )
 

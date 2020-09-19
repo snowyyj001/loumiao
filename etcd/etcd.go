@@ -5,8 +5,12 @@ import (
 	"fmt"
 	"sync"
 	"time"
+	"log"
+	"github.com/snowyyj001/loumiao/define"
+	"github.com/snowyyj001/loumiao/util"
 
 	"github.com/coreos/etcd/clientv3"
+	"github.com/coreos/etcd/clientv3/concurrency"
 	"github.com/coreos/etcd/mvcc/mvccpb"
 )
 
@@ -19,6 +23,12 @@ type ServiceReg struct {
 	keepAliveChan <-chan *clientv3.LeaseKeepAliveResponse
 	key           string
 }
+
+//
+func (self *ServiceReg) GetClient() *clientv3.Client {
+	return self.client
+}
+
 
 //timeNum 租约心跳间隔
 func NewServiceReg(addr []string, timeNum int64) (*ServiceReg, error) {
@@ -98,16 +108,65 @@ func (self *ServiceReg) PutService(key, val string) error {
 //撤销租约
 func (self *ServiceReg) RevokeLease() error {
 	self.canclefunc()
-	time.Sleep(2 * time.Second)
 	_, err := self.lease.Revoke(context.TODO(), self.leaseResp.ID)
 	return err
 }
 
+func (self *ServiceReg) Watch(prefix string, hanlder func(string, string, bool)) ([]string, error) {
+	resp, err := self.client.Get(context.Background(), prefix, clientv3.WithPrefix())
+	if err != nil {
+		return nil, err
+	}
+	self.CallBack = hanlder
+	self.extractValues(resp)
+
+	go self.watcher(prefix)
+	return addrs, nil
+}
+
+func (self *ServiceReg) extractValues(resp *clientv3.GetResponse) {
+	if resp == nil || resp.Kvs == nil {
+		return
+	}
+	for i := range resp.Kvs {
+		if v := resp.Kvs[i].Value; v != nil {
+			if self.CallBack != nil {
+				self.CallBack(string(resp.Kvs[i].Key), string(resp.Kvs[i].Value), true)
+			}
+		}
+	}
+}
+
+func (self *ServiceReg) watcher(prefix string) {
+	rch := self.client.Watch(context.Background(), prefix, clientv3.WithPrefix())
+	for wresp := range rch {
+		for _, ev := range wresp.Events {
+			switch ev.Type {
+			case mvccpb.PUT:
+				if self.CallBack != nil {
+					self.CallBack(string(resp.Kvs[i].Key), string(resp.Kvs[i].Value), true)
+				}
+			case mvccpb.DELETE:
+				if self.CallBack != nil {
+					self.CallBack(string(resp.Kvs[i].Key), nil, false)
+				}
+			}
+		}
+	}
+}
+
+///////////////////////////////////////////////////////////
+//client
 type ClientDis struct {
 	client     *clientv3.Client
 	serverList map[string]string
 	CallBack   func(string, string, bool)
 	lock       sync.Mutex
+}
+
+//
+func (self *ClientDis) GetClient() *clientv3.Client {
+	return self.client
 }
 
 func NewClientDis(addr []string) (*ClientDis, error) {
@@ -192,4 +251,61 @@ func (self *ClientDis) SerList2Array() []string {
 		addrs = append(addrs, v)
 	}
 	return addrs
+}
+
+////////////////////////////////////////////////////////////
+//
+
+//设置value
+func func Put(cli *clientv3.Client, key string, val string) error {
+	dresp, err := cli.Put(context.TODO(), key, val)
+	return err
+}
+
+//删除value
+func Delete(cli *clientv3.Client, key string, val string) error {
+	dresp, err := cli.Delete(context.TODO(), key, val)
+	return err
+}
+
+//获得value
+func Get(cli *clientv3.Client, key string) (*clientv3.GetResponse, error) {
+	gresp, err := cli.Get(context.TODO(), key)
+	return gresp, err
+}
+
+//获取server uid
+func GetServerUid(cli *clientv3.Client, key string) int {
+	sk := fmt.Sprintf("%s%s", define.ETCD_LOCKUID, key)
+	gresp, err := Get(cli, sk)
+	if err != nil {
+		log.Fatal("GetServerUid get failed " + err.Error())
+	}
+	if gresp.GetCount() > 0 {		//server has been assigned value
+		return util.Atoi(gresp.Kvs[0].Value)
+	}
+	
+	var session *concurrency.Session
+	session, err = concurrency.NewSession(cli)
+	if err != nil {
+		log.Fatal("GetServerUid NewSession failed " + err.Error())
+	}
+	m := concurrency.NewMutex(session, define.ETCD_LOCKUID)
+	if err = m.Lock(context.TODO()); err != nil {
+		log.Fatal("GetServerUid NewMutex failed " + err.Error())
+	}
+	var topvalue int
+	sk_reserve := fmt.Sprintf("%s%s", define.ETCD_LOCKUID, "0")
+	gresp, err = Get(cli, sk_reserve)
+	if gresp.GetCount() == 0 {
+		topvalue = 1
+		Put(cli, sk_reserve, topvalue)		//init value
+	} else {
+		topvalue = util.Atoi(gresp.Kvs[0].Value) + 1	//inc value
+		Put(cli, sk_reserve, topvalue)		//inc value
+	}
+	Put(cli, sk, topvalue)		//set value
+	m.Unlock(context.TODO())
+	
+	return topvalue
 }
