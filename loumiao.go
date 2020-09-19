@@ -7,12 +7,14 @@ import (
 	"runtime"
 	"syscall"
 
+	"github.com/snowyyj001loumiao/gate"
+
 	"github.com/snowyyj001/loumiao/config"
-	"github.com/snowyyj001/loumiao/gate"
 	"github.com/snowyyj001/loumiao/gorpc"
 	"github.com/snowyyj001/loumiao/log"
 	"github.com/snowyyj001/loumiao/message"
 	"github.com/snowyyj001/loumiao/nsq"
+	"github.com/snowyyj001/loumiao/util"
 )
 
 //创建一个服务，稍后开启
@@ -65,14 +67,18 @@ func UnRegisterNetHandler(igo gorpc.IGoRoutine, name string) {
 func SendClient(clientid int, data interface{}) {
 	buff, _ := message.Encode(-1, 0, "", data)
 	m := gorpc.M{Id: clientid, Data: buff}
-	igo.Send("GateServer", "SendClient", m)
+	server := GetGoRoutineMgr().GetRoutine("GateServer")
+	job := gorpc.ChannelContext{"SendClient", m, nil, nil}
+	server.GetJobChan() <- job
 }
 
 //发送给客户端消息
-func SendMulClient(clientids []int, data interface{}) {
+func SendMulClient(igo gorpc.IGoRoutine, clientids []int, data interface{}) {
 	buff, _ := message.Encode(-1, 0, "", data)
-	m := gorpc.M{Id: clientid, Data: buff}
-	igo.Send("GateServer", "SendMulClient", m)
+	m := gorpc.MS{Ids: clientids, Data: buff}
+	server := GetGoRoutineMgr().GetRoutine("GateServer")
+	job := gorpc.ChannelContext{"SendMulClient", m, nil, nil}
+	server.GetJobChan() <- job
 }
 
 //注册rpc消息
@@ -93,7 +99,7 @@ func UnRegisterRpcHandler(igo gorpc.IGoRoutine, call gorpc.HanlderNetFunc) {
 }
 
 //rpc调用
-func SendRpc(funcName string, data interface{}) {
+func SendRpc(igo gorpc.IGoRoutine, funcName string, data interface{}) {
 	md5str := util.Md5(funcName)
 	m := gorpc.M{Id: 0, Name: md5str, Data: data}
 	igo.Send("GateServer", "SendRpc", m)

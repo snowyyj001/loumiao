@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"sync"
 	"time"
-	"log"
+
+	"github.com/snowyyj001/loumiao/log"
+
 	"github.com/snowyyj001/loumiao/define"
 	"github.com/snowyyj001/loumiao/util"
 
@@ -22,13 +24,13 @@ type ServiceReg struct {
 	canclefunc    func()
 	keepAliveChan <-chan *clientv3.LeaseKeepAliveResponse
 	key           string
+	CallBack      func(string, string, bool)
 }
 
 //
 func (self *ServiceReg) GetClient() *clientv3.Client {
 	return self.client
 }
-
 
 //timeNum 租约心跳间隔
 func NewServiceReg(addr []string, timeNum int64) (*ServiceReg, error) {
@@ -112,16 +114,16 @@ func (self *ServiceReg) RevokeLease() error {
 	return err
 }
 
-func (self *ServiceReg) Watch(prefix string, hanlder func(string, string, bool)) ([]string, error) {
+func (self *ServiceReg) Watch(prefix string, hanlder func(string, string, bool)) {
 	resp, err := self.client.Get(context.Background(), prefix, clientv3.WithPrefix())
 	if err != nil {
-		return nil, err
+		log.Errorf("ServiceReg Watch %s error: %s", prefix, err.Error())
+		return
 	}
 	self.CallBack = hanlder
 	self.extractValues(resp)
 
 	go self.watcher(prefix)
-	return addrs, nil
 }
 
 func (self *ServiceReg) extractValues(resp *clientv3.GetResponse) {
@@ -144,11 +146,11 @@ func (self *ServiceReg) watcher(prefix string) {
 			switch ev.Type {
 			case mvccpb.PUT:
 				if self.CallBack != nil {
-					self.CallBack(string(resp.Kvs[i].Key), string(resp.Kvs[i].Value), true)
+					self.CallBack(string(ev.Kv.Key), string(ev.Kv.Value), true)
 				}
 			case mvccpb.DELETE:
 				if self.CallBack != nil {
-					self.CallBack(string(resp.Kvs[i].Key), nil, false)
+					self.CallBack(string(ev.Kv.Key), "", false)
 				}
 			}
 		}
@@ -257,14 +259,14 @@ func (self *ClientDis) SerList2Array() []string {
 //
 
 //设置value
-func func Put(cli *clientv3.Client, key string, val string) error {
-	dresp, err := cli.Put(context.TODO(), key, val)
+func Put(cli *clientv3.Client, key string, val string) error {
+	_, err := cli.Put(context.TODO(), key, val)
 	return err
 }
 
 //删除value
-func Delete(cli *clientv3.Client, key string, val string) error {
-	dresp, err := cli.Delete(context.TODO(), key, val)
+func Delete(cli *clientv3.Client, key string) error {
+	_, err := cli.Delete(context.TODO(), key)
 	return err
 }
 
@@ -281,10 +283,10 @@ func GetServerUid(cli *clientv3.Client, key string) int {
 	if err != nil {
 		log.Fatal("GetServerUid get failed " + err.Error())
 	}
-	if gresp.GetCount() > 0 {		//server has been assigned value
-		return util.Atoi(gresp.Kvs[0].Value)
+	if len(gresp.Kvs) > 0 { //server has been assigned value
+		return util.Atoi(string(gresp.Kvs[0].Value))
 	}
-	
+
 	var session *concurrency.Session
 	session, err = concurrency.NewSession(cli)
 	if err != nil {
@@ -297,15 +299,15 @@ func GetServerUid(cli *clientv3.Client, key string) int {
 	var topvalue int
 	sk_reserve := fmt.Sprintf("%s%s", define.ETCD_LOCKUID, "0")
 	gresp, err = Get(cli, sk_reserve)
-	if gresp.GetCount() == 0 {
+	if len(gresp.Kvs) == 0 {
 		topvalue = 1
-		Put(cli, sk_reserve, topvalue)		//init value
+		Put(cli, sk_reserve, util.Itoa(topvalue)) //init value
 	} else {
-		topvalue = util.Atoi(gresp.Kvs[0].Value) + 1	//inc value
-		Put(cli, sk_reserve, topvalue)		//inc value
+		topvalue = util.Atoi(string(gresp.Kvs[0].Value)) + 1 //inc value
+		Put(cli, sk_reserve, util.Itoa(topvalue))            //inc value
 	}
-	Put(cli, sk, topvalue)		//set value
+	Put(cli, sk, util.Itoa(topvalue)) //set value
 	m.Unlock(context.TODO())
-	
+
 	return topvalue
 }

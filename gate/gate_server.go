@@ -11,7 +11,6 @@ import (
 	"github.com/snowyyj001/loumiao/log"
 	"github.com/snowyyj001/loumiao/message"
 	"github.com/snowyyj001/loumiao/network"
-	"github.com/snowyyj001/loumiao/util"
 )
 
 var (
@@ -50,7 +49,7 @@ type GateServer struct {
 	clientReq     *etcd.ClientDis
 	rpcMap        map[string][]int
 
-	OnClientConnected func(int)
+	OnClientConnected    func(int)
 	OnClientDisConnected func(int)
 }
 
@@ -97,7 +96,7 @@ func (self *GateServer) DoInit() {
 	self.tokens_u = make(map[int]int)
 	self.users_u = make(map[int]int)
 	self.rpcMap = make(map[string][]int) //md5(funcname) -> [uid,uid,...]
-	
+
 }
 
 func (self *GateServer) DoRegsiter() {
@@ -166,7 +165,7 @@ func (self *GateServer) DoStart() {
 		}
 	}
 
-	log.Info("GateServer DoStart success : " + self.Name + ", " + config.NET_GATE_SADDR + self.Id)
+	log.Infof("GateServer DoStart success: %s,%s,%d", self.Name, config.NET_GATE_SADDR, self.Id)
 }
 
 func (self *GateServer) NewClientDiscover(key string, val string, dis bool) {
@@ -202,11 +201,10 @@ func (self *GateServer) NewRpcRegister(key string, val string, dis bool) {
 					return
 				}
 			}
-			append(arr, uid)
+			arr = append(arr, uid)
 		} else {
 			self.rpcMap[funcName] = make([]int, 5)
-			arr, ok := self.rpcMap[funcName]
-			append(arr, uid)
+			self.rpcMap[funcName] = append(self.rpcMap[funcName], uid)
 		}
 	} else {
 		arr, ok := self.rpcMap[funcName]
@@ -245,7 +243,7 @@ func PacketFunc(socketid int, buff []byte, nlen int) bool {
 		}
 	}()
 
-	err,, target, name, pm := message.Decode(This.Id, buff, nlen)
+	err, target, name, pm := message.Decode(This.Id, buff, nlen)
 	if err != nil {
 		log.Warningf("PacketFunc Decode error: %s", err.Error())
 		return false
@@ -266,15 +264,15 @@ func PacketFunc(socketid int, buff []byte, nlen int) bool {
 		}
 	} else { //send to target server
 		if config.NET_NODE_TYPE != config.ServerType_Gate {
-			log.Errorf("PacketFunc target error, [%s]drop it, target=%d,myid=%d", name, target, This.Id )
+			log.Errorf("PacketFunc target error, [%s]drop it, target=%d,myid=%d", name, target, This.Id)
 			return false
 		}
 		token, ok := This.tokens[socketid]
-		if ok != nil {
+		if ok {
 			log.Debugf("0.PacketFunc recv client msg, but client has lost[%d] ", socketid)
 			return false
 		}
-		msg := LouMiaoNetMsg{ClientId: socketid, Buffer: buff}
+		msg := LouMiaoNetMsg{ClientId: token.UserId, Buffer: buff}
 		buff, _ := message.Encode(target, This.Id, "LouMiaoNetMsg", msg)
 
 		rpcClient := This.GetRpcClient(target)
@@ -311,18 +309,10 @@ func (self *GateServer) GetRpcClient(uid int) *network.ClientSocket {
 	return self.clients[uid]
 }
 
-func (self *GateServer) RegisterRpc() {
-	client, ok := self.clients[uid]
-	if ok {
-		client.Stop()
-	}
-	delete(self.clients, uid)
-}
-
 func (self *GateServer) OnServerConnected(uid int) {
 	req := &LouMiaoLoginGate{TokenId: uid, UserId: self.Id}
 	buff, _ := message.Encode(uid, self.Id, "LouMiaoLoginGate", req)
-	client, ok := self.clients[uid]
+	client, _ := self.clients[uid]
 	client.Send(buff)
 }
 

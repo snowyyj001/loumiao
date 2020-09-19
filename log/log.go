@@ -125,6 +125,6 @@ func Fatal(msg string) {
 }
 
 //log Fatal
-func Fatalf(msg string, err error) {
-	log.Fatal(msg + err.Error())
+func Fatalf(msg string, a ...interface{}) {
+	log.Fatalf(msg, a)
 }

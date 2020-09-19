@@ -1,11 +1,16 @@
 package gate
 
 import (
+	"fmt"
+
 	"github.com/snowyyj001/loumiao/config"
+	"github.com/snowyyj001/loumiao/define"
+	"github.com/snowyyj001/loumiao/etcd"
 	"github.com/snowyyj001/loumiao/gorpc"
 	"github.com/snowyyj001/loumiao/log"
 	"github.com/snowyyj001/loumiao/message"
 	"github.com/snowyyj001/loumiao/network"
+	"github.com/snowyyj001/loumiao/util"
 )
 
 //client connect
@@ -16,10 +21,10 @@ func InnerConnect(igo gorpc.IGoRoutine, socketId int, data interface{}) interfac
 //client disconnect
 func InnerDisConnect(igo gorpc.IGoRoutine, socketId int, data interface{}) interface{} {
 	token, ok := This.tokens[socketId]
-	if ok == nil {
+	if ok {
 		delete(This.tokens, socketId)
 		delete(This.tokens_u, token.UserId)
-		
+
 		if This.OnClientDisConnected != nil {
 			This.OnClientDisConnected(token.UserId)
 		}
@@ -30,7 +35,7 @@ func InnerDisConnect(igo gorpc.IGoRoutine, socketId int, data interface{}) inter
 //login gate
 func InnerLouMiaoLoginGate(igo gorpc.IGoRoutine, socketId int, data interface{}) interface{} {
 	m := data.(*LouMiaoLoginGate)
-	
+
 	old_socketid, ok := This.tokens_u[m.UserId]
 	if ok { //close the old connection
 		req := &LouMiaoKickOut{}
@@ -62,6 +67,7 @@ func InnerLouMiaoRpcMsg(igo gorpc.IGoRoutine, socketId int, data interface{}) in
 	req := data.(*LouMiaoRpcMsg)
 	handler, ok := handler_Map[req.FuncName]
 	if ok {
+		m := gorpc.M{Id: socketId, Name: req.FuncName, Data: req.Buffer}
 		This.Send(handler, "ServiceHandler", m)
 	} else {
 		log.Warningf("0.InnerLouMiaoRpcMsg no rpc hanlder %s, %d", req.FuncName, socketId)
@@ -75,8 +81,8 @@ func InnerLouMiaoNetMsg(igo gorpc.IGoRoutine, socketId int, data interface{}) in
 	req := data.(*LouMiaoNetMsg) //after decode LouMiaoNetMsg msg, post Buffer to next
 
 	if config.NET_NODE_TYPE == config.ServerType_Gate { //server -> gate
-		socketId, _ := This.tokens_u[req.ClientId] // get client's socketid by userid
-		This.pService.SendById(socketId, buff)     //set to client
+		socketId, _ := This.tokens_u[req.ClientId]   // get client's socketid by userid
+		This.pService.SendById(socketId, req.Buffer) //set to client
 	} else { //gate -> server
 		This.users_u[req.ClientId] = socketId
 		PacketFunc(req.ClientId, req.Buffer, len(req.Buffer)) //post msg to server service
@@ -89,7 +95,7 @@ func RegisterNet(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	handler_Map[m.Name] = m.Data.(string)
 	if m.Id < 0 { //rpc register
 		key := fmt.Sprintf("%s%s/%d", define.ETCD_RPCADDR, m.Name, This.Id)
-		This.serverReg.Put(key, This.Id)
+		etcd.Put(This.serverReg.GetClient(), key, util.Itoa(This.Id))
 	}
 	return nil
 }
@@ -98,25 +104,25 @@ func UnRegisterNet(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	m := data.(gorpc.M)
 	delete(handler_Map, m.Name)
 	if m.Id < 0 { //rpc unregister
-		This.serverReg.Delete(m.Name)
+		key := fmt.Sprintf("%s%s/%d", define.ETCD_RPCADDR, m.Name, This.Id)
+		etcd.Delete(This.serverReg.GetClient(), key)
 	}
 	return nil
 }
 
 func SendClient(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	m := data.(gorpc.M)
-	var buff []byte = m.Data.([]byte)
 	if config.NET_NODE_TYPE == config.ServerType_Gate {
 		log.Error("0.SendClient gate can not send client")
-		return
+		return nil
 	}
 	socketId, _ := This.users_u[m.Id] // get gate's socketid by client's userid
 	token, ok := This.tokens[socketId]
-	if ok != nil {
+	if ok {
 		log.Noticef("1.SendClient gate has been shut down, uid = %d", m.Id)
-		return
+		return nil
 	}
-	msg := LouMiaoNetMsg{ClientId: m.Id, Buffer: m.Data} //m.Id should be client`s userid
+	msg := LouMiaoNetMsg{ClientId: m.Id, Buffer: m.Data.([]byte)} //m.Id should be client`s userid
 	buff, _ := message.Encode(token.UserId, This.Id, "LouMiaoNetMsg", msg)
 
 	This.pInnerService.SendById(socketId, buff)
@@ -126,21 +132,20 @@ func SendClient(igo gorpc.IGoRoutine, data interface{}) interface{} {
 
 func SendMulClient(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	m := data.(gorpc.MS)
-	var buff []byte = m.Data.([]byte)
 	if config.NET_NODE_TYPE == config.ServerType_Gate {
 		log.Error("0.SendMulClient gate can not send client")
-		return
+		return nil
 	}
-	for k, v range(m.Ids) {
+	for _, v := range m.Ids {
 		socketId, _ := This.users_u[v] // get gate's socketid by client's userid
 		token, ok := This.tokens[socketId]
-		if ok != nil {
+		if ok {
 			log.Noticef("1.SendMulClient gate has been shut down, uid = %d", v)
-			return
+			return nil
 		}
-		msg := LouMiaoNetMsg{ClientId: v, Buffer: m.Data} //m.Id should be client`s userid
+		msg := LouMiaoNetMsg{ClientId: v, Buffer: m.Data.([]byte)} //m.Id should be client`s userid
 		buff, _ := message.Encode(token.UserId, This.Id, "LouMiaoNetMsg", msg)
-	
+
 		This.pInnerService.SendById(socketId, buff)
 	}
 
@@ -156,18 +161,18 @@ func SendRpc(igo gorpc.IGoRoutine, data interface{}) interface{} {
 		log.Warningf("0.SendRpc no rpc server hanlder finded %s", m.Name)
 		return nil
 	}
-	index := util.Random(0, sz) //随机一个server进行rpc调用
+	index := util.Random(sz) //随机一个server进行rpc调用
 	target := arr[index]
 
 	rpcClient := This.GetRpcClient(target)
 	if rpcClient == nil {
-		return false
+		return nil
 	}
-	indata := message.Encode(target, This.Id, "", m.Data)
+	indata, _ := message.Encode(target, This.Id, "", m.Data)
 	outdata := LouMiaoRpcMsg{FuncName: m.Name, Buffer: indata}
 
 	buff, _ := message.Encode(target, 0, "LouMiaoRpcMsg", outdata)
-	rpcClient.Send(buff[0:nlen])
+	rpcClient.Send(buff)
 
 	return nil
 }

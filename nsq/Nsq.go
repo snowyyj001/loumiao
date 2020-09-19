@@ -2,8 +2,9 @@ package nsq
 
 import (
 	"fmt"
-	"github.com/snowyyj001/loumiao/log"
 	"time"
+
+	"github.com/snowyyj001/loumiao/log"
 
 	"github.com/snowyyj001/loumiao/util"
 
@@ -31,7 +32,7 @@ func RegisterTpoic(topic string, channel string, recv Consumer) {
 
 	//建立NSQLookupd连接
 	if err := c.ConnectToNSQDs(nsqdAddress); err != nil {
-	//if err := c.ConnectToNSQLookupd("127.0.0.1:4160"); err != nil {
+		//if err := c.ConnectToNSQLookupd("127.0.0.1:4160"); err != nil {
 		panic(err)
 	}
 }
@@ -55,7 +56,7 @@ func Publish(topic string, message []byte) error {
 		}
 		trytimes := 0
 		for err = producer.Publish(topic, message); err != nil; err = producer.Publish(topic, message) {
-			log.Error(Publish msg error)
+			log.Errorf("nsq Publish msg error:%ds ", err.Error())
 			trytimes++
 			addr := nsqdAddress[util.Random(len(nsqdAddress))]
 			InitProducer(addr)

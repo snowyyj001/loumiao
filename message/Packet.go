@@ -13,7 +13,6 @@ import (
 	"github.com/golang/protobuf/proto"
 )
 
-
 //消息pack,unpack格式
 //消息buffer以大端传输
 //2+4+4+2+name+msg
@@ -72,7 +71,7 @@ func DecodeProBuff(uid int, buff []byte, length int) (error, int, string, interf
 	if target != -1 && target != uid { //do not need decode anymore, a msg to other server
 		return nil, target, "", nil
 	}
-	
+
 	mbuff1 = buff[6:10]
 	reserve := util.BytesToUInt32(mbuff1, binary.BigEndian)
 	if reserve <= 0 {
@@ -91,7 +90,7 @@ func DecodeProBuff(uid int, buff []byte, length int) (error, int, string, interf
 	}
 	packet := GetPakcet(msgName)
 	if packet == nil {
-		return fmt.Errorf("DecodeProBuff: packet[%s] may not registered", msgName), 0, 0, "", nil
+		return fmt.Errorf("DecodeProBuff: packet[%s] may not registered", msgName), 0, "", nil
 	}
 	err := proto.Unmarshal(buff[12+nameLen:length], packet.(proto.Message))
 	if util.CheckErr(err) {
@@ -133,14 +132,14 @@ func EncodeJson(target int, reserve int, name string, packet interface{}) ([]byt
 func DecodeJson(uid int, buff []byte, length int) (error, int, string, interface{}) {
 	mbuff1 := buff[2:6]
 	target := int(util.BytesToUInt32(mbuff1, binary.BigEndian))
-	
+
 	if target != -1 && target != uid { //do not need decode anymore, a msg to other server
 		return nil, target, "", nil
 	}
 
 	mbuff1 = buff[6:10]
 	reserve := util.BytesToUInt32(mbuff1, binary.BigEndian)
-	if flag <= 0 {
+	if reserve <= 0 {
 		return fmt.Errorf("DecodeJson: reserve is illegal: %d", reserve), 0, "", nil
 	}
 	mbuff1 = buff[10:12]
@@ -150,7 +149,7 @@ func DecodeJson(uid int, buff []byte, length int) (error, int, string, interface
 	}
 	msgName := string(buff[12 : 12+nameLen])
 	if length == 12+int(nameLen) { //just for on CONNECT/DISCONNECT
-		return nil,, target, msgName, nil
+		return nil, target, msgName, nil
 	}
 
 	packet := GetPakcet(msgName)

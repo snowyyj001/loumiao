@@ -27,7 +27,6 @@ type LouMiaoNetMsg struct {
 }
 
 func init() {
-	message.RegisterPacket(&LouMiaoHandShake{})
 	message.RegisterPacket(&LouMiaoLoginGate{})
 	message.RegisterPacket(&LouMiaoKickOut{})
 	message.RegisterPacket(&LouMiaoClientOffline{})

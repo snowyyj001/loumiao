@@ -2,12 +2,12 @@ package util
 
 import (
 	"bytes"
+	"crypto/md5"
 	"encoding/binary"
 	"fmt"
 	"log"
 	"math"
 	rand2 "math/rand"
-	"md5"
 	"strconv"
 	"time"
 )
@@ -69,7 +69,7 @@ func CopyArray(dst []int, src []int, size int) {
 	}
 }
 
-func Md5(str string) {
+func Md5(str string) string {
 	data := []byte(str)
 	has := md5.Sum(data)
 	md5str := fmt.Sprintf("%x", has)
@@ -78,10 +78,14 @@ func Md5(str string) {
 
 func Atoi(num string) int {
 	val, err := strconv.Atoi(num)
-	if err {
+	if err != nil {
 		log.Fatal("Atoi strconv.Atoi failed " + err.Error())
 	}
 	return val
+}
+
+func Itoa(num int) string {
+	return strconv.Itoa(num)
 }
 
 func HasBit(val int, flag int) bool {
