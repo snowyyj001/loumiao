@@ -7,8 +7,6 @@ import (
 	"runtime"
 	"syscall"
 
-	"github.com/snowyyj001loumiao/gate"
-
 	"github.com/snowyyj001/loumiao/config"
 	"github.com/snowyyj001/loumiao/gorpc"
 	"github.com/snowyyj001/loumiao/log"
@@ -67,7 +65,7 @@ func UnRegisterNetHandler(igo gorpc.IGoRoutine, name string) {
 func SendClient(clientid int, data interface{}) {
 	buff, _ := message.Encode(-1, 0, "", data)
 	m := gorpc.M{Id: clientid, Data: buff}
-	server := GetGoRoutineMgr().GetRoutine("GateServer")
+	server := gorpc.GetGoRoutineMgr().GetRoutine("GateServer")
 	job := gorpc.ChannelContext{"SendClient", m, nil, nil}
 	server.GetJobChan() <- job
 }
@@ -76,7 +74,7 @@ func SendClient(clientid int, data interface{}) {
 func SendMulClient(igo gorpc.IGoRoutine, clientids []int, data interface{}) {
 	buff, _ := message.Encode(-1, 0, "", data)
 	m := gorpc.MS{Ids: clientids, Data: buff}
-	server := GetGoRoutineMgr().GetRoutine("GateServer")
+	server := gorpc.GetGoRoutineMgr().GetRoutine("GateServer")
 	job := gorpc.ChannelContext{"SendMulClient", m, nil, nil}
 	server.GetJobChan() <- job
 }
