@@ -68,7 +68,7 @@ func DecodeProBuff(uid int, buff []byte, length int) (error, int, string, interf
 	mbuff1 := buff[2:6]
 	target := int(util.BytesToUInt32(mbuff1, binary.BigEndian))
 
-	if target != -1 && target != uid { //do not need decode anymore, a msg to other server
+	if target > 0 && target != uid { //do not need decode anymore, a msg to other server
 		return nil, target, "", nil
 	}
 

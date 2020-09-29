@@ -4,6 +4,10 @@ import (
 	"reflect"
 )
 
+const (
+	Flag_RPC int = 1 << 0
+)
+
 var (
 	Packet_CreateFactorStringMap map[string]func() interface{}
 )

@@ -141,7 +141,7 @@ func (self *GateServer) DoStart() {
 			self.clientReq = client
 			self.Id = etcd.GetServerUid(client.GetClient(), config.NET_GATE_SADDR)
 			//watch addr
-			_, err = self.clientReq.Watch(define.ETCD_SADDR, self.NewClientDiscover)
+			_, err = self.clientReq.Watch(define.ETCD_SADDR, self.NewServerDiscover)
 			if err != nil {
 				log.Fatalf("etcd watch error ", err)
 			}
@@ -168,7 +168,7 @@ func (self *GateServer) DoStart() {
 	log.Infof("GateServer DoStart success: %s,%s,%d", self.Name, config.NET_GATE_SADDR, self.Id)
 }
 
-func (self *GateServer) NewClientDiscover(key string, val string, dis bool) {
+func (self *GateServer) NewServerDiscover(key string, val string, dis bool) {
 	var uid int
 	fmt.Sscanf(key, define.ETCD_SADDR+"%d", &uid)
 
@@ -203,7 +203,7 @@ func (self *GateServer) NewRpcRegister(key string, val string, dis bool) {
 			}
 			arr = append(arr, uid)
 		} else {
-			self.rpcMap[funcName] = make([]int, 5)
+			self.rpcMap[funcName] = make([]int, 100)
 			self.rpcMap[funcName] = append(self.rpcMap[funcName], uid)
 		}
 	} else {
@@ -251,10 +251,10 @@ func PacketFunc(socketid int, buff []byte, nlen int) bool {
 	if target == This.Id { //send to me
 		handler, ok := handler_Map[name]
 		if ok {
-			m := gorpc.M{Id: socketid, Name: name, Data: pm}
 			if handler == "GateServer" {
-				This.CallNetFunc(m)
+				This.CallNetFunc(pm)
 			} else {
+				m := gorpc.M{Id: socketid, Name: name, Data: pm}
 				This.Send(handler, "ServiceHandler", m)
 			}
 		} else {
@@ -273,7 +273,7 @@ func PacketFunc(socketid int, buff []byte, nlen int) bool {
 			return false
 		}
 		msg := LouMiaoNetMsg{ClientId: token.UserId, Buffer: buff}
-		buff, _ := message.Encode(target, This.Id, "LouMiaoNetMsg", msg)
+		buff, _ := message.Encode(target, 0, "LouMiaoNetMsg", msg)
 
 		rpcClient := This.GetRpcClient(target)
 		if rpcClient != nil {
@@ -311,9 +311,21 @@ func (self *GateServer) GetRpcClient(uid int) *network.ClientSocket {
 
 func (self *GateServer) OnServerConnected(uid int) {
 	req := &LouMiaoLoginGate{TokenId: uid, UserId: self.Id}
-	buff, _ := message.Encode(uid, self.Id, "LouMiaoLoginGate", req)
+	buff, _ := message.Encode(uid, 0, "LouMiaoLoginGate", req)
 	client, _ := self.clients[uid]
 	client.Send(buff)
+}
+
+func (self *GateServer) GetCluserGate() int {
+	if config.NET_NODE_TYPE == config.ServerType_Gate {
+		log.Fatalf("GetCluserGate: gate can not call this func")
+		return 0
+	} else {
+		sz := len(self.tokens)
+		index := util.Random(sz) //随机一个gate进行rpc转发
+		clientid := self.tokens[index]
+		return clientid
+	}
 }
 
 func init() {
