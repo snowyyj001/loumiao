@@ -1,4 +1,3 @@
 module github.com/snowyyj001/loumiao
 
-
-go 1.13
+go 1.15
