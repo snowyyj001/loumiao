@@ -74,19 +74,21 @@ func InnerLouMiaoRpcMsg(igo gorpc.IGoRoutine, socketId int, data interface{}) in
 				log.Warningf("0.InnerLouMiaoRpcMsg no rpc server hanlder finded %s", req.FuncName)
 				return nil
 			}
-			index := util.Random(sz) //随机一个server进行rpc调用
-			target := arr[index]
-
+			target := req.ClientId
+			if req.ClientId <= 0 {
+				index := util.Random(sz) //cluser server rpc call
+				target = arr[index]
+			}
 			rpcClient := This.GetRpcClient(target)
 			if rpcClient == nil {
 				log.Warningf("1.InnerLouMiaoRpcMsg rpc client error %s %d", req.FuncName, target)
 				return nil
 			}
-			outdata := LouMiaoRpcMsg{FuncName: m.Name, Buffer: req.Buffer}
+			outdata := LouMiaoRpcMsg{ClientId: req.ClientId, FuncName: req.FuncName, Buffer: req.Buffer}
 			buff, _ := message.Encode(target, 0, "LouMiaoRpcMsg", outdata)
 			rpcClient.Send(buff)
 		} else { //gate -> server
-			err, target, name, pm := message.Decode(This.Id, req.Buffer, len(req.Buffer))
+			err, _, name, pm := message.Decode(This.Id, req.Buffer, len(req.Buffer))
 			if err != nil {
 				log.Warningf("2.InnerLouMiaoRpcMsg decode msg error : func=%s, error=%s ", req.FuncName, err.Error())
 				return nil
@@ -117,7 +119,7 @@ func InnerLouMiaoNetMsg(igo gorpc.IGoRoutine, socketId int, data interface{}) in
 
 func RegisterNet(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	m := data.(gorpc.M)
-	v, ok := handler_Map[m.Name]
+	_, ok := handler_Map[m.Name]
 	if ok {
 		log.Errorf("RegisterNet %s has already been registered", m.Name)
 		return nil
@@ -190,11 +192,11 @@ func SendRpc(igo gorpc.IGoRoutine, data interface{}) interface{} {
 		return nil
 	}
 
-	indata, _ := message.Encode(target, 0, "", m.Data)
-	outdata := LouMiaoRpcMsg{FuncName: m.Name, Buffer: indata}
+	indata, _ := message.Encode(m.Id, 0, "", m.Data)
+	outdata := LouMiaoRpcMsg{ClientId: m.Id, FuncName: m.Name, Buffer: indata}
 
-	buff, _ := message.Encode(target, 0, "LouMiaoRpcMsg", outdata)
-	rpcClient.Send(buff)
+	buff, _ := message.Encode(clientid, 0, "LouMiaoRpcMsg", outdata)
+	This.pInnerService.SendById(clientid, buff)
 
 	return nil
 }

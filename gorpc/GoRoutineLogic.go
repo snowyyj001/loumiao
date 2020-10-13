@@ -11,7 +11,10 @@ import (
 )
 
 const (
-	CHAN_BUFFER_LEN = 20000 //channel缓冲数量
+	CHAN_BUFFER_LEN = 20000  //channel缓冲数量
+	CHAN_BUFFER_MAX = 100000 //channel缓冲最大数量
+	CALL_TIMEOUT    = 3      //call超时时间,秒
+
 )
 
 type Cmdtype map[string]HanlderFunc
@@ -66,7 +69,6 @@ func (self *GoRoutineLogic) GetName() string {
 func (self *GoRoutineLogic) GetJobChan() chan ChannelContext {
 	return self.JobChan
 }
-
 func (self *GoRoutineLogic) SetSync(sync bool) {
 	self.GoFun = sync
 }
@@ -117,7 +119,7 @@ func (self *GoRoutineLogic) woker() {
 					ct.Data = self.CallFunc(hd, ct.Data)
 					if ct.Data != nil && ct.ReadChan != nil {
 						ch := ct.ReadChan
-						ct.ReadChan = nil
+						ct.ReadChan = nil //this is importent, for send callback
 						ch <- ct
 					}
 				}
@@ -147,7 +149,10 @@ func (self *GoRoutineLogic) Send(target string, hanld_name string, sdata interfa
 		log.Noticef("GoRoutineLogic.Send:[%s --> %s(is nil)] %s", self.Name, target, hanld_name)
 		return
 	}
-
+	if len(server.GetJobChan()) > CHAN_BUFFER_MAX {
+		log.Warningf("GoRoutineLogic.Send:[%s --> %s(chan overlow)] %s", self.Name, target, hanld_name)
+		return
+	}
 	job := ChannelContext{hanld_name, sdata, nil, nil}
 	server.GetJobChan() <- job
 }
@@ -156,10 +161,13 @@ func (self *GoRoutineLogic) Send(target string, hanld_name string, sdata interfa
 func (self *GoRoutineLogic) SendBack(target string, hanld_name string, sdata interface{}, Cb HanlderFunc) {
 	server := GetGoRoutineMgr().GetRoutine(target)
 	if server == nil {
-		log.Noticef("GoRoutineLogic.SendBack:[%s --> %s(is nil)] %s", self.Name, target, hanld_name)
+		log.Warningf("GoRoutineLogic.SendBack:[%s --> %s(is nil)] %s", self.Name, target, hanld_name)
 		return
 	}
-
+	if len(server.GetJobChan()) > CHAN_BUFFER_MAX {
+		log.Warningf("GoRoutineLogic.SendBack:[%s --> %s(chan overlow)] %s", self.Name, target, hanld_name)
+		return
+	}
 	job := ChannelContext{hanld_name, sdata, self.JobChan, Cb}
 	server.GetJobChan() <- job
 }
@@ -171,12 +179,16 @@ func (self *GoRoutineLogic) Call(target string, hanld_name string, sdata interfa
 		log.Noticef("GoRoutineLogic.Call:[%s --> %s(is nil)] %s", self.Name, target, hanld_name)
 		return nil
 	}
+	if len(server.GetJobChan()) > CHAN_BUFFER_MAX {
+		log.Warningf("GoRoutineLogic.Call:[%s --> %s(chan overlow)] %s", self.Name, target, hanld_name)
+		return
+	}
 	job := ChannelContext{hanld_name, sdata, self.ReadChan, nil}
 	select {
 	case server.GetJobChan() <- job:
 		rdata := <-self.ReadChan
 		return rdata.Data
-	case <-time.After(3 * time.Second):
+	case <-time.After(CALL_TIMEOUT * time.Second):
 		log.Noticef("GoRoutineLogic[%s] send timeout: %s", self.Name, hanld_name)
 		return nil
 	}

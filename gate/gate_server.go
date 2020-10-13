@@ -11,6 +11,7 @@ import (
 	"github.com/snowyyj001/loumiao/log"
 	"github.com/snowyyj001/loumiao/message"
 	"github.com/snowyyj001/loumiao/network"
+	"github.com/snowyyj001/loumiao/util"
 )
 
 var (
@@ -24,7 +25,7 @@ type Token struct {
 }
 
 /*tokens, tokens_u, users_u说明
-当loumiao是gate时，tokens的key是客户端的socketid，Token.UserId是客户端的userid，
+当loumiao是gate\account时，tokens的key是客户端的socketid，Token.UserId是客户端的userid，
 Token.TokenId是account生成的秘钥，用来校验client的合法性；
 tokens_u的key是客户端的userid,value是socketid
 users_u无效
@@ -57,19 +58,7 @@ func (self *GateServer) DoInit() {
 	log.Infof("%s DoInit", self.Name)
 	This = self
 
-	if config.NET_NODE_TYPE == config.ServerType_World {
-		if config.NET_NODE_ID != 1 {
-			log.Fatalf("GateServer world node id error [%d]", config.NET_NODE_ID)
-			return
-		}
-	}
-
-	if config.NET_NODE_TYPE < config.ServerType_World || config.NET_NODE_TYPE > config.ServerType_IM {
-		log.Fatalf("GateServer node type error [%d]", config.NET_NODE_TYPE)
-		return
-	}
-
-	if self.ServerType == network.CLIENT_CONNECT { //对外
+	if self.ServerType == network.CLIENT_CONNECT { //对外(login,gate)
 		if config.NET_WEBSOCKET {
 			self.pService = new(network.WebSocket)
 			self.pService.(*network.WebSocket).SetMaxClients(config.NET_MAX_CONNS)
@@ -82,7 +71,7 @@ func (self *GateServer) DoInit() {
 		self.pService.SetConnectType(network.CLIENT_CONNECT)
 	}
 
-	if config.NET_NODE_TYPE == config.ServerType_Gate {
+	if self.ServerType == network.CLIENT_CONNECT { //对外(login,gate)
 		self.clients = make(map[int]*network.ClientSocket)
 	} else {
 		self.pInnerService = new(network.ServerSocket)
@@ -135,7 +124,7 @@ func (self *GateServer) DoStart() {
 	}
 
 	//server discover
-	if config.NET_NODE_TYPE == config.ServerType_Gate {
+	if self.ServerType == network.CLIENT_CONNECT { //对外(login,gate)
 		client, err := etcd.NewClientDis(config.Cfg.EtcdAddr)
 		if err == nil {
 			self.clientReq = client
@@ -323,8 +312,14 @@ func (self *GateServer) GetCluserGate() int {
 	} else {
 		sz := len(self.tokens)
 		index := util.Random(sz) //随机一个gate进行rpc转发
-		clientid := self.tokens[index]
-		return clientid
+		num := 0
+		for k, _ := range self.tokens {
+			if num == index {
+				return k
+			}
+			num++
+		}
+		return 0
 	}
 }
 

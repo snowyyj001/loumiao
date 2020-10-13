@@ -7,13 +7,14 @@ import (
 )
 
 const (
-	ServerType_ETCD  = 0 //etcd
-	ServerType_World = 1 //世界服-->集群
-	ServerType_Gate  = 2 //网关服-->集群
-	ServerType_Login = 3 //登录服-->集群
-	ServerType_DB    = 4 //数据库服-->集群
-	ServerType_Zone  = 5 //地图服-->集群
-	ServerType_IM    = 6 //聊天服-->集群
+	ServerType_ETCD    = iota //0 etcd
+	ServerType_Gate           //1 网关
+	ServerType_Account        //2 账号
+	ServerType_World          //3 世界
+	ServerType_Zone           //4 地图
+	ServerType_DB             //5 数据库
+	ServerType_Log            //6 日志
+	ServerType_IM             //7 聊天
 )
 
 var (

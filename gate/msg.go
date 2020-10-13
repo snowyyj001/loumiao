@@ -17,6 +17,7 @@ type LouMiaoClientOffline struct {
 }
 
 type LouMiaoRpcMsg struct {
+	ClientId int
 	FuncName string
 	Buffer   []byte
 }

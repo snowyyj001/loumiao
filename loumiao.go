@@ -97,8 +97,11 @@ func UnRegisterRpcHandler(igo gorpc.IGoRoutine, call gorpc.HanlderNetFunc) {
 }
 
 //rpc调用
-func SendRpc(igo gorpc.IGoRoutine, funcName string, data interface{}) {
+//@funcName: rpc函数
+//@data: 函数参数
+//@target: 目标server的uid，如果不指定，则随机指定目标地址
+func SendRpc(igo gorpc.IGoRoutine, funcName string, data interface{}, target int) {
 	md5str := util.Md5(funcName)
-	m := gorpc.M{Id: 0, Name: md5str, Data: data}
+	m := gorpc.M{Id: target, Name: md5str, Data: data}
 	igo.Send("GateServer", "SendRpc", m)
 }
