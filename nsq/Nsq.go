@@ -40,7 +40,7 @@ func RegisterTpoic(topic string, channel string, recv Consumer) {
 // 初始化生产者
 func InitProducer(str string) {
 	var err error
-	log.Debugf("InitProducer addr: ", str)
+	log.Debugf("InitProducer addr: %s", str)
 	producer, err = nsq.NewProducer(str, nsq.NewConfig())
 	if err != nil {
 		panic(err)

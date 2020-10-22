@@ -63,6 +63,7 @@ func (self *ClientSocket) Send(buff []byte) int {
 	if self.m_Conn == nil {
 		return 0
 	}
+	//log.Debugf("发送消息 %v", buff)
 	n, err := self.m_Conn.Write(buff)
 	handleError(err)
 	if n > 0 {
@@ -86,11 +87,9 @@ func (self *ClientSocket) Connect() bool {
 		log.Warningf("ClientSocket address error", self.m_sAddr)
 		return false
 	}
-
-Label:
+	//ln, err1 := net.DialTimeout("tcp4", self.m_sAddr, 5*time.Second)
 	ln, err1 := net.DialTCP("tcp4", nil, tcpAddr)
 	if err1 != nil {
-		goto Label
 		log.Errorf("ClientSocket DialTCP  %v", err1)
 		return false
 	}
@@ -106,13 +105,13 @@ func (self *ClientSocket) OnDisconnect() {
 }
 
 func (self *ClientSocket) OnNetConn() {
-	buff, nLen := message.Encode(-1, 0, "CONNECT", nil)
+	buff, nLen := message.Encode(0, 0, "CONNECT", nil)
 	self.HandlePacket(self.m_ClientId, buff, nLen)
 }
 
 func (self *ClientSocket) OnNetFail(int) {
 	self.Stop()
-	buff, nLen := message.Encode(-1, 0, "DISCONNECT", nil)
+	buff, nLen := message.Encode(0, 0, "DISCONNECT", nil)
 	self.HandlePacket(self.m_ClientId, buff, nLen)
 }
 
@@ -123,7 +122,7 @@ func clientRoutine(pClient *ClientSocket) bool {
 
 	defer func() {
 		if err := recover(); err != nil {
-			fmt.Println("clientRoutine", err)
+			log.Errorf("clientRoutine error: %v", err)
 		}
 	}()
 
@@ -135,20 +134,19 @@ func clientRoutine(pClient *ClientSocket) bool {
 		var buff = make([]byte, pClient.m_MaxReceiveBufferSize)
 		n, err := pClient.m_Conn.Read(buff)
 		if err == io.EOF {
-			fmt.Printf("0.远程链接：%s已经关闭！\n", pClient.m_Conn.RemoteAddr().String())
+			log.Debugf("0.远程链接：%s已经关闭", pClient.m_Conn.RemoteAddr().String())
 			pClient.OnNetFail(0)
 			break
 		}
 		if err != nil {
-			handleError(err)
-			fmt.Printf("1.远程链接：%s已经关闭！\n", pClient.m_Conn.RemoteAddr().String())
+			log.Debugf("1.远程链接：%s已经关闭", pClient.m_Conn.RemoteAddr().String())
 			pClient.OnNetFail(1)
 			break
 		}
 		if n > 0 {
 			ok := pClient.ReceivePacket(pClient.m_ClientId, buff[:n])
 			if !ok {
-				fmt.Printf("2.远程链接：%s已经关闭！\n", pClient.m_Conn.RemoteAddr().String())
+				log.Debugf("2.远程链接：%s已经关闭", pClient.m_Conn.RemoteAddr().String())
 				pClient.OnNetFail(2)
 				break
 			}

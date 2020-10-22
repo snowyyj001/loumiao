@@ -2,6 +2,8 @@ package gorpc
 
 import (
 	"sync"
+
+	"github.com/snowyyj001/loumiao/log"
 )
 
 type GoRoutineMgr struct {
@@ -25,6 +27,10 @@ func GetGoRoutineMgr() *GoRoutineMgr {
 }
 
 func (self *GoRoutineMgr) AddRoutine(rou IGoRoutine, name string) {
+	if self.go_name_Map[name] != nil {
+		log.Fatalf("AddRoutine error: %s has already been added")
+		return
+	}
 	if self.is_starting {
 		self.go_name_Tmp[name] = rou
 	} else {
@@ -70,14 +76,17 @@ func (self *GoRoutineMgr) Start(igo IGoRoutine, name string) {
 func (self *GoRoutineMgr) DoStart() {
 	self.is_starting = true
 	for _, igo := range self.go_name_Map {
-		igo.Run()
-	}
-	for _, igo := range self.go_name_Map {
-		igo.DoStart()
+		if igo.IsRunning() == false {
+			igo.Run()
+			igo.DoStart()
+		}
+
 	}
 	for name, igo := range self.go_name_Tmp {
-		igo.Run()
-		igo.DoStart()
+		if igo.IsRunning() == false {
+			igo.Run()
+			igo.DoStart()
+		}
 		self.go_name_Map[name] = igo
 	}
 	self.go_name_Tmp = nil

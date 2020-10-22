@@ -1,25 +1,39 @@
 package loumiao
 
 import (
+	"encoding/base64"
 	"os"
 	"os/signal"
 	"reflect"
 	"runtime"
 	"syscall"
 
-	"github.com/snowyyj001/loumiao/config"
+	"github.com/snowyyj001/loumiao/util/timer"
+
+	_ "github.com/snowyyj001/loumiao/config"
 	"github.com/snowyyj001/loumiao/gorpc"
 	"github.com/snowyyj001/loumiao/log"
 	"github.com/snowyyj001/loumiao/message"
-	"github.com/snowyyj001/loumiao/nsq"
-	"github.com/snowyyj001/loumiao/util"
+	_ "github.com/snowyyj001/loumiao/nsq"
 )
 
+//最开始的初始化
+func DoInit() {
+	message.DoInit()
+	//nsq.Init(config.Cfg.NsqAddr)
+}
+
+func init() {
+	DoInit()
+}
+
 //创建一个服务，稍后开启
+//@name: actor名，唯一
+//@sync: 是否异步协程
 func Prepare(igo gorpc.IGoRoutine, name string, sync bool) {
 	igo.SetSync(sync)
-	igo.Register("ServiceHandler", gorpc.ServiceHandler)
 	gorpc.GetGoRoutineMgr().Start(igo, name)
+	igo.Register("ServiceHandler", gorpc.ServiceHandler)
 }
 
 //创建一个服务,立即开启
@@ -28,17 +42,19 @@ func Start(igo gorpc.IGoRoutine, name string, sync bool) {
 	gorpc.GetGoRoutineMgr().DoSingleStart(name)
 }
 
-//最开始的初始化
-func DoInit() {
-	message.DoInit()
-	nsq.Init(config.Cfg.NsqAddr)
-}
-
 //开启游戏
 func Run() {
-	DoInit()
 
 	gorpc.GetGoRoutineMgr().DoStart()
+
+	timer.DelayJob(1000, func() {
+		igo := gorpc.GetGoRoutineMgr().GetRoutine("GateServer")
+		if igo != nil {
+			igo.DoOpen()
+		}
+	}, true)
+
+	log.Notice("loumiao start success!")
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, os.Kill, syscall.SIGTERM)
@@ -63,7 +79,7 @@ func UnRegisterNetHandler(igo gorpc.IGoRoutine, name string) {
 
 //发送给客户端消息
 func SendClient(clientid int, data interface{}) {
-	buff, _ := message.Encode(-1, 0, "", data)
+	buff, _ := message.Encode(0, 0, "", data)
 	m := gorpc.M{Id: clientid, Data: buff}
 	server := gorpc.GetGoRoutineMgr().GetRoutine("GateServer")
 	job := gorpc.ChannelContext{"SendClient", m, nil, nil}
@@ -72,7 +88,7 @@ func SendClient(clientid int, data interface{}) {
 
 //发送给客户端消息
 func SendMulClient(igo gorpc.IGoRoutine, clientids []int, data interface{}) {
-	buff, _ := message.Encode(-1, 0, "", data)
+	buff, _ := message.Encode(0, 0, "", data)
 	m := gorpc.MS{Ids: clientids, Data: buff}
 	server := gorpc.GetGoRoutineMgr().GetRoutine("GateServer")
 	job := gorpc.ChannelContext{"SendMulClient", m, nil, nil}
@@ -82,18 +98,18 @@ func SendMulClient(igo gorpc.IGoRoutine, clientids []int, data interface{}) {
 //注册rpc消息
 func RegisterRpcHandler(igo gorpc.IGoRoutine, call gorpc.HanlderNetFunc) {
 	funcName := runtime.FuncForPC(reflect.ValueOf(call).Pointer()).Name()
-	md5str := util.Md5(funcName)
-	igo.Send("GateServer", "RegisterNet", gorpc.M{Id: -1, Name: md5str, Data: igo.GetName()})
+	base64str := base64.StdEncoding.EncodeToString([]byte(funcName))
+	igo.Send("GateServer", "RegisterNet", gorpc.M{Id: -1, Name: base64str, Data: igo.GetName()})
 
-	igo.RegisterGate(md5str, call)
+	igo.RegisterGate(funcName, call)
 }
 
 func UnRegisterRpcHandler(igo gorpc.IGoRoutine, call gorpc.HanlderNetFunc) {
 	funcName := runtime.FuncForPC(reflect.ValueOf(call).Pointer()).Name()
-	md5str := util.Md5(funcName)
-	igo.Send("GateServer", "UnRegisterNet", gorpc.M{Id: -1, Name: md5str})
+	base64str := base64.StdEncoding.EncodeToString([]byte(funcName))
+	igo.Send("GateServer", "UnRegisterNet", gorpc.M{Id: -1, Name: base64str})
 
-	igo.UnRegisterGate(md5str)
+	igo.UnRegisterGate(funcName)
 }
 
 //rpc调用
@@ -101,7 +117,8 @@ func UnRegisterRpcHandler(igo gorpc.IGoRoutine, call gorpc.HanlderNetFunc) {
 //@data: 函数参数
 //@target: 目标server的uid，如果不指定，则随机指定目标地址
 func SendRpc(igo gorpc.IGoRoutine, funcName string, data interface{}, target int) {
-	md5str := util.Md5(funcName)
-	m := gorpc.M{Id: target, Name: md5str, Data: data}
+	buff, _ := message.Encode(target, 0, "", data)
+	base64str := base64.StdEncoding.EncodeToString([]byte(funcName))
+	m := gorpc.M{Id: target, Name: base64str, Data: buff}
 	igo.Send("GateServer", "SendRpc", m)
 }

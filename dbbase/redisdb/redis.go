@@ -3,6 +3,7 @@ package redisdb
 
 import (
 	"github.com/snowyyj001/loumiao/config"
+	"github.com/snowyyj001/loumiao/log"
 	"github.com/snowyyj001/loumiao/util"
 
 	"github.com/gomodule/redigo/redis"
@@ -20,7 +21,7 @@ func Dial(url string) error {
 	if util.CheckErr(err) == false {
 		DB = conn
 	}
-
+	log.Infof("redis dail success: %s", url)
 	return err
 }
 
@@ -31,5 +32,8 @@ func DialDefault() error {
 		panic(err)
 	}
 	DB = conn
+
+	log.Infof("redis DialDefault success: %s", config.REDIS_URI)
+
 	return err
 }

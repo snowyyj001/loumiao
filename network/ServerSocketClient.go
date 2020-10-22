@@ -59,14 +59,14 @@ func (self *ServerSocketClient) Send(buff []byte) int {
 }
 
 func (self *ServerSocketClient) OnNetConn() {
-	buff, nLen := message.Encode(-1, 0, "CONNECT", nil)
+	buff, nLen := message.Encode(0, 0, "CONNECT", nil)
 	//bufflittle := common.BigEngianToLittle(buff, nLen)
 	self.HandlePacket(self.m_ClientId, buff, nLen)
 }
 
 func (self *ServerSocketClient) OnNetFail(error int) {
 	self.Stop()
-	buff, nLen := message.Encode(-1, 0, "DISCONNECT", nil)
+	buff, nLen := message.Encode(0, 0, "DISCONNECT", nil)
 	//bufflittle := common.BigEngianToLittle(buff, nLen)
 	self.HandlePacket(self.m_ClientId, buff, nLen)
 }

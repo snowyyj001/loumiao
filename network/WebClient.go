@@ -88,13 +88,13 @@ func (self *WebClient) OnDisconnect() {
 }
 
 func (self *WebClient) OnNetConn() {
-	buff, nLen := message.Encode(-1, 0, "CONNECT", nil)
+	buff, nLen := message.Encode(0, 0, "CONNECT", nil)
 	self.HandlePacket(self.m_ClientId, buff, nLen)
 }
 
 func (self *WebClient) OnNetFail(int) {
 	self.Stop()
-	buff, nLen := message.Encode(-1, 0, "DISCONNECT", nil)
+	buff, nLen := message.Encode(0, 0, "DISCONNECT", nil)
 	self.HandlePacket(self.m_ClientId, buff, nLen)
 }
 

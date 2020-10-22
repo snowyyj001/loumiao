@@ -4,6 +4,8 @@ package mysqldb
 import (
 	"fmt"
 
+	"github.com/snowyyj001/loumiao/log"
+
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jinzhu/gorm"
 
@@ -28,6 +30,8 @@ func Dial(tbs []interface{}) error {
 	DB = engine
 
 	create(tbs)
+
+	log.Infof("mysql dail success: %s", config.MYSQL_DBNAME)
 
 	return err
 }

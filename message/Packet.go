@@ -61,6 +61,7 @@ func EncodeProBuff(target int, reserve int, name string, packet interface{}) ([]
 	if buff != nil {
 		binary.Write(bytesBuffer, binary.BigEndian, buff)
 	}
+
 	return bytesBuffer.Bytes(), nLen
 }
 
@@ -74,7 +75,7 @@ func DecodeProBuff(uid int, buff []byte, length int) (error, int, string, interf
 
 	mbuff1 = buff[6:10]
 	reserve := util.BytesToUInt32(mbuff1, binary.BigEndian)
-	if reserve <= 0 {
+	if reserve < 0 {
 		return fmt.Errorf("DecodeProBuff: reserve is illegal: %d", reserve), 0, "", nil
 	}
 
@@ -94,7 +95,7 @@ func DecodeProBuff(uid int, buff []byte, length int) (error, int, string, interf
 	}
 	err := proto.Unmarshal(buff[12+nameLen:length], packet.(proto.Message))
 	if util.CheckErr(err) {
-		log.Warningf("DecodeProBuff: Unmarshal[%s] error", msgName)
+		log.Errorf("DecodeProBuff: Unmarshal[%s] error", msgName)
 		return err, target, "", nil
 	}
 	return nil, target, msgName, packet
@@ -119,9 +120,9 @@ func EncodeJson(target int, reserve int, name string, packet interface{}) ([]byt
 	nLen := 12 + pLen + len(buff)
 
 	binary.Write(bytesBuffer, binary.BigEndian, int16(nLen))
-	binary.Write(bytesBuffer, binary.BigEndian, int16(pLen))
 	binary.Write(bytesBuffer, binary.BigEndian, int32(target))
 	binary.Write(bytesBuffer, binary.BigEndian, int32(reserve))
+	binary.Write(bytesBuffer, binary.BigEndian, int16(pLen))
 	binary.Write(bytesBuffer, binary.BigEndian, []byte(name))
 	if buff != nil {
 		binary.Write(bytesBuffer, binary.BigEndian, buff)
@@ -133,13 +134,13 @@ func DecodeJson(uid int, buff []byte, length int) (error, int, string, interface
 	mbuff1 := buff[2:6]
 	target := int(util.BytesToUInt32(mbuff1, binary.BigEndian))
 
-	if target != -1 && target != uid { //do not need decode anymore, a msg to other server
+	if target > 0 && target != uid { //do not need decode anymore, a msg to other server
 		return nil, target, "", nil
 	}
 
 	mbuff1 = buff[6:10]
 	reserve := util.BytesToUInt32(mbuff1, binary.BigEndian)
-	if reserve <= 0 {
+	if reserve < 0 {
 		return fmt.Errorf("DecodeJson: reserve is illegal: %d", reserve), 0, "", nil
 	}
 	mbuff1 = buff[10:12]
@@ -158,7 +159,7 @@ func DecodeJson(uid int, buff []byte, length int) (error, int, string, interface
 	}
 	err := json.Unmarshal(buff[12+nameLen:length], packet)
 	if util.CheckErr(err) {
-		log.Warningf("DecodeJson: Unmarshal[%s] error", msgName)
+		log.Errorf("DecodeJson: Unmarshal[%s] error", msgName)
 		return err, target, "", nil
 	}
 	return nil, target, msgName, packet

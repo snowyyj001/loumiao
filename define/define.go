@@ -8,3 +8,6 @@ const ETCD_RPCADDR string = "/rpcaddr/"
 
 //分布式锁-uid
 const ETCD_LOCKUID string = "/lockuid/"
+
+//node状态
+const ETCD_NODESTATUS string = "/nodestatus/"

@@ -90,3 +90,16 @@ func (self *Timer) Stop() {
 	self.over = false
 	self.done <- true
 }
+
+//延迟dt毫秒，执行一个任务
+//@dt:延迟时间，毫秒
+//@cb:任务
+//@sync:是否同步执行
+func DelayJob(dt int64, cb func(), sync bool) {
+	<-time.After(time.Duration(dt) * time.Millisecond)
+	if sync {
+		cb()
+	} else {
+		go cb()
+	}
+}

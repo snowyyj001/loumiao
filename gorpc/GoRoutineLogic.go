@@ -23,12 +23,15 @@ type IGoRoutine interface {
 	DoInit()     //初始化数据
 	DoRegsiter() //注册消息
 	DoStart()    //启动完成
+	DoOpen()     //开始服务
 	DoDestory()  //销毁数据
 	Init(string) //GoRoutineLogic初始化
 	Run()        //开始执行
 	Stop()       //停止执行
 	GetName() string
 	GetJobChan() chan ChannelContext
+	WriteSync(ct *ChannelContext)
+	ReadSync() interface{}
 	Send(target string, hanld_name string, sdata interface{})
 	SendBack(target string, hanld_name string, sdata interface{}, Cb HanlderFunc)
 	Call(target string, hanld_name string, sdata interface{}) interface{}
@@ -36,13 +39,15 @@ type IGoRoutine interface {
 	UnRegisterGate(name string)
 	Register(name string, fun HanlderFunc)
 	UnRegister(name string)
-	CallNetFunc(data interface{})
+	CallNetFunc(*M)
 	SetSync(sync bool)
+	IsRunning() bool
 }
 
 type GoRoutineLogic struct {
 	Name       string                    //队列名字
 	Cmd        Cmdtype                   //处理函数集合
+	RpcCall    Cmdtype                   //处理函数集合
 	JobChan    chan ChannelContext       //投递任务chan
 	ReadChan   chan ChannelContext       //读取chan
 	chanNum    int                       //协程数量
@@ -52,16 +57,23 @@ type GoRoutineLogic struct {
 	GoFun      bool                      //true:使用go执行Cmd,GoRoutineLogic非协程安全;false:协程安全
 	wg         sync.WaitGroup
 	Ticker     *timer.Timer
+	Started    bool //是否已启动
 }
 
 func (self *GoRoutineLogic) DoInit() {
+	log.Infof("%s DoInit", self.Name)
 }
 func (self *GoRoutineLogic) DoRegsiter() {
+	log.Infof("%s DoRegsiter", self.Name)
 }
 func (self *GoRoutineLogic) DoStart() {
 	log.Infof("%s DoStart", self.Name)
 }
+func (self *GoRoutineLogic) DoOpen() {
+	log.Infof("%s DoOpen", self.Name)
+}
 func (self *GoRoutineLogic) DoDestory() {
+	log.Infof("%s DoDestory", self.Name)
 }
 func (self *GoRoutineLogic) GetName() string {
 	return self.Name
@@ -72,10 +84,21 @@ func (self *GoRoutineLogic) GetJobChan() chan ChannelContext {
 func (self *GoRoutineLogic) SetSync(sync bool) {
 	self.GoFun = sync
 }
+func (self *GoRoutineLogic) IsRunning() bool {
+	return self.Started
+}
 
-func (self *GoRoutineLogic) CallNetFunc(data interface{}) {
-	m := data.(M)
-	self.NetHandler[m.Name](self, m.Id, m.Data)
+func (self *GoRoutineLogic) CallNetFunc(m *M) {
+	ret := self.NetHandler[m.Name](self, m.Id, m.Data)
+	if ret != nil { //rpc send call back
+		m := M{Id: m.Id, Data: ret, Name: m.Name}
+		if self.Name == "GateServer" {
+
+		} else {
+			self.Send("GateServer", "SendRpc", m)
+		}
+
+	}
 }
 
 //同步定时任务
@@ -123,7 +146,6 @@ func (self *GoRoutineLogic) woker() {
 						ch <- ct
 					}
 				}
-
 			}
 		}
 	}
@@ -131,7 +153,7 @@ func (self *GoRoutineLogic) woker() {
 
 //处理任务
 func (self *GoRoutineLogic) Run() {
-
+	self.Started = true
 	self.wg.Add(1)
 	go self.woker()
 }
@@ -139,6 +161,7 @@ func (self *GoRoutineLogic) Run() {
 //关闭任务
 func (self *GoRoutineLogic) Stop() {
 	close(self.JobChan)
+	close(self.ReadChan)
 	self.wg.Wait()
 }
 
@@ -181,7 +204,7 @@ func (self *GoRoutineLogic) Call(target string, hanld_name string, sdata interfa
 	}
 	if len(server.GetJobChan()) > CHAN_BUFFER_MAX {
 		log.Warningf("GoRoutineLogic.Call:[%s --> %s(chan overlow)] %s", self.Name, target, hanld_name)
-		return
+		return nil
 	}
 	job := ChannelContext{hanld_name, sdata, self.ReadChan, nil}
 	select {
@@ -219,6 +242,15 @@ func (self *GoRoutineLogic) CallGoFunc(hd HanlderFunc, ct *ChannelContext) {
 	}
 }
 
+func (self *GoRoutineLogic) WriteSync(ct *ChannelContext) {
+	self.ReadChan <- *ct
+}
+
+func (self *GoRoutineLogic) ReadSync() interface{} {
+	ct := <-self.ReadChan
+	return ct.Data
+}
+
 func (self *GoRoutineLogic) Register(name string, fun HanlderFunc) {
 	self.Cmd[name] = fun
 }
@@ -241,10 +273,11 @@ func (self *GoRoutineLogic) Init(name string) {
 	self.ReadChan = make(chan ChannelContext)
 	self.Cmd = make(Cmdtype)
 	self.NetHandler = make(map[string]HanlderNetFunc)
+	self.RpcCall = make(Cmdtype)
 }
 
 func ServiceHandler(igo IGoRoutine, data interface{}) interface{} {
 	m := data.(M)
-	igo.CallNetFunc(m)
+	igo.CallNetFunc(&m)
 	return nil
 }

@@ -5,11 +5,12 @@ import (
 	"crypto/md5"
 	"encoding/binary"
 	"fmt"
-	"log"
 	"math"
 	rand2 "math/rand"
 	"strconv"
 	"time"
+
+	"github.com/snowyyj001/loumiao/log"
 )
 
 func init() {
@@ -33,7 +34,7 @@ func TimeStampTarget(y int, m time.Month, d int, h int, mt int, s int) int64 {
 
 func CheckErr(err error) bool {
 	if err != nil {
-		fmt.Println("CheckErr: ", err)
+		log.Error("CheckErr: " + err.Error())
 		return true
 	}
 	return false
@@ -46,9 +47,23 @@ func BytesToUInt16(buff []byte, order binary.ByteOrder) uint16 {
 	return data
 }
 
+func BytesToInt16(buff []byte, order binary.ByteOrder) int16 {
+	bytebuff := bytes.NewBuffer(buff)
+	var data int16
+	binary.Read(bytebuff, order, &data)
+	return data
+}
+
 func BytesToUInt32(buff []byte, order binary.ByteOrder) uint32 {
 	bytebuff := bytes.NewBuffer(buff)
 	var data uint32
+	binary.Read(bytebuff, order, &data)
+	return data
+}
+
+func BytesToInt32(buff []byte, order binary.ByteOrder) int32 {
+	bytebuff := bytes.NewBuffer(buff)
+	var data int32
 	binary.Read(bytebuff, order, &data)
 	return data
 }
@@ -67,6 +82,16 @@ func CopyArray(dst []int, src []int, size int) {
 	for i := 0; i < size; i++ {
 		dst[i] = src[i]
 	}
+}
+
+func RemoveSlice(arr []int, val int) []int {
+	for i, v := range arr {
+		if v == val {
+			arr = append(arr[:i], arr[i+1:]...)
+			return arr
+		}
+	}
+	return arr
 }
 
 func Md5(str string) string {

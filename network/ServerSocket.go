@@ -51,6 +51,7 @@ func (self *ServerSocket) Start() bool {
 	self.m_bShuttingDown = false
 
 	if self.m_sAddr == "" {
+		log.Error("ServerSocket Start error, saddr is null")
 		return false
 	}
 
@@ -64,7 +65,7 @@ func (self *ServerSocket) Start() bool {
 		return false
 	}
 
-	log.Infof("启动监听，等待链接！%s", self.m_sAddr)
+	log.Infof("ServerSocket 启动监听，等待链接！%s", self.m_sAddr)
 
 	self.m_Listen = ln
 	//延迟，监听关闭
