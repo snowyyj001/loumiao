@@ -14,6 +14,10 @@ type Timer struct {
 	over bool
 }
 
+//创建一个定时器
+//@dt: 时间间隔，毫秒
+//@cb：触发回调
+//@repeat：是否循环出发
 func NewTimer(dt int, cb func(dt int64) bool, repeat bool) *Timer {
 	delat := time.Duration(dt) * time.Millisecond
 
@@ -52,6 +56,9 @@ func NewTimer(dt int, cb func(dt int64) bool, repeat bool) *Timer {
 	return t
 }
 
+//创建一个定时器
+//@dt: 时间间隔，毫秒
+//@cb：触发回调
 func NewTicker(dt int, cb func(dt int64) bool) *Timer {
 
 	t := new(Timer)
@@ -60,6 +67,7 @@ func NewTicker(dt int, cb func(dt int64) bool) *Timer {
 	t.done = make(chan bool)
 	t.t1 = ticker
 	t.loop = true
+	t.over = true
 
 	go func(timer *Timer) {
 		defer timer.t1.Stop()

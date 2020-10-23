@@ -1,7 +1,6 @@
 package gate
 
 import (
-	"encoding/base64"
 	"fmt"
 
 	"github.com/snowyyj001/loumiao/etcd"
@@ -17,12 +16,14 @@ import (
 )
 
 //client connect
-func InnerConnect(igo gorpc.IGoRoutine, socketId int, data interface{}) interface{} {
-	return nil
+func InnerConnect(igo gorpc.IGoRoutine, socketId int, data interface{}) {
+	log.Debugf("InnerConnect: %d", socketId)
 }
 
 //client disconnect
-func InnerDisConnect(igo gorpc.IGoRoutine, socketId int, data interface{}) interface{} {
+func InnerDisConnect(igo gorpc.IGoRoutine, socketId int, data interface{}) {
+	log.Debugf("InnerDisConnect: %d", socketId)
+
 	token, ok := This.tokens[socketId]
 	if ok {
 		delete(This.tokens, socketId)
@@ -32,7 +33,10 @@ func InnerDisConnect(igo gorpc.IGoRoutine, socketId int, data interface{}) inter
 			This.OnClientDisConnected(token.UserId)
 		}
 	}
-	return nil
+
+	if config.NET_NODE_TYPE == config.ServerType_Gate {
+
+	}
 }
 
 //gate connected to server
@@ -67,11 +71,11 @@ func leaseCallBack(success bool) {
 }
 
 //login gate
-func InnerLouMiaoLoginGate(igo gorpc.IGoRoutine, socketId int, data interface{}) interface{} {
+func InnerLouMiaoLoginGate(igo gorpc.IGoRoutine, socketId int, data interface{}) {
 	m := data.(*msg.LouMiaoLoginGate)
 	userid := int(m.UserId)
 
-	log.Debugf("InnerLouMiaoLoginGate: %v", m)
+	log.Debugf("InnerLouMiaoLoginGate: %v, socketId=%d", m, socketId)
 
 	old_socketid, ok := This.tokens_u[userid]
 	if ok { //close the old connection
@@ -97,75 +101,76 @@ func InnerLouMiaoLoginGate(igo gorpc.IGoRoutine, socketId int, data interface{})
 	if This.OnClientConnected != nil {
 		This.OnClientConnected(userid)
 	}
-	return nil
 }
 
 //rpc register
-func InnerLouMiaoRpcRegister(igo gorpc.IGoRoutine, socketId int, data interface{}) interface{} {
+func InnerLouMiaoRpcRegister(igo gorpc.IGoRoutine, socketId int, data interface{}) {
 	req := data.(*msg.LouMiaoRpcRegister)
 	log.Debugf("InnerLouMiaoRpcRegister: %v", req)
 
 	client := This.GetRpcClient(socketId)
 	if client == nil {
 		log.Warningf("0.InnerLouMiaoRpcRegister server has lost[%d] ", socketId)
-		return nil
+		return
 	}
 	for _, key := range req.FuncName {
 		if This.rpcMap[key] == nil {
-			This.rpcMap[key] = make([]int, len(req.FuncName))
+			This.rpcMap[key] = []int{}
 		}
 		This.rpcMap[key] = append(This.rpcMap[key], socketId)
-		rpcstr, _ := base64.StdEncoding.DecodeString(key)
-		log.Debugf("rpc register: funcname=%s, uid=%d", string(rpcstr), socketId)
+		//rpcstr, _ := base64.StdEncoding.DecodeString(key)
+		//log.Debugf("rpc register: funcname=%s, uid=%d", string(rpcstr), socketId)
 	}
-	return nil
 }
 
 //recv rpc msg
-func InnerLouMiaoRpcMsg(igo gorpc.IGoRoutine, socketId int, data interface{}) interface{} {
+func InnerLouMiaoRpcMsg(igo gorpc.IGoRoutine, socketId int, data interface{}) {
 	req := data.(*msg.LouMiaoRpcMsg)
-	handler, ok := handler_Map[req.FuncName]
-	if ok {
-		if config.NET_NODE_TYPE == config.ServerType_Gate { //server -> gate
-			arr := This.rpcMap[req.FuncName]
-			sz := len(arr)
-			if sz == 0 {
-				log.Warningf("0.InnerLouMiaoRpcMsg no rpc server hanlder finded %s", req.FuncName)
-				return nil
-			}
-			target := int(req.TargetId)
-			if target <= 0 {
-				index := util.Random(sz) //cluser server rpc call
-				target = arr[index]
-			}
-			rpcClient := This.GetRpcClient(target)
-			if rpcClient == nil {
-				log.Warningf("1.InnerLouMiaoRpcMsg rpc client error %s %d", req.FuncName, target)
-				return nil
-			}
-			outdata := &msg.LouMiaoRpcMsg{TargetId: int32(target), FuncName: req.FuncName, Buffer: req.Buffer, SourceId: req.SourceId}
-			buff, _ := message.Encode(target, 0, "LouMiaoRpcMsg", outdata)
-			rpcClient.Send(buff)
-		} else { //gate -> server
-			err, _, name, pm := message.Decode(This.Id, req.Buffer, len(req.Buffer))
+	log.Debugf("InnerLouMiaoRpcMsg：rpc=%s, socurce=%d, target=%d", req.FuncName, req.SourceId, req.TargetId)
+
+	if config.NET_NODE_TYPE == config.ServerType_Gate { //server -> gate
+		arr := This.rpcMap[req.FuncName]
+		sz := len(arr)
+		if sz == 0 {
+			log.Warningf("0.InnerLouMiaoRpcMsg no rpc server hanlder finded %s", req.FuncName)
+			return
+		}
+		target := int(req.TargetId)
+		if target <= 0 {
+			index := util.Random(sz) //cluser server rpc call
+			target = arr[index]
+		}
+		rpcClient := This.GetRpcClient(target)
+		if rpcClient == nil {
+			log.Warningf("1.InnerLouMiaoRpcMsg rpc client error %s %d", req.FuncName, target)
+			return
+		}
+		outdata := &msg.LouMiaoRpcMsg{TargetId: req.TargetId, FuncName: req.FuncName, Buffer: req.Buffer, SourceId: req.SourceId}
+		buff, _ := message.Encode(target, 0, "LouMiaoRpcMsg", outdata)
+		rpcClient.Send(buff)
+	} else { //gate -> server
+		handler, ok := handler_Map[req.FuncName]
+		if ok {
+			err, _, _, pm := message.Decode(This.Id, req.Buffer, len(req.Buffer))
+			//log.Debugf("InnerLouMiaoRpcMsg : pm = %v", pm)
+			//spm := reflect.Indirect(reflect.ValueOf(pm))
+			//log.Debugf("InnerLouMiaoRpcMsg : spm = %v, typename=%v", spm, reflect.TypeOf(spm.Interface()).Name
 			if err != nil {
 				log.Warningf("2.InnerLouMiaoRpcMsg decode msg error : func=%s, error=%s ", req.FuncName, err.Error())
-				return nil
+				return
 			}
-			m := gorpc.M{Id: int(req.SourceId), Name: name, Data: pm}
+			m := gorpc.M{Id: int(req.SourceId), Name: req.FuncName, Data: pm}
 			This.Send(handler, "ServiceHandler", m)
+		} else {
+			log.Warningf("3.InnerLouMiaoRpcMsg no rpc hanlder %s, %d", req.FuncName, socketId)
 		}
-	} else {
-		log.Warningf("0.InnerLouMiaoRpcMsg no rpc hanlder %s, %d", req.FuncName, socketId)
 	}
-
-	return nil
 }
 
 //recv net msg
-func InnerLouMiaoNetMsg(igo gorpc.IGoRoutine, socketId int, data interface{}) interface{} {
+func InnerLouMiaoNetMsg(igo gorpc.IGoRoutine, socketId int, data interface{}) {
 	req := data.(*msg.LouMiaoNetMsg) //after decode LouMiaoNetMsg msg, post Buffer to next
-	log.Debugf("InnerLouMiaoNetMsg %v", data)
+	//log.Debugf("InnerLouMiaoNetMsg %v", data)
 	clientid := int(req.ClientId)
 
 	if config.NET_NODE_TYPE == config.ServerType_Gate { //server -> gate
@@ -175,7 +180,6 @@ func InnerLouMiaoNetMsg(igo gorpc.IGoRoutine, socketId int, data interface{}) in
 		This.users_u[clientid] = socketId
 		PacketFunc(clientid, req.Buffer, len(req.Buffer)) //post msg to server service
 	}
-	return nil
 }
 
 func RegisterNet(igo gorpc.IGoRoutine, data interface{}) interface{} {
@@ -213,7 +217,7 @@ func SendClient(igo gorpc.IGoRoutine, data interface{}) interface{} {
 		log.Noticef("1.SendClient gate has been shut down, uid = %d", m.Id)
 		return nil
 	}
-	msg := &msg.LouMiaoNetMsg{ClientId: int32(m.Id), Buffer: m.Data.([]byte)} //m.Id should be client`s userid
+	msg := &msg.LouMiaoNetMsg{ClientId: int64(m.Id), Buffer: m.Data.([]byte)} //m.Id should be client`s userid
 	buff, _ := message.Encode(token.UserId, 0, "LouMiaoNetMsg", msg)
 
 	This.pInnerService.SendById(socketId, buff)
@@ -234,7 +238,7 @@ func SendMulClient(igo gorpc.IGoRoutine, data interface{}) interface{} {
 			log.Noticef("1.SendMulClient gate has been shut down, uid = %d", v)
 			return nil
 		}
-		msg := &msg.LouMiaoNetMsg{ClientId: int32(v), Buffer: m.Data.([]byte)} //m.Id should be client`s userid
+		msg := &msg.LouMiaoNetMsg{ClientId: int64(v), Buffer: m.Data.([]byte)} //m.Id should be client`s userid
 		buff, _ := message.Encode(token.UserId, 0, "LouMiaoNetMsg", msg)
 
 		This.pInnerService.SendById(socketId, buff)
@@ -250,12 +254,24 @@ func SendRpc(igo gorpc.IGoRoutine, data interface{}) interface{} {
 		log.Warningf("0.SendRpc no gate server finded %s", m.Name)
 		return nil
 	}
+	//log.Debugf("SendRpc: %d", clientid)
 
 	//indata, _ := message.Encode(m.Id, 0, "", m.Data)
-	outdata := &msg.LouMiaoRpcMsg{TargetId: int32(m.Id), FuncName: m.Name, Buffer: m.Data.([]byte), SourceId: int32(This.Id)}
+	outdata := &msg.LouMiaoRpcMsg{TargetId: int64(m.Id), FuncName: m.Name, Buffer: m.Data.([]byte), SourceId: int64(This.Id)}
 
 	buff, _ := message.Encode(clientid, 0, "LouMiaoRpcMsg", outdata)
 	This.pInnerService.SendById(clientid, buff)
 
 	return nil
+}
+
+func BroadCast(buff []byte) {
+	log.Debugf("GateServer BroadCast: %d")
+	if config.NET_NODE_TYPE == config.ServerType_Gate {
+		for uid, client := range This.clients {
+			client.Send(data)
+		}
+	} else {
+		This.pInnerService.BroadCast(buff)
+	}
 }

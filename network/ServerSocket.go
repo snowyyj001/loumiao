@@ -156,6 +156,14 @@ func (self *ServerSocket) SendById(id int, buff []byte) int {
 	return 0
 }
 
+func (self *ServerSocket) BroadCast(buff []byte) {
+	self.m_ClientLocker.RLock()
+	for _, client := range self.m_ClientList {
+		client.Send(buff)
+	}
+	self.m_ClientLocker.Unlock()
+}
+
 func (self *ServerSocket) Restart() bool {
 	return true
 }

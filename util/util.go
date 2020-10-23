@@ -113,6 +113,10 @@ func Itoa(num int) string {
 	return strconv.Itoa(num)
 }
 
+func Itoa64(num int64) string {
+	return strconv.Itoa(int(num))
+}
+
 func HasBit(val int, flag int) bool {
 	return (val & flag) != 0
 }

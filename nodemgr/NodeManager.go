@@ -64,17 +64,26 @@ func NodeStatusUpdate(key string, val string, dis bool) {
 	}
 }
 
-//pick a gate for client
-func GetBalanceGate() string {
-	//pick the least gate
+//pick a gate and world for client
+func GetBalanceServer() (string, int) {
+	//pick the gate and the world
 	var saddr string
+	var worlduid int
+
 	var minNum int = 0x7fffffff
 	for val, number := range status_Map {
 		if number < minNum && node_Map[val].Type == config.ServerType_Gate {
 			saddr = val
 		}
 	}
-	return saddr
+	minNum = 0x7fffffff
+	for val, number := range status_Map {
+		if number < minNum && node_Map[val].Type == config.ServerType_World {
+			worlduid = node_Map[val].Uid
+		}
+	}
+
+	return saddr, worlduid
 }
 
 //generate a server uid, ip+port <--> uid

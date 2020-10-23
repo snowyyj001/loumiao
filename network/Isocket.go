@@ -66,6 +66,7 @@ type (
 		Close()
 		Send([]byte) int
 		SendById(int, []byte) int
+		BroadCast(buff []byte)
 
 		GetState() int
 		SetMaxSendBufferSize(int)

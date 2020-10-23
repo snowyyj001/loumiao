@@ -1,7 +1,6 @@
 package loumiao
 
 import (
-	"encoding/base64"
 	"os"
 	"os/signal"
 	"reflect"
@@ -98,16 +97,16 @@ func SendMulClient(igo gorpc.IGoRoutine, clientids []int, data interface{}) {
 //注册rpc消息
 func RegisterRpcHandler(igo gorpc.IGoRoutine, call gorpc.HanlderNetFunc) {
 	funcName := runtime.FuncForPC(reflect.ValueOf(call).Pointer()).Name()
-	base64str := base64.StdEncoding.EncodeToString([]byte(funcName))
-	igo.Send("GateServer", "RegisterNet", gorpc.M{Id: -1, Name: base64str, Data: igo.GetName()})
+	//base64str := base64.StdEncoding.EncodeToString([]byte(funcName))
+	igo.Send("GateServer", "RegisterNet", gorpc.M{Id: -1, Name: funcName, Data: igo.GetName()})
 
 	igo.RegisterGate(funcName, call)
 }
 
 func UnRegisterRpcHandler(igo gorpc.IGoRoutine, call gorpc.HanlderNetFunc) {
 	funcName := runtime.FuncForPC(reflect.ValueOf(call).Pointer()).Name()
-	base64str := base64.StdEncoding.EncodeToString([]byte(funcName))
-	igo.Send("GateServer", "UnRegisterNet", gorpc.M{Id: -1, Name: base64str})
+	//base64str := base64.StdEncoding.EncodeToString([]byte(funcName))
+	igo.Send("GateServer", "UnRegisterNet", gorpc.M{Id: -1, Name: funcName})
 
 	igo.UnRegisterGate(funcName)
 }
@@ -118,7 +117,7 @@ func UnRegisterRpcHandler(igo gorpc.IGoRoutine, call gorpc.HanlderNetFunc) {
 //@target: 目标server的uid，如果不指定，则随机指定目标地址
 func SendRpc(igo gorpc.IGoRoutine, funcName string, data interface{}, target int) {
 	buff, _ := message.Encode(target, 0, "", data)
-	base64str := base64.StdEncoding.EncodeToString([]byte(funcName))
-	m := gorpc.M{Id: target, Name: base64str, Data: buff}
+	//base64str := base64.StdEncoding.EncodeToString([]byte(funcName))
+	m := gorpc.M{Id: target, Name: funcName, Data: buff}
 	igo.Send("GateServer", "SendRpc", m)
 }

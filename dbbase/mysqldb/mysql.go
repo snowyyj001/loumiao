@@ -47,3 +47,11 @@ func create(tbs []interface{}) {
 		}
 	}
 }
+
+//关闭连接
+func Close() {
+	if DB != nil {
+		DB.Close()
+		DB = nil
+	}
+}

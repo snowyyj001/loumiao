@@ -34,7 +34,7 @@ tokens: 没有用
 tokens_u: 没有用
 ================================================================================
 当loumiao是gate时:
-tokens：key是client的socketid，Token.UserId是client的userid， Token.TokenId是account返回给client的TokenID
+tokens：key是client的socketid，Token.UserId是client的userid， Token.TokenId是world的uid
 tokens_u：key是client的userid,value是socketid
 users_u: 指向tokens_u
 ================================================================================
@@ -167,17 +167,13 @@ func (self *GateServer) DoStart() {
 //begin communicate with other nodes
 func (self *GateServer) DoOpen() {
 	//server discover
-	if self.ServerType == network.CLIENT_CONNECT { //gate watch server
-		//watch addr
-		_, err := self.clientReq.WatchServerList(define.ETCD_SADDR, self.NewServerDiscover)
-		if err != nil {
-			log.Fatalf("etcd watch NET_GATE_SADDR error ", err)
-		}
+	if self.ServerType == network.CLIENT_CONNECT { //account/gate watch server
+
 		self.clientReq.SetLeasefunc(leaseCallBack)
 		self.clientReq.SetLease(int64(config.GAME_LEASE_TIME), true)
 		if config.NET_NODE_TYPE == config.ServerType_Account {
 			//watch all node, just for account, to manager server node, gate balance
-			_, err = self.clientReq.WatchNodeList(define.ETCD_LOCKUID, nodemgr.NewNodeDiscover)
+			_, err := self.clientReq.WatchNodeList(define.ETCD_LOCKUID, nodemgr.NewNodeDiscover)
 			if err != nil {
 				log.Fatalf("etcd watch ETCD_LOCKUID error ", err)
 			}
@@ -186,6 +182,12 @@ func (self *GateServer) DoOpen() {
 			err = self.clientReq.WatchStatusList(define.ETCD_NODESTATUS, nodemgr.NodeStatusUpdate)
 			if err != nil {
 				log.Fatalf("etcd watch ETCD_NODESTATUS error ", err)
+			}
+		} else {
+			//watch addr
+			_, err := self.clientReq.WatchServerList(define.ETCD_SADDR, self.NewServerDiscover)
+			if err != nil {
+				log.Fatalf("etcd watch NET_GATE_SADDR error ", err)
 			}
 		}
 	} else { // server put address
@@ -260,6 +262,8 @@ func PacketFunc(socketid int, buff []byte, nlen int) bool {
 		} else {
 			if name != "CONNECT" && name != "DISCONNECT" {
 				log.Noticef("MsgProcess self handler is nil, drop it[%s]", name)
+			} else {
+				log.Debugf("PacketFunc[%s]: %d", name, socketid)
 			}
 		}
 	} else { //send to target server
@@ -268,16 +272,16 @@ func PacketFunc(socketid int, buff []byte, nlen int) bool {
 			return false
 		}
 		token, ok := This.tokens[socketid]
-		if ok {
+		if ok == false {
 			log.Debugf("0.PacketFunc recv client msg, but client has lost[%d] ", socketid)
 			return false
 		}
-		msg := &msg.LouMiaoNetMsg{ClientId: int32(token.UserId), Buffer: buff}
-		buff, _ := message.Encode(target, 0, "LouMiaoNetMsg", msg)
-
+		msg := &msg.LouMiaoNetMsg{ClientId: int64(token.UserId), Buffer: buff}
+		buff, newlen := message.Encode(target, 0, "LouMiaoNetMsg", msg)
+		//log.Debugf("LouMiaoNetMsg send to server %d", target)
 		rpcClient := This.GetRpcClient(target)
 		if rpcClient != nil {
-			rpcClient.Send(buff[0:nlen])
+			rpcClient.Send(buff[0:newlen])
 		} else {
 			log.Debugf("1.PacketFunc recv client msg, but server has lost[%d] ", target)
 			return false

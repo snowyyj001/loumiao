@@ -89,16 +89,7 @@ func (self *GoRoutineLogic) IsRunning() bool {
 }
 
 func (self *GoRoutineLogic) CallNetFunc(m *M) {
-	ret := self.NetHandler[m.Name](self, m.Id, m.Data)
-	if ret != nil { //rpc send call back
-		m := M{Id: m.Id, Data: ret, Name: m.Name}
-		if self.Name == "GateServer" {
-
-		} else {
-			self.Send("GateServer", "SendRpc", m)
-		}
-
-	}
+	self.NetHandler[m.Name](self, m.Id, m.Data)
 }
 
 //同步定时任务
