@@ -21,6 +21,21 @@ type MS struct {
 	Data interface{}
 }
 
+// 声明一个数据类型
+type MI struct {
+	Id   int
+	Name int
+	Data interface{}
+}
+
+// 声明一个数据类型
+type MM struct {
+	Id    int
+	Name  string
+	Param int
+	Data  interface{}
+}
+
 type ChannelContext struct {
 	Handler  string              //处理函数名字
 	Data     interface{}         //传送携带数据

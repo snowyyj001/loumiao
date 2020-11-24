@@ -24,7 +24,7 @@ func (self *WebSocketClient) Start() bool {
 	if self.m_pServer == nil {
 		return false
 	}
-
+	self.m_bShuttingDown = false
 	self.m_nState = SSF_ACCEPT
 
 	//self.OnNetConn()
@@ -79,23 +79,25 @@ func wserverclientRoutine(pClient *WebSocketClient) bool {
 
 	for {
 		if pClient.m_bShuttingDown {
+			log.Debugf("远程链接：%s已经被关闭！", pClient.m_WsConn.RemoteAddr().String())
+			pClient.OnNetFail(0)
 			break
 		}
 
 		mt, message, err := pClient.m_WsConn.ReadMessage()
 		if err != nil {
 			log.Debugf("远程链接：%s已经关闭！%v\n", pClient.m_WsConn.RemoteAddr().String(), err)
-			pClient.OnNetFail(0)
+			pClient.OnNetFail(1)
 			break
 		}
 		if mt != websocket.BinaryMessage {
-			pClient.OnNetFail(1)
+			pClient.OnNetFail(2)
 			break
 		}
 
 		ok := pClient.ReceivePacket(pClient.m_ClientId, message)
 		if !ok {
-			pClient.OnNetFail(2)
+			pClient.OnNetFail(3)
 			break
 		}
 	}

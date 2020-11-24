@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/snowyyj001/loumiao/base"
+
 	"github.com/snowyyj001/loumiao/config"
 	"github.com/snowyyj001/loumiao/log"
 	"github.com/snowyyj001/loumiao/util"
@@ -67,20 +69,20 @@ func EncodeProBuff(target int, reserve int, name string, packet interface{}) ([]
 
 func DecodeProBuff(uid int, buff []byte, length int) (error, int, string, interface{}) {
 	mbuff1 := buff[2:6]
-	target := int(util.BytesToUInt32(mbuff1, binary.BigEndian))
+	target := int(base.BytesToInt32(mbuff1, binary.BigEndian))
 
 	if target > 0 && target != uid { //do not need decode anymore, a msg to other server
 		return nil, target, "", nil
 	}
 
 	mbuff1 = buff[6:10]
-	reserve := util.BytesToUInt32(mbuff1, binary.BigEndian)
+	reserve := base.BytesToUInt32(mbuff1, binary.BigEndian)
 	if reserve < 0 {
 		return fmt.Errorf("DecodeProBuff: reserve is illegal: %d", reserve), 0, "", nil
 	}
 
 	mbuff1 = buff[10:12]
-	nameLen := util.BytesToUInt16(mbuff1, binary.BigEndian)
+	nameLen := base.BytesToUInt16(mbuff1, binary.BigEndian)
 	if nameLen <= 0 {
 		return fmt.Errorf("DecodeProBuff: msgname len is illegal: %d", nameLen), 0, "", nil
 	}
@@ -132,19 +134,19 @@ func EncodeJson(target int, reserve int, name string, packet interface{}) ([]byt
 
 func DecodeJson(uid int, buff []byte, length int) (error, int, string, interface{}) {
 	mbuff1 := buff[2:6]
-	target := int(util.BytesToUInt32(mbuff1, binary.BigEndian))
+	target := int(base.BytesToUInt32(mbuff1, binary.BigEndian))
 
 	if target > 0 && target != uid { //do not need decode anymore, a msg to other server
 		return nil, target, "", nil
 	}
 
 	mbuff1 = buff[6:10]
-	reserve := util.BytesToUInt32(mbuff1, binary.BigEndian)
+	reserve := base.BytesToUInt32(mbuff1, binary.BigEndian)
 	if reserve < 0 {
 		return fmt.Errorf("DecodeJson: reserve is illegal: %d", reserve), 0, "", nil
 	}
 	mbuff1 = buff[10:12]
-	nameLen := util.BytesToUInt16(mbuff1, binary.BigEndian)
+	nameLen := base.BytesToUInt16(mbuff1, binary.BigEndian)
 	if nameLen <= 0 {
 		return fmt.Errorf("DecodeJson: msgname len is illegal: %d", nameLen), 0, "", nil
 	}

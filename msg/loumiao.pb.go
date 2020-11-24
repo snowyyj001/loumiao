@@ -30,8 +30,9 @@ type LouMiaoLoginGate struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	TokenId int64 `protobuf:"varint,1,opt,name=TokenId,proto3" json:"TokenId,omitempty"`
-	UserId  int64 `protobuf:"varint,2,opt,name=UserId,proto3" json:"UserId,omitempty"`
+	TokenId  int64 `protobuf:"varint,1,opt,name=TokenId,proto3" json:"TokenId,omitempty"`
+	UserId   int64 `protobuf:"varint,2,opt,name=UserId,proto3" json:"UserId,omitempty"`
+	WorldUid int32 `protobuf:"varint,3,opt,name=WorldUid,proto3" json:"WorldUid,omitempty"`
 }
 
 func (x *LouMiaoLoginGate) Reset() {
@@ -80,6 +81,60 @@ func (x *LouMiaoLoginGate) GetUserId() int64 {
 	return 0
 }
 
+func (x *LouMiaoLoginGate) GetWorldUid() int32 {
+	if x != nil {
+		return x.WorldUid
+	}
+	return 0
+}
+
+type LouMiaoHeartBeat struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	TokenId int64 `protobuf:"varint,1,opt,name=TokenId,proto3" json:"TokenId,omitempty"`
+}
+
+func (x *LouMiaoHeartBeat) Reset() {
+	*x = LouMiaoHeartBeat{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_pbmsg_loumiao_proto_msgTypes[1]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *LouMiaoHeartBeat) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LouMiaoHeartBeat) ProtoMessage() {}
+
+func (x *LouMiaoHeartBeat) ProtoReflect() protoreflect.Message {
+	mi := &file_pbmsg_loumiao_proto_msgTypes[1]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LouMiaoHeartBeat.ProtoReflect.Descriptor instead.
+func (*LouMiaoHeartBeat) Descriptor() ([]byte, []int) {
+	return file_pbmsg_loumiao_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *LouMiaoHeartBeat) GetTokenId() int64 {
+	if x != nil {
+		return x.TokenId
+	}
+	return 0
+}
+
 type LouMiaoRpcRegister struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -91,7 +146,7 @@ type LouMiaoRpcRegister struct {
 func (x *LouMiaoRpcRegister) Reset() {
 	*x = LouMiaoRpcRegister{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_pbmsg_loumiao_proto_msgTypes[1]
+		mi := &file_pbmsg_loumiao_proto_msgTypes[2]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -104,7 +159,7 @@ func (x *LouMiaoRpcRegister) String() string {
 func (*LouMiaoRpcRegister) ProtoMessage() {}
 
 func (x *LouMiaoRpcRegister) ProtoReflect() protoreflect.Message {
-	mi := &file_pbmsg_loumiao_proto_msgTypes[1]
+	mi := &file_pbmsg_loumiao_proto_msgTypes[2]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -117,7 +172,7 @@ func (x *LouMiaoRpcRegister) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LouMiaoRpcRegister.ProtoReflect.Descriptor instead.
 func (*LouMiaoRpcRegister) Descriptor() ([]byte, []int) {
-	return file_pbmsg_loumiao_proto_rawDescGZIP(), []int{1}
+	return file_pbmsg_loumiao_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *LouMiaoRpcRegister) GetFuncName() []string {
@@ -136,7 +191,7 @@ type LouMiaoKickOut struct {
 func (x *LouMiaoKickOut) Reset() {
 	*x = LouMiaoKickOut{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_pbmsg_loumiao_proto_msgTypes[2]
+		mi := &file_pbmsg_loumiao_proto_msgTypes[3]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -149,7 +204,7 @@ func (x *LouMiaoKickOut) String() string {
 func (*LouMiaoKickOut) ProtoMessage() {}
 
 func (x *LouMiaoKickOut) ProtoReflect() protoreflect.Message {
-	mi := &file_pbmsg_loumiao_proto_msgTypes[2]
+	mi := &file_pbmsg_loumiao_proto_msgTypes[3]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -162,34 +217,35 @@ func (x *LouMiaoKickOut) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LouMiaoKickOut.ProtoReflect.Descriptor instead.
 func (*LouMiaoKickOut) Descriptor() ([]byte, []int) {
-	return file_pbmsg_loumiao_proto_rawDescGZIP(), []int{2}
+	return file_pbmsg_loumiao_proto_rawDescGZIP(), []int{3}
 }
 
-type LouMiaoClientOffline struct {
+type LouMiaoClientConnect struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
 	ClientId int64 `protobuf:"varint,1,opt,name=ClientId,proto3" json:"ClientId,omitempty"`
+	GateId   int64 `protobuf:"varint,2,opt,name=GateId,proto3" json:"GateId,omitempty"`
 }
 
-func (x *LouMiaoClientOffline) Reset() {
-	*x = LouMiaoClientOffline{}
+func (x *LouMiaoClientConnect) Reset() {
+	*x = LouMiaoClientConnect{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_pbmsg_loumiao_proto_msgTypes[3]
+		mi := &file_pbmsg_loumiao_proto_msgTypes[4]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
 }
 
-func (x *LouMiaoClientOffline) String() string {
+func (x *LouMiaoClientConnect) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*LouMiaoClientOffline) ProtoMessage() {}
+func (*LouMiaoClientConnect) ProtoMessage() {}
 
-func (x *LouMiaoClientOffline) ProtoReflect() protoreflect.Message {
-	mi := &file_pbmsg_loumiao_proto_msgTypes[3]
+func (x *LouMiaoClientConnect) ProtoReflect() protoreflect.Message {
+	mi := &file_pbmsg_loumiao_proto_msgTypes[4]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -200,12 +256,66 @@ func (x *LouMiaoClientOffline) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use LouMiaoClientOffline.ProtoReflect.Descriptor instead.
-func (*LouMiaoClientOffline) Descriptor() ([]byte, []int) {
-	return file_pbmsg_loumiao_proto_rawDescGZIP(), []int{3}
+// Deprecated: Use LouMiaoClientConnect.ProtoReflect.Descriptor instead.
+func (*LouMiaoClientConnect) Descriptor() ([]byte, []int) {
+	return file_pbmsg_loumiao_proto_rawDescGZIP(), []int{4}
 }
 
-func (x *LouMiaoClientOffline) GetClientId() int64 {
+func (x *LouMiaoClientConnect) GetClientId() int64 {
+	if x != nil {
+		return x.ClientId
+	}
+	return 0
+}
+
+func (x *LouMiaoClientConnect) GetGateId() int64 {
+	if x != nil {
+		return x.GateId
+	}
+	return 0
+}
+
+type LouMiaoClientDisConnect struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	ClientId int64 `protobuf:"varint,1,opt,name=ClientId,proto3" json:"ClientId,omitempty"`
+}
+
+func (x *LouMiaoClientDisConnect) Reset() {
+	*x = LouMiaoClientDisConnect{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_pbmsg_loumiao_proto_msgTypes[5]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *LouMiaoClientDisConnect) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LouMiaoClientDisConnect) ProtoMessage() {}
+
+func (x *LouMiaoClientDisConnect) ProtoReflect() protoreflect.Message {
+	mi := &file_pbmsg_loumiao_proto_msgTypes[5]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LouMiaoClientDisConnect.ProtoReflect.Descriptor instead.
+func (*LouMiaoClientDisConnect) Descriptor() ([]byte, []int) {
+	return file_pbmsg_loumiao_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *LouMiaoClientDisConnect) GetClientId() int64 {
 	if x != nil {
 		return x.ClientId
 	}
@@ -217,16 +327,17 @@ type LouMiaoRpcMsg struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	TargetId int64  `protobuf:"varint,1,opt,name=TargetId,proto3" json:"TargetId,omitempty"` //>0指定目标服务器uid
-	FuncName string `protobuf:"bytes,2,opt,name=FuncName,proto3" json:"FuncName,omitempty"`
-	Buffer   []byte `protobuf:"bytes,3,opt,name=Buffer,proto3" json:"Buffer,omitempty"`
-	SourceId int64  `protobuf:"varint,4,opt,name=SourceId,proto3" json:"SourceId,omitempty"` //>0指定源服务器uid
+	TargetId   int64  `protobuf:"varint,1,opt,name=TargetId,proto3" json:"TargetId,omitempty"` //>0指定目标服务器uid
+	FuncName   string `protobuf:"bytes,2,opt,name=FuncName,proto3" json:"FuncName,omitempty"`
+	Buffer     []byte `protobuf:"bytes,3,opt,name=Buffer,proto3" json:"Buffer,omitempty"`
+	SourceId   int64  `protobuf:"varint,4,opt,name=SourceId,proto3" json:"SourceId,omitempty"`     //>0指定源服务器uid
+	ByteBuffer int32  `protobuf:"varint,5,opt,name=ByteBuffer,proto3" json:"ByteBuffer,omitempty"` //消息内容是否为二进制格式
 }
 
 func (x *LouMiaoRpcMsg) Reset() {
 	*x = LouMiaoRpcMsg{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_pbmsg_loumiao_proto_msgTypes[4]
+		mi := &file_pbmsg_loumiao_proto_msgTypes[6]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -239,7 +350,7 @@ func (x *LouMiaoRpcMsg) String() string {
 func (*LouMiaoRpcMsg) ProtoMessage() {}
 
 func (x *LouMiaoRpcMsg) ProtoReflect() protoreflect.Message {
-	mi := &file_pbmsg_loumiao_proto_msgTypes[4]
+	mi := &file_pbmsg_loumiao_proto_msgTypes[6]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -252,7 +363,7 @@ func (x *LouMiaoRpcMsg) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LouMiaoRpcMsg.ProtoReflect.Descriptor instead.
 func (*LouMiaoRpcMsg) Descriptor() ([]byte, []int) {
-	return file_pbmsg_loumiao_proto_rawDescGZIP(), []int{4}
+	return file_pbmsg_loumiao_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *LouMiaoRpcMsg) GetTargetId() int64 {
@@ -283,6 +394,13 @@ func (x *LouMiaoRpcMsg) GetSourceId() int64 {
 	return 0
 }
 
+func (x *LouMiaoRpcMsg) GetByteBuffer() int32 {
+	if x != nil {
+		return x.ByteBuffer
+	}
+	return 0
+}
+
 type LouMiaoNetMsg struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -295,7 +413,7 @@ type LouMiaoNetMsg struct {
 func (x *LouMiaoNetMsg) Reset() {
 	*x = LouMiaoNetMsg{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_pbmsg_loumiao_proto_msgTypes[5]
+		mi := &file_pbmsg_loumiao_proto_msgTypes[7]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -308,7 +426,7 @@ func (x *LouMiaoNetMsg) String() string {
 func (*LouMiaoNetMsg) ProtoMessage() {}
 
 func (x *LouMiaoNetMsg) ProtoReflect() protoreflect.Message {
-	mi := &file_pbmsg_loumiao_proto_msgTypes[5]
+	mi := &file_pbmsg_loumiao_proto_msgTypes[7]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -321,7 +439,7 @@ func (x *LouMiaoNetMsg) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LouMiaoNetMsg.ProtoReflect.Descriptor instead.
 func (*LouMiaoNetMsg) Descriptor() ([]byte, []int) {
-	return file_pbmsg_loumiao_proto_rawDescGZIP(), []int{5}
+	return file_pbmsg_loumiao_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *LouMiaoNetMsg) GetClientId() int64 {
@@ -338,38 +456,108 @@ func (x *LouMiaoNetMsg) GetBuffer() []byte {
 	return nil
 }
 
+type LouMiaoBindGate struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Uid    int32 `protobuf:"varint,1,opt,name=Uid,proto3" json:"Uid,omitempty"`       //gate的uid
+	UserId int64 `protobuf:"varint,2,opt,name=UserId,proto3" json:"UserId,omitempty"` //userid
+}
+
+func (x *LouMiaoBindGate) Reset() {
+	*x = LouMiaoBindGate{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_pbmsg_loumiao_proto_msgTypes[8]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *LouMiaoBindGate) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LouMiaoBindGate) ProtoMessage() {}
+
+func (x *LouMiaoBindGate) ProtoReflect() protoreflect.Message {
+	mi := &file_pbmsg_loumiao_proto_msgTypes[8]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LouMiaoBindGate.ProtoReflect.Descriptor instead.
+func (*LouMiaoBindGate) Descriptor() ([]byte, []int) {
+	return file_pbmsg_loumiao_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *LouMiaoBindGate) GetUid() int32 {
+	if x != nil {
+		return x.Uid
+	}
+	return 0
+}
+
+func (x *LouMiaoBindGate) GetUserId() int64 {
+	if x != nil {
+		return x.UserId
+	}
+	return 0
+}
+
 var File_pbmsg_loumiao_proto protoreflect.FileDescriptor
 
 var file_pbmsg_loumiao_proto_rawDesc = []byte{
 	0x0a, 0x13, 0x70, 0x62, 0x6d, 0x73, 0x67, 0x2f, 0x6c, 0x6f, 0x75, 0x6d, 0x69, 0x61, 0x6f, 0x2e,
-	0x70, 0x72, 0x6f, 0x74, 0x6f, 0x12, 0x03, 0x6d, 0x73, 0x67, 0x22, 0x44, 0x0a, 0x10, 0x4c, 0x6f,
+	0x70, 0x72, 0x6f, 0x74, 0x6f, 0x12, 0x03, 0x6d, 0x73, 0x67, 0x22, 0x60, 0x0a, 0x10, 0x4c, 0x6f,
 	0x75, 0x4d, 0x69, 0x61, 0x6f, 0x4c, 0x6f, 0x67, 0x69, 0x6e, 0x47, 0x61, 0x74, 0x65, 0x12, 0x18,
 	0x0a, 0x07, 0x54, 0x6f, 0x6b, 0x65, 0x6e, 0x49, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x03, 0x52,
 	0x07, 0x54, 0x6f, 0x6b, 0x65, 0x6e, 0x49, 0x64, 0x12, 0x16, 0x0a, 0x06, 0x55, 0x73, 0x65, 0x72,
 	0x49, 0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x03, 0x52, 0x06, 0x55, 0x73, 0x65, 0x72, 0x49, 0x64,
-	0x22, 0x30, 0x0a, 0x12, 0x4c, 0x6f, 0x75, 0x4d, 0x69, 0x61, 0x6f, 0x52, 0x70, 0x63, 0x52, 0x65,
-	0x67, 0x69, 0x73, 0x74, 0x65, 0x72, 0x12, 0x1a, 0x0a, 0x08, 0x46, 0x75, 0x6e, 0x63, 0x4e, 0x61,
-	0x6d, 0x65, 0x18, 0x01, 0x20, 0x03, 0x28, 0x09, 0x52, 0x08, 0x46, 0x75, 0x6e, 0x63, 0x4e, 0x61,
-	0x6d, 0x65, 0x22, 0x10, 0x0a, 0x0e, 0x4c, 0x6f, 0x75, 0x4d, 0x69, 0x61, 0x6f, 0x4b, 0x69, 0x63,
-	0x6b, 0x4f, 0x75, 0x74, 0x22, 0x32, 0x0a, 0x14, 0x4c, 0x6f, 0x75, 0x4d, 0x69, 0x61, 0x6f, 0x43,
-	0x6c, 0x69, 0x65, 0x6e, 0x74, 0x4f, 0x66, 0x66, 0x6c, 0x69, 0x6e, 0x65, 0x12, 0x1a, 0x0a, 0x08,
-	0x43, 0x6c, 0x69, 0x65, 0x6e, 0x74, 0x49, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x03, 0x52, 0x08,
-	0x43, 0x6c, 0x69, 0x65, 0x6e, 0x74, 0x49, 0x64, 0x22, 0x7b, 0x0a, 0x0d, 0x4c, 0x6f, 0x75, 0x4d,
-	0x69, 0x61, 0x6f, 0x52, 0x70, 0x63, 0x4d, 0x73, 0x67, 0x12, 0x1a, 0x0a, 0x08, 0x54, 0x61, 0x72,
-	0x67, 0x65, 0x74, 0x49, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x03, 0x52, 0x08, 0x54, 0x61, 0x72,
-	0x67, 0x65, 0x74, 0x49, 0x64, 0x12, 0x1a, 0x0a, 0x08, 0x46, 0x75, 0x6e, 0x63, 0x4e, 0x61, 0x6d,
-	0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x46, 0x75, 0x6e, 0x63, 0x4e, 0x61, 0x6d,
-	0x65, 0x12, 0x16, 0x0a, 0x06, 0x42, 0x75, 0x66, 0x66, 0x65, 0x72, 0x18, 0x03, 0x20, 0x01, 0x28,
-	0x0c, 0x52, 0x06, 0x42, 0x75, 0x66, 0x66, 0x65, 0x72, 0x12, 0x1a, 0x0a, 0x08, 0x53, 0x6f, 0x75,
-	0x72, 0x63, 0x65, 0x49, 0x64, 0x18, 0x04, 0x20, 0x01, 0x28, 0x03, 0x52, 0x08, 0x53, 0x6f, 0x75,
-	0x72, 0x63, 0x65, 0x49, 0x64, 0x22, 0x43, 0x0a, 0x0d, 0x4c, 0x6f, 0x75, 0x4d, 0x69, 0x61, 0x6f,
-	0x4e, 0x65, 0x74, 0x4d, 0x73, 0x67, 0x12, 0x1a, 0x0a, 0x08, 0x43, 0x6c, 0x69, 0x65, 0x6e, 0x74,
+	0x12, 0x1a, 0x0a, 0x08, 0x57, 0x6f, 0x72, 0x6c, 0x64, 0x55, 0x69, 0x64, 0x18, 0x03, 0x20, 0x01,
+	0x28, 0x05, 0x52, 0x08, 0x57, 0x6f, 0x72, 0x6c, 0x64, 0x55, 0x69, 0x64, 0x22, 0x2c, 0x0a, 0x10,
+	0x4c, 0x6f, 0x75, 0x4d, 0x69, 0x61, 0x6f, 0x48, 0x65, 0x61, 0x72, 0x74, 0x42, 0x65, 0x61, 0x74,
+	0x12, 0x18, 0x0a, 0x07, 0x54, 0x6f, 0x6b, 0x65, 0x6e, 0x49, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28,
+	0x03, 0x52, 0x07, 0x54, 0x6f, 0x6b, 0x65, 0x6e, 0x49, 0x64, 0x22, 0x30, 0x0a, 0x12, 0x4c, 0x6f,
+	0x75, 0x4d, 0x69, 0x61, 0x6f, 0x52, 0x70, 0x63, 0x52, 0x65, 0x67, 0x69, 0x73, 0x74, 0x65, 0x72,
+	0x12, 0x1a, 0x0a, 0x08, 0x46, 0x75, 0x6e, 0x63, 0x4e, 0x61, 0x6d, 0x65, 0x18, 0x01, 0x20, 0x03,
+	0x28, 0x09, 0x52, 0x08, 0x46, 0x75, 0x6e, 0x63, 0x4e, 0x61, 0x6d, 0x65, 0x22, 0x10, 0x0a, 0x0e,
+	0x4c, 0x6f, 0x75, 0x4d, 0x69, 0x61, 0x6f, 0x4b, 0x69, 0x63, 0x6b, 0x4f, 0x75, 0x74, 0x22, 0x4a,
+	0x0a, 0x14, 0x4c, 0x6f, 0x75, 0x4d, 0x69, 0x61, 0x6f, 0x43, 0x6c, 0x69, 0x65, 0x6e, 0x74, 0x43,
+	0x6f, 0x6e, 0x6e, 0x65, 0x63, 0x74, 0x12, 0x1a, 0x0a, 0x08, 0x43, 0x6c, 0x69, 0x65, 0x6e, 0x74,
 	0x49, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x03, 0x52, 0x08, 0x43, 0x6c, 0x69, 0x65, 0x6e, 0x74,
-	0x49, 0x64, 0x12, 0x16, 0x0a, 0x06, 0x42, 0x75, 0x66, 0x66, 0x65, 0x72, 0x18, 0x02, 0x20, 0x01,
-	0x28, 0x0c, 0x52, 0x06, 0x42, 0x75, 0x66, 0x66, 0x65, 0x72, 0x42, 0x23, 0x5a, 0x21, 0x67, 0x69,
-	0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x73, 0x6e, 0x6f, 0x77, 0x79, 0x79, 0x6a,
-	0x30, 0x30, 0x31, 0x2f, 0x6c, 0x6f, 0x75, 0x6d, 0x69, 0x61, 0x6f, 0x2f, 0x6d, 0x73, 0x67, 0x62,
-	0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x49, 0x64, 0x12, 0x16, 0x0a, 0x06, 0x47, 0x61, 0x74, 0x65, 0x49, 0x64, 0x18, 0x02, 0x20, 0x01,
+	0x28, 0x03, 0x52, 0x06, 0x47, 0x61, 0x74, 0x65, 0x49, 0x64, 0x22, 0x35, 0x0a, 0x17, 0x4c, 0x6f,
+	0x75, 0x4d, 0x69, 0x61, 0x6f, 0x43, 0x6c, 0x69, 0x65, 0x6e, 0x74, 0x44, 0x69, 0x73, 0x43, 0x6f,
+	0x6e, 0x6e, 0x65, 0x63, 0x74, 0x12, 0x1a, 0x0a, 0x08, 0x43, 0x6c, 0x69, 0x65, 0x6e, 0x74, 0x49,
+	0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x03, 0x52, 0x08, 0x43, 0x6c, 0x69, 0x65, 0x6e, 0x74, 0x49,
+	0x64, 0x22, 0x9b, 0x01, 0x0a, 0x0d, 0x4c, 0x6f, 0x75, 0x4d, 0x69, 0x61, 0x6f, 0x52, 0x70, 0x63,
+	0x4d, 0x73, 0x67, 0x12, 0x1a, 0x0a, 0x08, 0x54, 0x61, 0x72, 0x67, 0x65, 0x74, 0x49, 0x64, 0x18,
+	0x01, 0x20, 0x01, 0x28, 0x03, 0x52, 0x08, 0x54, 0x61, 0x72, 0x67, 0x65, 0x74, 0x49, 0x64, 0x12,
+	0x1a, 0x0a, 0x08, 0x46, 0x75, 0x6e, 0x63, 0x4e, 0x61, 0x6d, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28,
+	0x09, 0x52, 0x08, 0x46, 0x75, 0x6e, 0x63, 0x4e, 0x61, 0x6d, 0x65, 0x12, 0x16, 0x0a, 0x06, 0x42,
+	0x75, 0x66, 0x66, 0x65, 0x72, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0c, 0x52, 0x06, 0x42, 0x75, 0x66,
+	0x66, 0x65, 0x72, 0x12, 0x1a, 0x0a, 0x08, 0x53, 0x6f, 0x75, 0x72, 0x63, 0x65, 0x49, 0x64, 0x18,
+	0x04, 0x20, 0x01, 0x28, 0x03, 0x52, 0x08, 0x53, 0x6f, 0x75, 0x72, 0x63, 0x65, 0x49, 0x64, 0x12,
+	0x1e, 0x0a, 0x0a, 0x42, 0x79, 0x74, 0x65, 0x42, 0x75, 0x66, 0x66, 0x65, 0x72, 0x18, 0x05, 0x20,
+	0x01, 0x28, 0x05, 0x52, 0x0a, 0x42, 0x79, 0x74, 0x65, 0x42, 0x75, 0x66, 0x66, 0x65, 0x72, 0x22,
+	0x43, 0x0a, 0x0d, 0x4c, 0x6f, 0x75, 0x4d, 0x69, 0x61, 0x6f, 0x4e, 0x65, 0x74, 0x4d, 0x73, 0x67,
+	0x12, 0x1a, 0x0a, 0x08, 0x43, 0x6c, 0x69, 0x65, 0x6e, 0x74, 0x49, 0x64, 0x18, 0x01, 0x20, 0x01,
+	0x28, 0x03, 0x52, 0x08, 0x43, 0x6c, 0x69, 0x65, 0x6e, 0x74, 0x49, 0x64, 0x12, 0x16, 0x0a, 0x06,
+	0x42, 0x75, 0x66, 0x66, 0x65, 0x72, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0c, 0x52, 0x06, 0x42, 0x75,
+	0x66, 0x66, 0x65, 0x72, 0x22, 0x3b, 0x0a, 0x0f, 0x4c, 0x6f, 0x75, 0x4d, 0x69, 0x61, 0x6f, 0x42,
+	0x69, 0x6e, 0x64, 0x47, 0x61, 0x74, 0x65, 0x12, 0x10, 0x0a, 0x03, 0x55, 0x69, 0x64, 0x18, 0x01,
+	0x20, 0x01, 0x28, 0x05, 0x52, 0x03, 0x55, 0x69, 0x64, 0x12, 0x16, 0x0a, 0x06, 0x55, 0x73, 0x65,
+	0x72, 0x49, 0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x03, 0x52, 0x06, 0x55, 0x73, 0x65, 0x72, 0x49,
+	0x64, 0x42, 0x23, 0x5a, 0x21, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f,
+	0x73, 0x6e, 0x6f, 0x77, 0x79, 0x79, 0x6a, 0x30, 0x30, 0x31, 0x2f, 0x6c, 0x6f, 0x75, 0x6d, 0x69,
+	0x61, 0x6f, 0x2f, 0x6d, 0x73, 0x67, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -384,14 +572,17 @@ func file_pbmsg_loumiao_proto_rawDescGZIP() []byte {
 	return file_pbmsg_loumiao_proto_rawDescData
 }
 
-var file_pbmsg_loumiao_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_pbmsg_loumiao_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_pbmsg_loumiao_proto_goTypes = []interface{}{
-	(*LouMiaoLoginGate)(nil),     // 0: msg.LouMiaoLoginGate
-	(*LouMiaoRpcRegister)(nil),   // 1: msg.LouMiaoRpcRegister
-	(*LouMiaoKickOut)(nil),       // 2: msg.LouMiaoKickOut
-	(*LouMiaoClientOffline)(nil), // 3: msg.LouMiaoClientOffline
-	(*LouMiaoRpcMsg)(nil),        // 4: msg.LouMiaoRpcMsg
-	(*LouMiaoNetMsg)(nil),        // 5: msg.LouMiaoNetMsg
+	(*LouMiaoLoginGate)(nil),        // 0: msg.LouMiaoLoginGate
+	(*LouMiaoHeartBeat)(nil),        // 1: msg.LouMiaoHeartBeat
+	(*LouMiaoRpcRegister)(nil),      // 2: msg.LouMiaoRpcRegister
+	(*LouMiaoKickOut)(nil),          // 3: msg.LouMiaoKickOut
+	(*LouMiaoClientConnect)(nil),    // 4: msg.LouMiaoClientConnect
+	(*LouMiaoClientDisConnect)(nil), // 5: msg.LouMiaoClientDisConnect
+	(*LouMiaoRpcMsg)(nil),           // 6: msg.LouMiaoRpcMsg
+	(*LouMiaoNetMsg)(nil),           // 7: msg.LouMiaoNetMsg
+	(*LouMiaoBindGate)(nil),         // 8: msg.LouMiaoBindGate
 }
 var file_pbmsg_loumiao_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for method output_type
@@ -420,7 +611,7 @@ func file_pbmsg_loumiao_proto_init() {
 			}
 		}
 		file_pbmsg_loumiao_proto_msgTypes[1].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*LouMiaoRpcRegister); i {
+			switch v := v.(*LouMiaoHeartBeat); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -432,7 +623,7 @@ func file_pbmsg_loumiao_proto_init() {
 			}
 		}
 		file_pbmsg_loumiao_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*LouMiaoKickOut); i {
+			switch v := v.(*LouMiaoRpcRegister); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -444,7 +635,7 @@ func file_pbmsg_loumiao_proto_init() {
 			}
 		}
 		file_pbmsg_loumiao_proto_msgTypes[3].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*LouMiaoClientOffline); i {
+			switch v := v.(*LouMiaoKickOut); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -456,7 +647,7 @@ func file_pbmsg_loumiao_proto_init() {
 			}
 		}
 		file_pbmsg_loumiao_proto_msgTypes[4].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*LouMiaoRpcMsg); i {
+			switch v := v.(*LouMiaoClientConnect); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -468,7 +659,43 @@ func file_pbmsg_loumiao_proto_init() {
 			}
 		}
 		file_pbmsg_loumiao_proto_msgTypes[5].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*LouMiaoClientDisConnect); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_pbmsg_loumiao_proto_msgTypes[6].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*LouMiaoRpcMsg); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_pbmsg_loumiao_proto_msgTypes[7].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*LouMiaoNetMsg); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_pbmsg_loumiao_proto_msgTypes[8].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*LouMiaoBindGate); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -486,7 +713,7 @@ func file_pbmsg_loumiao_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_pbmsg_loumiao_proto_rawDesc,
 			NumEnums:      0,
-			NumMessages:   6,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

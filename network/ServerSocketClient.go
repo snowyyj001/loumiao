@@ -32,7 +32,7 @@ func (self *ServerSocketClient) Start() bool {
 	if self.m_pServer == nil {
 		return false
 	}
-
+	self.m_bShuttingDown = false
 	self.m_nState = SSF_CONNECT
 	self.m_Conn.(*net.TCPConn).SetNoDelay(true)
 	//self.m_Conn.SetKeepAlive(true)
@@ -83,30 +83,32 @@ func serverclientRoutine(pClient *ServerSocketClient) bool {
 
 	defer func() {
 		if err := recover(); err != nil {
-			log.Errorf("serverclientRoutine", err)
+			log.Errorf("serverclientRoutine: %v", err)
 		}
 	}()
 	var buff = make([]byte, pClient.m_MaxReceiveBufferSize)
 	for {
 		if pClient.m_bShuttingDown {
+			log.Debugf("远程链接：%s已经被关闭！", pClient.m_Conn.RemoteAddr().String())
+			pClient.OnNetFail(0)
 			break
 		}
 
 		n, err := pClient.m_Conn.Read(buff)
 		if err == io.EOF {
-			log.Debugf("远程链接：%s已经关闭！\n", pClient.m_Conn.RemoteAddr().String())
-			pClient.OnNetFail(0)
+			log.Debugf("远程链接：%s已经关闭！", pClient.m_Conn.RemoteAddr().String())
+			pClient.OnNetFail(1)
 			break
 		}
 		if err != nil {
 			handleError(err)
-			pClient.OnNetFail(1)
+			pClient.OnNetFail(2)
 			break
 		}
 		if n > 0 {
 			ok := pClient.ReceivePacket(pClient.m_ClientId, buff[:n])
 			if !ok {
-				pClient.OnNetFail(2)
+				pClient.OnNetFail(3)
 				break
 			}
 		}

@@ -2,6 +2,8 @@ package etcd
 
 import (
 	"context"
+	"fmt"
+	"sync"
 	"time"
 
 	"github.com/snowyyj001/loumiao/log"
@@ -9,7 +11,14 @@ import (
 	"github.com/snowyyj001/loumiao/define"
 
 	"github.com/coreos/etcd/clientv3"
+	"github.com/coreos/etcd/clientv3/concurrency"
 	"github.com/coreos/etcd/mvcc/mvccpb"
+)
+
+type HanlderFunc func(string, string, bool)
+
+var (
+	This *clientv3.Client
 )
 
 type IEtcdBase interface {
@@ -54,6 +63,7 @@ func (self *EtcdBase) Put(key string, val string, withlease bool) error {
 
 //删除value
 func (self *EtcdBase) Delete(key string) error {
+	log.Debugf("etcd delete: %s", key)
 	_, err := self.client.Delete(context.TODO(), key)
 	return err
 }
@@ -68,6 +78,9 @@ func (self *EtcdBase) Get(key string) (*clientv3.GetResponse, error) {
 //@timeNum: 过期时间
 //@keepalive: 是否自动续约
 func (self *EtcdBase) SetLease(timeNum int64, keepalive bool) error {
+	if self.lease != nil {
+		return fmt.Errorf("lease error")
+	}
 	lease := clientv3.NewLease(self.client)
 
 	//设置租约时间
@@ -102,13 +115,14 @@ func (self *EtcdBase) listenLeaseRespChan() {
 		select {
 		case leaseKeepResp := <-self.keepAliveChan:
 			if leaseKeepResp == nil {
-				//fmt.Printf("已经关闭续租功能\n")
+				log.Debugf("已经关闭续租功能")
+				self.lease = nil
 				if self.leasefunc != nil {
 					self.leasefunc(false)
 				}
 				return
 			} else {
-				//	fmt.Printf("续租成功\n")
+				//fmt.Printf("续租成功\n")
 				if self.leasefunc != nil {
 					self.leasefunc(true)
 				}
@@ -124,7 +138,35 @@ func (self *EtcdBase) RevokeLease() error {
 	return err
 }
 
-//创建服务注册
+//获取一个分布式锁,expire秒后会超时返回nil
+//@prefix: 锁key
+//@expire: 超时时间,秒
+func AquireLock(prefix string, expire int) *concurrency.Mutex {
+	if This == nil {
+		return nil
+	}
+	var session *concurrency.Session
+	session, err := concurrency.NewSession(This, concurrency.WithTTL(expire))
+	if err != nil {
+		log.Error("EtcdBase Lock NewSession failed " + err.Error())
+		return nil
+	}
+	m := concurrency.NewMutex(session, prefix)
+	// 获取锁使用context.TODO()会一直获取锁直到获取成功
+	// 如果这里使用context.WithTimeout(context.TODO(), expire*time.Second)
+	// 表示获取锁expire秒如果没有获取成功则返回error
+	//if err = m.Lock(context.TODO()); err != nil {
+	ct, _ := context.WithTimeout(context.TODO(), time.Duration(expire)*time.Second)
+	if err = m.Lock(ct); err != nil {
+		log.Error("EtcdBase Lock NewMutex Lock lock failed " + err.Error())
+		return nil
+	}
+	//注意在获取锁后要调用该函数在session的租约到期后才会释放锁
+	session.Orphan()
+	return m
+}
+
+//创建etcd服务
 //@addr: etcd地址
 //@timeNum: 连接超时时间
 func NewEtcd(addr []string, timeNum int64) (*EtcdBase, error) {
@@ -146,58 +188,17 @@ func NewEtcd(addr []string, timeNum int64) (*EtcdBase, error) {
 	ser := &EtcdBase{
 		client: client}
 
+	This = client
 	return ser, nil
 }
 
 ///////////////////////////////////////////////////////////
-//服务注册
-type ServiceReg struct {
-	EtcdBase
-
-	TimeOut int64 //续租时间
-}
-
-//通过租约 注册服务
-func (self *ServiceReg) PutService(key, val string) error {
-	kv := clientv3.NewKV(self.client)
-	_, err := kv.Put(context.TODO(), key, val, clientv3.WithLease(self.leaseResp.ID))
-	return err
-}
-
-//创建服务注册
-func NewServiceReg(addr []string, timeNum int64) (*ServiceReg, error) {
-	conf := clientv3.Config{
-		Endpoints:   addr,
-		DialTimeout: time.Duration(timeNum) * time.Second,
-	}
-
-	var (
-		client *clientv3.Client
-	)
-
-	if clientTem, err := clientv3.New(conf); err == nil {
-		client = clientTem
-	} else {
-		return nil, err
-	}
-
-	ser := &ServiceReg{
-		EtcdBase: EtcdBase{client: client},
-		TimeOut:  timeNum}
-
-	if err := ser.SetLease(timeNum, true); err != nil {
-		return nil, err
-	}
-	return ser, nil
-}
-
-///////////////////////////////////////////////////////////
-//服务监听
+//服发现
 type ClientDis struct {
 	EtcdBase
+	otherFunc sync.Map //[string]HanlderFunc
 
 	ServerListFuc func(string, string, bool) //服发现
-	RpcListFuc    func(string, string, bool) //rpc发现
 	NodeListFuc   func(string, string, bool) //所有服发现
 	StatusListFuc func(string, string, bool) //状态更新
 }
@@ -206,14 +207,17 @@ func (self *ClientDis) watchFuc(prefix, key, value string, put bool) {
 	switch prefix {
 	case define.ETCD_SADDR:
 		self.ServerListFuc(key, value, put)
-	case define.ETCD_RPCADDR:
-		self.RpcListFuc(key, value, put)
-	case define.ETCD_LOCKUID:
+	case define.ETCD_NODEINFO:
 		self.NodeListFuc(key, value, put)
 	case define.ETCD_NODESTATUS:
 		self.StatusListFuc(key, value, put)
 	default:
-		log.Warningf("etcd WatchFuc prefix no handler: %s", prefix)
+		cb, ok := self.otherFunc.Load(prefix)
+		if ok {
+			cb.(HanlderFunc)(key, value, put)
+		} else {
+			log.Warningf("etcd WatchFuc prefix no handler: %s", prefix)
+		}
 	}
 }
 
@@ -229,6 +233,35 @@ func (self *ClientDis) watcher(prefix string) {
 			}
 		}
 	}
+}
+
+//通用发现
+//@prefix: 监听key值
+//@hanlder: key值变化回调
+func (self *ClientDis) WatchCommon(prefix string, hanlder HanlderFunc) ([]string, error) {
+	resp, err := self.client.Get(context.Background(), prefix, clientv3.WithPrefix())
+	if err != nil {
+		return nil, err
+	}
+	self.otherFunc.Store(prefix, hanlder)
+	addrs := self.extractOthers(hanlder, resp)
+
+	go self.watcher(prefix)
+	return addrs, nil
+}
+
+func (self *ClientDis) extractOthers(hanlder HanlderFunc, resp *clientv3.GetResponse) []string {
+	addrs := make([]string, 0)
+	if resp == nil || resp.Kvs == nil {
+		return addrs
+	}
+	for i := range resp.Kvs {
+		if v := resp.Kvs[i].Value; v != nil {
+			hanlder(string(resp.Kvs[i].Key), string(resp.Kvs[i].Value), true)
+			addrs = append(addrs, string(v))
+		}
+	}
+	return addrs
 }
 
 //服发现
@@ -254,35 +287,6 @@ func (self *ClientDis) extractAddrs(resp *clientv3.GetResponse) []string {
 	for i := range resp.Kvs {
 		if v := resp.Kvs[i].Value; v != nil {
 			self.ServerListFuc(string(resp.Kvs[i].Key), string(resp.Kvs[i].Value), true)
-			addrs = append(addrs, string(v))
-		}
-	}
-	return addrs
-}
-
-//rpc发现
-//@prefix: 监听key值
-//@hanlder: key值变化回调
-func (self *ClientDis) WatchRpcList(prefix string, hanlder func(string, string, bool)) ([]string, error) {
-	resp, err := self.client.Get(context.Background(), prefix, clientv3.WithPrefix())
-	if err != nil {
-		return nil, err
-	}
-	self.RpcListFuc = hanlder
-	addrs := self.extractRpcs(resp)
-
-	go self.watcher(prefix)
-	return addrs, nil
-}
-
-func (self *ClientDis) extractRpcs(resp *clientv3.GetResponse) []string {
-	addrs := make([]string, 0)
-	if resp == nil || resp.Kvs == nil {
-		return addrs
-	}
-	for i := range resp.Kvs {
-		if v := resp.Kvs[i].Value; v != nil {
-			self.RpcListFuc(string(resp.Kvs[i].Key), string(resp.Kvs[i].Value), true)
 			addrs = append(addrs, string(v))
 		}
 	}
@@ -318,6 +322,18 @@ func (self *ClientDis) extractAddrs_All(resp *clientv3.GetResponse) []string {
 	return addrs
 }
 
+//通过租约 注册服务
+func (self *ClientDis) PutService(key, val string) error {
+	kv := clientv3.NewKV(self.client)
+	_, err := kv.Put(context.TODO(), key, val, clientv3.WithLease(self.leaseResp.ID))
+	return err
+}
+
+//删除服务，保留租约
+func (self *ClientDis) DelService(key string) {
+	self.Delete(key)
+}
+
 //状态更新
 //@prefix: 监听key值
 //@hanlder: key值变化回调
@@ -335,6 +351,7 @@ func NewClientDis(addr []string) (*ClientDis, error) {
 		DialTimeout: 5 * time.Second,
 	}
 	if client, err := clientv3.New(conf); err == nil {
+		This = client
 		return &ClientDis{
 			EtcdBase: EtcdBase{client: client},
 		}, nil

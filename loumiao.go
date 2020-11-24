@@ -13,13 +13,13 @@ import (
 	"github.com/snowyyj001/loumiao/gorpc"
 	"github.com/snowyyj001/loumiao/log"
 	"github.com/snowyyj001/loumiao/message"
-	_ "github.com/snowyyj001/loumiao/nsq"
 )
+
+var c chan os.Signal
 
 //最开始的初始化
 func DoInit() {
 	message.DoInit()
-	//nsq.Init(config.Cfg.NsqAddr)
 }
 
 func init() {
@@ -31,56 +31,63 @@ func init() {
 //@sync: 是否异步协程
 func Prepare(igo gorpc.IGoRoutine, name string, sync bool) {
 	igo.SetSync(sync)
-	gorpc.GetGoRoutineMgr().Start(igo, name)
+	gorpc.MGR.Start(igo, name)
 	igo.Register("ServiceHandler", gorpc.ServiceHandler)
 }
 
 //创建一个服务,立即开启
 func Start(igo gorpc.IGoRoutine, name string, sync bool) {
 	Prepare(igo, name, sync)
-	gorpc.GetGoRoutineMgr().DoSingleStart(name)
+	gorpc.MGR.DoSingleStart(name)
 }
 
 //开启游戏
 func Run() {
 
-	gorpc.GetGoRoutineMgr().DoStart()
+	gorpc.MGR.DoStart()
 
 	timer.DelayJob(1000, func() {
-		igo := gorpc.GetGoRoutineMgr().GetRoutine("GateServer")
+		igo := gorpc.MGR.GetRoutine("GateServer")
 		if igo != nil {
 			igo.DoOpen()
+			log.Notice("loumiao start success!")
 		}
 	}, true)
 
-	log.Notice("loumiao start success!")
-
-	c := make(chan os.Signal, 1)
+	c = make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, os.Kill, syscall.SIGTERM)
 	sig := <-c
 	log.Infof("loumiao closing down (signal: %v)", sig)
 
-	gorpc.GetGoRoutineMgr().CloseAll()
+	gorpc.MGR.CloseAll()
 
 	log.Infof("loumiao done !")
 }
 
+//关闭游戏
+func Stop() {
+	log.Infof("loumiao stop the server !")
+	c <- os.Kill
+}
+
 //注册网络消息
 func RegisterNetHandler(igo gorpc.IGoRoutine, name string, call gorpc.HanlderNetFunc) {
-	igo.Send("GateServer", "RegisterNet", gorpc.M{Id: 0, Name: name, Data: igo.GetName()})
+	gorpc.MGR.Send("GateServer", "RegisterNet", gorpc.M{Id: 0, Name: name, Data: igo.GetName()})
 	igo.RegisterGate(name, call)
 }
 
 func UnRegisterNetHandler(igo gorpc.IGoRoutine, name string) {
-	igo.Send("GateServer", "UnRegisterNet", gorpc.M{Id: 0, Name: name})
+	gorpc.MGR.Send("GateServer", "UnRegisterNet", gorpc.M{Id: 0, Name: name})
 	igo.UnRegisterGate(name)
 }
 
 //发送给客户端消息
+//@clientid: 客户端userid
+//@data: 消息结构体指针
 func SendClient(clientid int, data interface{}) {
 	buff, _ := message.Encode(0, 0, "", data)
 	m := gorpc.M{Id: clientid, Data: buff}
-	server := gorpc.GetGoRoutineMgr().GetRoutine("GateServer")
+	server := gorpc.MGR.GetRoutine("GateServer")
 	job := gorpc.ChannelContext{"SendClient", m, nil, nil}
 	server.GetJobChan() <- job
 }
@@ -89,35 +96,64 @@ func SendClient(clientid int, data interface{}) {
 func SendMulClient(igo gorpc.IGoRoutine, clientids []int, data interface{}) {
 	buff, _ := message.Encode(0, 0, "", data)
 	m := gorpc.MS{Ids: clientids, Data: buff}
-	server := gorpc.GetGoRoutineMgr().GetRoutine("GateServer")
+	server := gorpc.MGR.GetRoutine("GateServer")
 	job := gorpc.ChannelContext{"SendMulClient", m, nil, nil}
 	server.GetJobChan() <- job
 }
 
+//获得rpc注册名
+func RpcFuncName(call gorpc.HanlderNetFunc) string {
+	//base64str := base64.StdEncoding.EncodeToString([]byte(funcName))
+	funcName := runtime.FuncForPC(reflect.ValueOf(call).Pointer()).Name()
+	return funcName
+}
+
 //注册rpc消息
 func RegisterRpcHandler(igo gorpc.IGoRoutine, call gorpc.HanlderNetFunc) {
-	funcName := runtime.FuncForPC(reflect.ValueOf(call).Pointer()).Name()
+	funcName := RpcFuncName(call)
 	//base64str := base64.StdEncoding.EncodeToString([]byte(funcName))
-	igo.Send("GateServer", "RegisterNet", gorpc.M{Id: -1, Name: funcName, Data: igo.GetName()})
-
+	gorpc.MGR.Send("GateServer", "RegisterNet", gorpc.M{Id: -1, Name: funcName, Data: igo.GetName()})
 	igo.RegisterGate(funcName, call)
 }
 
 func UnRegisterRpcHandler(igo gorpc.IGoRoutine, call gorpc.HanlderNetFunc) {
-	funcName := runtime.FuncForPC(reflect.ValueOf(call).Pointer()).Name()
-	//base64str := base64.StdEncoding.EncodeToString([]byte(funcName))
-	igo.Send("GateServer", "UnRegisterNet", gorpc.M{Id: -1, Name: funcName})
-
+	funcName := RpcFuncName(call)
+	gorpc.MGR.Send("GateServer", "UnRegisterNet", gorpc.M{Id: -1, Name: funcName})
 	igo.UnRegisterGate(funcName)
 }
 
-//rpc调用
+//远程rpc调用
 //@funcName: rpc函数
-//@data: 函数参数
-//@target: 目标server的uid，如果不指定，则随机指定目标地址
-func SendRpc(igo gorpc.IGoRoutine, funcName string, data interface{}, target int) {
-	buff, _ := message.Encode(target, 0, "", data)
+//@data: 函数参数,如果data是[]byte类型，则代表使用bitstream或自定义二进制内容，否则data应该是一个messgae注册的pb或json结构体
+//@target: 目标server的uid，如果target==0，则随机指定目标地址, 否则gate会把消息转发给指定的target服务
+func SendRpc(funcName string, data interface{}, target int) {
+	m := gorpc.MM{Id: target, Name: funcName}
+	if reflect.TypeOf(data).Kind() == reflect.Slice { //bitstream
+		m.Data = data
+		m.Param = 1
+	} else {
+		buff, _ := message.Encode(target, 0, "", data)
+		m.Data = buff
+	}
 	//base64str := base64.StdEncoding.EncodeToString([]byte(funcName))
-	m := gorpc.M{Id: target, Name: funcName, Data: buff}
-	igo.Send("GateServer", "SendRpc", m)
+	gorpc.MGR.Send("GateServer", "SendRpc", m)
+}
+
+//发送给gate的网络消息
+//@clientid: 目标gate的uid，如果clientid=0，则会随机选择一个gate发送
+//@data: 发送消息
+func SendGate(clientid int, data interface{}) {
+	buff, _ := message.Encode(clientid, 0, "", data)
+	m := gorpc.M{Id: clientid, Data: buff}
+	gorpc.MGR.Send("GateServer", "SendGate", m)
+}
+
+//全局通用发送actor消息
+//@actorName: 目标actor的名字
+//@actorHandler: 目标actor的处理函数
+//@data: 函数参数
+func SendAcotr(actorName string, actorHandler string, data interface{}) {
+	server := gorpc.MGR.GetRoutine(actorName)
+	job := gorpc.ChannelContext{actorHandler, data, nil, nil}
+	server.GetJobChan() <- job
 }

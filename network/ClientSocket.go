@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"runtime"
 
 	"github.com/snowyyj001/loumiao/log"
 
@@ -31,7 +32,6 @@ func (self *ClientSocket) Init(saddr string) bool {
 }
 func (self *ClientSocket) Start() bool {
 	self.m_bShuttingDown = false
-
 	if self.m_sAddr == "" {
 		return false
 	}
@@ -48,14 +48,15 @@ func (self *ClientSocket) Stop() bool {
 	if self.m_bShuttingDown {
 		return true
 	}
-
 	self.m_bShuttingDown = true
+	self.Close()
 	return true
 }
 
 func (self *ClientSocket) Send(buff []byte) int {
 	defer func() {
 		if err := recover(); err != nil {
+
 			fmt.Println("ClientSocket Send", err)
 		}
 	}()
@@ -105,13 +106,13 @@ func (self *ClientSocket) OnDisconnect() {
 }
 
 func (self *ClientSocket) OnNetConn() {
-	buff, nLen := message.Encode(0, 0, "CONNECT", nil)
+	buff, nLen := message.Encode(0, 0, "C_CONNECT", nil)
 	self.HandlePacket(self.m_ClientId, buff, nLen)
 }
 
 func (self *ClientSocket) OnNetFail(int) {
 	self.Stop()
-	buff, nLen := message.Encode(0, 0, "DISCONNECT", nil)
+	buff, nLen := message.Encode(0, 0, "C_DISCONNECT", nil)
 	self.HandlePacket(self.m_ClientId, buff, nLen)
 }
 
@@ -122,37 +123,39 @@ func clientRoutine(pClient *ClientSocket) bool {
 
 	defer func() {
 		if err := recover(); err != nil {
+			var buf [4096]byte
+			n := runtime.Stack(buf[:], false)
+			data := string(buf[:n])
+			log.Error(data)
 			log.Errorf("clientRoutine error: %v", err)
 		}
 	}()
-
+	var buff = make([]byte, pClient.m_MaxReceiveBufferSize)
 	for {
 		if pClient.m_bShuttingDown {
 			break
 		}
-
-		var buff = make([]byte, pClient.m_MaxReceiveBufferSize)
 		n, err := pClient.m_Conn.Read(buff)
 		if err == io.EOF {
-			log.Debugf("0.远程链接：%s已经关闭", pClient.m_Conn.RemoteAddr().String())
+			log.Debugf("0.远程链接：%s已经关闭: %s", pClient.m_Conn.RemoteAddr().String(), err.Error())
 			pClient.OnNetFail(0)
 			break
 		}
 		if err != nil {
-			log.Debugf("1.远程链接：%s已经关闭", pClient.m_Conn.RemoteAddr().String())
+			log.Debugf("1.远程链接：%s已经关闭: %s", pClient.m_Conn.RemoteAddr().String(), err.Error())
 			pClient.OnNetFail(1)
 			break
 		}
 		if n > 0 {
 			ok := pClient.ReceivePacket(pClient.m_ClientId, buff[:n])
 			if !ok {
-				log.Debugf("2.远程链接：%s已经关闭", pClient.m_Conn.RemoteAddr().String())
+				log.Debugf("2.远程链接：%s已经关闭: %s", pClient.m_Conn.RemoteAddr().String(), err.Error())
 				pClient.OnNetFail(2)
 				break
 			}
 		}
 	}
 
-	pClient.Close()
+	pClient.Clear()
 	return true
 }

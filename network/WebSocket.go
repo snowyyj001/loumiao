@@ -19,6 +19,7 @@ type IWebSocket interface {
 	AddClinet(*websocket.Conn, string, int) *WebSocketClient
 	DelClinet(*WebSocketClient) bool
 	StopClient(int)
+	ClientRemoteAddr(clientid int) string
 }
 
 type WebSocket struct {
@@ -95,6 +96,14 @@ func (self *WebSocket) GetClientById(id int) *WebSocketClient {
 	return nil
 }
 
+func (self *WebSocket) ClientRemoteAddr(clientid int) string {
+	pClinet := self.GetClientById(clientid)
+	if pClinet != nil {
+		return pClinet.m_Conn.RemoteAddr().String()
+	}
+	return ""
+}
+
 func (self *WebSocket) AddClinet(wConn *websocket.Conn, addr string, connectType int) *WebSocketClient {
 	pClient := self.LoadClient()
 	if pClient != nil {
@@ -121,7 +130,7 @@ func (self *WebSocket) DelClinet(pClient *WebSocketClient) bool {
 	self.m_Pool.Put(pClient)
 	self.m_ClientLocker.Lock()
 	delete(self.m_ClientList, pClient.m_ClientId)
-	log.Debugf("客户端：已断开连接[%d]！", pClient.m_ClientId)
+	log.Debugf("客户端：%s已断开连接[%d]！", pClient.m_WsConn.RemoteAddr().String(), pClient.m_ClientId)
 	self.m_ClientLocker.Unlock()
 	self.m_nClientCount--
 	return true

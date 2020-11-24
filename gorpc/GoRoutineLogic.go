@@ -3,38 +3,43 @@ package gorpc
 
 import (
 	"runtime"
-	"sync"
 	"time"
+	"unsafe"
 
 	"github.com/snowyyj001/loumiao/log"
-	"github.com/snowyyj001/loumiao/util/timer"
+	"github.com/snowyyj001/loumiao/util"
 )
 
 const (
-	CHAN_BUFFER_LEN = 20000  //channel缓冲数量
-	CHAN_BUFFER_MAX = 100000 //channel缓冲最大数量
-	CALL_TIMEOUT    = 3      //call超时时间,秒
+	ACTION_CLOSE = iota //0
+)
 
+const (
+	CHAN_BUFFER_LEN = 20000 //channel缓冲数量
+	CHAN_BUFFER_MAX = 50000 //channel缓冲最大数量
+	CALL_TIMEOUT    = 3     //call超时时间,秒
 )
 
 type Cmdtype map[string]HanlderFunc
 
 type IGoRoutine interface {
-	DoInit()     //初始化数据
-	DoRegsiter() //注册消息
-	DoStart()    //启动完成
-	DoOpen()     //开始服务
-	DoDestory()  //销毁数据
-	Init(string) //GoRoutineLogic初始化
-	Run()        //开始执行
-	Stop()       //停止执行
+	DoInit() bool //初始化数据//非线程安全
+	DoRegsiter()  //注册消息//非线程安全
+	DoStart()     //启动完成//非线程安全
+	DoOpen()      //开始服务//非线程安全
+	DoDestory()   //销毁数据//非线程安全
+	init(string)  //GoRoutineLogic初始化
+	Close()       //关闭,线程是否安全要看调用方是否是自己
+	Run()         //开始执行
+	stop()        //停止执行
 	GetName() string
+	SetName(str string)
 	GetJobChan() chan ChannelContext
 	WriteSync(ct *ChannelContext)
 	ReadSync() interface{}
-	Send(target string, hanld_name string, sdata interface{})
-	SendBack(target string, hanld_name string, sdata interface{}, Cb HanlderFunc)
-	Call(target string, hanld_name string, sdata interface{}) interface{}
+	Send(handler_name string, sdata interface{})
+	SendBack(target IGoRoutine, handler_name string, sdata interface{}, Cb HanlderFunc)
+	Call(target IGoRoutine, handler_name string, sdata interface{}) interface{}
 	RegisterGate(name string, call HanlderNetFunc)
 	UnRegisterGate(name string)
 	Register(name string, fun HanlderFunc)
@@ -42,26 +47,35 @@ type IGoRoutine interface {
 	CallNetFunc(*M)
 	SetSync(sync bool)
 	IsRunning() bool
+	GetChanLen() int
+	IsInited() bool
+	SetInited(bool)
+	LeftJobNumber() int
 }
 
 type GoRoutineLogic struct {
-	Name       string                    //队列名字
-	Cmd        Cmdtype                   //处理函数集合
-	RpcCall    Cmdtype                   //处理函数集合
-	JobChan    chan ChannelContext       //投递任务chan
-	ReadChan   chan ChannelContext       //读取chan
-	chanNum    int                       //协程数量
-	Level      int                       //队列协程等级
-	ChanIndex  int                       //当前使用协程
-	NetHandler map[string]HanlderNetFunc //net hanlder
-	GoFun      bool                      //true:使用go执行Cmd,GoRoutineLogic非协程安全;false:协程安全
-	wg         sync.WaitGroup
-	Ticker     *timer.Timer
-	Started    bool //是否已启动
+	Name         string                    //队列名字
+	Cmd          Cmdtype                   //处理函数集合
+	RpcCall      Cmdtype                   //处理函数集合
+	jobChan      chan ChannelContext       //投递任务chan
+	readChan     chan ChannelContext       //读取chan
+	actionChan   chan int                  //命令控制chan
+	chanNum      int                       //协程数量
+	Level        int                       //队列协程等级
+	ChanIndex    int                       //当前使用协程
+	NetHandler   map[string]HanlderNetFunc //net hanlder
+	GoFun        bool                      //true:使用go执行Cmd,GoRoutineLogic非协程安全;false:协程安全
+	timer        *time.Timer
+	timerCall    func(dt int64)
+	timerDuation time.Duration
+	Started      bool //是否已启动
+	Inited       bool //是否初始化失败
+	ChanSize     int  //job chan size
 }
 
-func (self *GoRoutineLogic) DoInit() {
+func (self *GoRoutineLogic) DoInit() bool {
 	log.Infof("%s DoInit", self.Name)
+	return true
 }
 func (self *GoRoutineLogic) DoRegsiter() {
 	log.Infof("%s DoRegsiter", self.Name)
@@ -78,8 +92,11 @@ func (self *GoRoutineLogic) DoDestory() {
 func (self *GoRoutineLogic) GetName() string {
 	return self.Name
 }
+func (self *GoRoutineLogic) SetName(str string) {
+	self.Name = str
+}
 func (self *GoRoutineLogic) GetJobChan() chan ChannelContext {
-	return self.JobChan
+	return self.jobChan
 }
 func (self *GoRoutineLogic) SetSync(sync bool) {
 	self.GoFun = sync
@@ -87,123 +104,154 @@ func (self *GoRoutineLogic) SetSync(sync bool) {
 func (self *GoRoutineLogic) IsRunning() bool {
 	return self.Started
 }
+func (self *GoRoutineLogic) GetChanLen() int {
+	return self.ChanSize
+}
+func (self *GoRoutineLogic) IsInited() bool {
+	return self.Inited
+}
+func (self *GoRoutineLogic) SetInited(in bool) {
+	self.Inited = in
+}
+
+func (self *GoRoutineLogic) LeftJobNumber() int {
+	return len(self.jobChan)
+}
 
 func (self *GoRoutineLogic) CallNetFunc(m *M) {
 	self.NetHandler[m.Name](self, m.Id, m.Data)
 }
 
 //同步定时任务
-func (self *GoRoutineLogic) RunTimer(delat int, f HanlderFunc) {
-	// callback
-	var cb = func(dt int64) bool {
-		job := ChannelContext{"", dt, nil, f}
-		self.JobChan <- job
-		return true
-	}
-	self.Ticker = timer.NewTimer(delat, cb, true)
-}
-
-//同步定时任务
-func (self *GoRoutineLogic) RunTicker(delat int, f HanlderFunc) {
-	// callback
-	var cb = func(dt int64) bool {
-		job := ChannelContext{"", dt, nil, f}
-		self.JobChan <- job
-		return true
-	}
-	self.Ticker = timer.NewTicker(delat, cb)
+func (self *GoRoutineLogic) RunTimer(delat int64, f func(int64)) {
+	self.timerCall = f
+	self.timerDuation = time.Duration(delat) * time.Millisecond
+	self.timer.Stop()
+	self.timer = time.NewTimer(self.timerDuation)
 }
 
 //工作队列
 func (self *GoRoutineLogic) woker() {
-	defer self.wg.Done()
-
-	for ct := range self.JobChan {
-		//log.Debugf("jobchan single %s %s", self.Name, ct.Handler)
-		if ct.Cb != nil && ct.ReadChan == nil {
-			self.CallFunc(ct.Cb, ct.Data)
-		} else {
-			var hd = self.Cmd[ct.Handler]
-			if hd == nil {
-				log.Noticef("GoRoutineLogic[%s] handler is nil: %s", self.Name, ct.Handler)
+	defer func() {
+		if err := recover(); err != nil {
+			log.Errorf("GoRoutineLogic woker: %v", err)
+		}
+	}()
+	utm := util.TimeStamp()
+	utmPre := utm
+	for {
+		select {
+		case ct := <-self.jobChan:
+			//	log.Debugf("jobchan single %s %s", self.Name, ct.Handler)
+			if ct.Cb != nil && ct.ReadChan == nil {
+				self.CallFunc(ct.Cb, ct.Data)
 			} else {
-				if self.GoFun {
-					go self.CallGoFunc(hd, &ct)
+				var hd = self.Cmd[ct.Handler]
+				if hd == nil {
+					log.Warningf("GoRoutineLogic[%s] handler is nil: %s", self.Name, ct.Handler)
 				} else {
-					ct.Data = self.CallFunc(hd, ct.Data)
-					if ct.Data != nil && ct.ReadChan != nil {
-						ch := ct.ReadChan
-						ct.ReadChan = nil //this is importent, for send callback
-						ch <- ct
+					if self.GoFun {
+						go self.CallGoFunc(hd, &ct)
+					} else {
+						ct.Data = self.CallFunc(hd, ct.Data)
+						if ct.Data != nil && ct.ReadChan != nil {
+							ch := ct.ReadChan
+							ct.ReadChan = nil //this is importent, for send callback
+							ch <- ct
+						}
 					}
 				}
 			}
+		case action := <-self.actionChan:
+			if action == ACTION_CLOSE {
+				return
+			}
+
+		case <-self.timer.C:
+			utmPre = util.TimeStamp()
+			if self.timerCall != nil {
+				self.timerCall(utmPre - utm)
+				self.timer.Reset(self.timerDuation)
+			}
+			utm = utmPre
 		}
 	}
+
+	self.stop()
 }
 
 //处理任务
 func (self *GoRoutineLogic) Run() {
 	self.Started = true
-	self.wg.Add(1)
 	go self.woker()
 }
 
 //关闭任务
-func (self *GoRoutineLogic) Stop() {
-	close(self.JobChan)
-	close(self.ReadChan)
-	self.wg.Wait()
+func (self *GoRoutineLogic) stop() {
+	self.Started = false
+	if self.timer != nil {
+		self.timer.Stop()
+		self.timer = nil
+	}
+	close(self.actionChan)
 }
 
-//投递任务
-func (self *GoRoutineLogic) Send(target string, hanld_name string, sdata interface{}) {
-	server := GetGoRoutineMgr().GetRoutine(target)
-	if server == nil {
-		log.Noticef("GoRoutineLogic.Send:[%s --> %s(is nil)] %s", self.Name, target, hanld_name)
+//关闭任务
+func (self *GoRoutineLogic) Close() {
+	self.DoDestory()
+	self.actionChan <- ACTION_CLOSE
+}
+
+//投递任务，给自己
+func (self *GoRoutineLogic) Send(handler_name string, sdata interface{}) {
+	if self.Started == false {
 		return
 	}
-	if len(server.GetJobChan()) > CHAN_BUFFER_MAX {
-		log.Warningf("GoRoutineLogic.Send:[%s --> %s(chan overlow)] %s", self.Name, target, hanld_name)
+	if len(self.GetJobChan()) > self.GetChanLen()*2 {
+		log.Noticef("GoRoutineLogic[%s].Send too many job chan: %s", self.Name, handler_name)
 		return
 	}
-	job := ChannelContext{hanld_name, sdata, nil, nil}
-	server.GetJobChan() <- job
+	job := ChannelContext{handler_name, sdata, nil, nil}
+	self.GetJobChan() <- job
 }
 
 //投递任务,拥有回调
-func (self *GoRoutineLogic) SendBack(target string, hanld_name string, sdata interface{}, Cb HanlderFunc) {
-	server := GetGoRoutineMgr().GetRoutine(target)
+func (self *GoRoutineLogic) SendBack(server IGoRoutine, handler_name string, sdata interface{}, Cb HanlderFunc) {
+	if self.Started == false {
+		return
+	}
 	if server == nil {
-		log.Warningf("GoRoutineLogic.SendBack:[%s --> %s(is nil)] %s", self.Name, target, hanld_name)
+		log.Noticef("GoRoutineLogic[%s].SendBack target[%s] is nil: %s", self.Name, server.GetName(), handler_name)
 		return
 	}
-	if len(server.GetJobChan()) > CHAN_BUFFER_MAX {
-		log.Warningf("GoRoutineLogic.SendBack:[%s --> %s(chan overlow)] %s", self.Name, target, hanld_name)
+	if len(server.GetJobChan()) > server.GetChanLen()*2 {
+		log.Noticef("GoRoutineLogic[%s].SendBack[%s] too many job chan: %s", self.Name, server.GetName(), handler_name)
 		return
 	}
-	job := ChannelContext{hanld_name, sdata, self.JobChan, Cb}
+	job := ChannelContext{handler_name, sdata, self.jobChan, Cb}
 	server.GetJobChan() <- job
 }
 
 //阻塞读取数据式投递任务，一直等待（超过三秒属于异常）
-func (self *GoRoutineLogic) Call(target string, hanld_name string, sdata interface{}) interface{} {
-	server := GetGoRoutineMgr().GetRoutine(target)
+func (self *GoRoutineLogic) Call(server IGoRoutine, handler_name string, sdata interface{}) interface{} {
+	if self.Started == false {
+		return nil
+	}
 	if server == nil {
-		log.Noticef("GoRoutineLogic.Call:[%s --> %s(is nil)] %s", self.Name, target, hanld_name)
+		log.Noticef("GoRoutineLogic[%s].Call target[%s] is nil: %s", self.Name, server.GetName(), handler_name)
 		return nil
 	}
-	if len(server.GetJobChan()) > CHAN_BUFFER_MAX {
-		log.Warningf("GoRoutineLogic.Call:[%s --> %s(chan overlow)] %s", self.Name, target, hanld_name)
+	if len(server.GetJobChan()) > server.GetChanLen()*2 {
+		log.Noticef("GoRoutineLogic[%s].Call target[%s] too many jon chan: %s", self.Name, server.GetName(), handler_name)
 		return nil
 	}
-	job := ChannelContext{hanld_name, sdata, self.ReadChan, nil}
+	job := ChannelContext{handler_name, sdata, self.readChan, nil}
 	select {
 	case server.GetJobChan() <- job:
-		rdata := <-self.ReadChan
+		rdata := <-self.readChan
 		return rdata.Data
 	case <-time.After(CALL_TIMEOUT * time.Second):
-		log.Noticef("GoRoutineLogic[%s] send timeout: %s", self.Name, hanld_name)
+		log.Noticef("GoRoutineLogic[%s] Call timeout: %s", self.Name, handler_name)
 		return nil
 	}
 }
@@ -234,11 +282,17 @@ func (self *GoRoutineLogic) CallGoFunc(hd HanlderFunc, ct *ChannelContext) {
 }
 
 func (self *GoRoutineLogic) WriteSync(ct *ChannelContext) {
-	self.ReadChan <- *ct
+	if self.Started == false {
+		return
+	}
+	self.readChan <- *ct
 }
 
 func (self *GoRoutineLogic) ReadSync() interface{} {
-	ct := <-self.ReadChan
+	if self.Started == false {
+		return nil
+	}
+	ct := <-self.readChan
 	return ct.Data
 }
 
@@ -258,17 +312,30 @@ func (self *GoRoutineLogic) UnRegisterGate(name string) {
 	delete(self.NetHandler, name)
 }
 
-func (self *GoRoutineLogic) Init(name string) {
+func (self *GoRoutineLogic) init(name string) {
 	self.Name = name
-	self.JobChan = make(chan ChannelContext, CHAN_BUFFER_LEN)
-	self.ReadChan = make(chan ChannelContext)
+	n := self.ChanSize
+	if n == 0 {
+		n = CHAN_BUFFER_LEN
+	}
+	self.ChanSize = n
+	self.jobChan = make(chan ChannelContext, n)
+	self.readChan = make(chan ChannelContext)
+	self.actionChan = make(chan int, 1)
 	self.Cmd = make(Cmdtype)
 	self.NetHandler = make(map[string]HanlderNetFunc)
 	self.RpcCall = make(Cmdtype)
+	self.timer = time.NewTimer(1<<63 - 1) //默认没有定时器
+	self.timerCall = nil
 }
 
 func ServiceHandler(igo IGoRoutine, data interface{}) interface{} {
+	//log.Debugf("ServiceHandler[%s]: %v", igo.GetName(), data)
 	m := data.(M)
 	igo.CallNetFunc(&m)
 	return nil
+}
+
+func CType(igo IGoRoutine) unsafe.Pointer {
+	return unsafe.Pointer(igo.(*GoRoutineLogic))
 }

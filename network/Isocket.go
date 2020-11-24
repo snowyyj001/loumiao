@@ -4,9 +4,10 @@ import (
 	"encoding/binary"
 	"net"
 
+	"github.com/snowyyj001/loumiao/base"
+
 	"github.com/snowyyj001/loumiao/config"
 	"github.com/snowyyj001/loumiao/log"
-	"github.com/snowyyj001/loumiao/util"
 
 	"github.com/gorilla/websocket"
 )
@@ -14,7 +15,8 @@ import (
 const (
 	SSF_ACCEPT = iota
 	SSF_CONNECT
-	SSF_SHUT_DOWN //已经关闭
+	SSF_SHUT_DOWN    //已经关闭
+	SSF_SHUT_DOWNING //将要关闭
 )
 
 const (
@@ -118,6 +120,10 @@ func (self *Socket) GetState() int {
 	return self.m_nState
 }
 
+func (self *Socket) SetState(state int) {
+	self.m_nState = state
+}
+
 func (self *Socket) Send([]byte) int {
 	return 0
 }
@@ -150,7 +156,6 @@ func (self *Socket) Close() {
 	if self.m_WsConn != nil {
 		self.m_WsConn.Close()
 	}
-	self.Clear()
 }
 
 func (self *Socket) GetMaxReceiveBufferSize() int {
@@ -210,7 +215,7 @@ func (self *Socket) ReceivePacket(Id int, dat []byte) bool {
 			break
 		}
 		mbuff1 := self.m_pInBuffer[0:2]
-		nLen1 := int(util.BytesToUInt16(mbuff1, binary.BigEndian)) //消息总长度
+		nLen1 := int(base.BytesToUInt16(mbuff1, binary.BigEndian)) //消息总长度
 		if nLen1 > self.m_pInBufferLen {
 			break
 		}

@@ -7,14 +7,15 @@ import (
 )
 
 const (
-	ServerType_ETCD    = iota //0 etcd
-	ServerType_Gate           //1 网关
-	ServerType_Account        //2 账号
-	ServerType_World          //3 世界
-	ServerType_Zone           //4 地图
-	ServerType_DB             //5 数据库
-	ServerType_Log            //6 日志
-	ServerType_IM             //7 聊天
+	ServerType_ETCD      = iota //0 etcd
+	ServerType_Gate             //1 网关
+	ServerType_Account          //2 账号
+	ServerType_World            //3 世界
+	ServerType_Zone             //4 地图
+	ServerType_DB               //5 数据库
+	ServerType_Log              //6 日志
+	ServerType_IM               //7 聊天
+	ServerType_WEBSERVER        //8 web
 )
 
 var (
@@ -27,6 +28,9 @@ var (
 	NET_MAX_CONNS     = 65535      //最大连接数
 	NET_MAX_RPC_CONNS = 1024       //rpc最大连接数
 	NET_BUFFER_SIZE   = 1024 * 64  //最大消息包长度64k
+	NET_MAX_NUMBER    = 30000      //pcu
+
+	SERVER_GROUP = "A" //服务器分组
 )
 
 //uid通过etcd自动分配，一般不要手动分配uid，除非清楚知道自己在做什么,参考GetServerUid
@@ -38,12 +42,14 @@ type NetNode struct {
 	Protocol  string `json:"protocol"`
 	WebSocket int    `json:"websocket"`
 	Uid       int    `json:"uid"`
+	MaxNum    int    `json:"maxnum"`
+	Group     string `json:"group"`
 }
 
 type ServerCfg struct {
 	NetCfg   NetNode  `json:"net"`
 	EtcdAddr []string `json:"etcd"`
-	NsqAddr  []string `json:"nsqd"`
+	NatsAddr []string `json:"nats"`
 }
 
 var Cfg ServerCfg
@@ -66,5 +72,6 @@ func init() {
 	NET_PROTOCOL = Cfg.NetCfg.Protocol
 	NET_WEBSOCKET = Cfg.NetCfg.WebSocket == 1
 	NET_GATE_SADDR = Cfg.NetCfg.SAddr
-
+	NET_MAX_NUMBER = Cfg.NetCfg.MaxNum
+	SERVER_GROUP = Cfg.NetCfg.Group
 }

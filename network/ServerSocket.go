@@ -17,6 +17,7 @@ type IServerSocket interface {
 	AddClinet(*net.TCPConn, string, int) *ServerSocketClient
 	DelClinet(*ServerSocketClient) bool
 	StopClient(int)
+	ClientRemoteAddr(clientid int) string
 }
 
 type ServerSocket struct {
@@ -90,6 +91,14 @@ func (self *ServerSocket) GetClientById(id int) *ServerSocketClient {
 	return nil
 }
 
+func (self *ServerSocket) ClientRemoteAddr(clientid int) string {
+	pClinet := self.GetClientById(clientid)
+	if pClinet != nil {
+		return pClinet.m_Conn.RemoteAddr().String()
+	}
+	return ""
+}
+
 func (self *ServerSocket) AddClinet(tcpConn *net.TCPConn, addr string, connectType int) *ServerSocketClient {
 	pClient := self.LoadClient()
 	if pClient != nil {
@@ -116,13 +125,14 @@ func (self *ServerSocket) DelClinet(pClient *ServerSocketClient) bool {
 	self.m_Pool.Put(pClient)
 	self.m_ClientLocker.Lock()
 	delete(self.m_ClientList, pClient.m_ClientId)
-	log.Debugf("客户端：已断开连接[%d]", pClient.m_ClientId)
+	log.Debugf("客户端：%s已断开连接[%d]", pClient.m_Conn.RemoteAddr().String(), pClient.m_ClientId)
 	self.m_ClientLocker.Unlock()
 	self.m_nClientCount--
 	return true
 }
 
 func (self *ServerSocket) StopClient(id int) {
+	log.Debugf("ServerSocket.StopClient: %d", id)
 	pClinet := self.GetClientById(id)
 	if pClinet != nil {
 		pClinet.Stop()

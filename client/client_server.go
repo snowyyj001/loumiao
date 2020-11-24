@@ -20,7 +20,7 @@ type ClientServer struct {
 	pService network.ISocket
 }
 
-func (self *ClientServer) DoInit() {
+func (self *ClientServer) DoInit() bool {
 	log.Info("ClientServer DoInit")
 	This = self
 
@@ -31,6 +31,8 @@ func (self *ClientServer) DoInit() {
 	self.pService.BindPacketFunc(PacketFunc)
 
 	handler_Map = make(map[string]string)
+
+	return true
 }
 
 func (self *ClientServer) DoRegsiter() {
