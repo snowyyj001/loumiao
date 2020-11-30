@@ -9,7 +9,6 @@ import (
 
 	"github.com/snowyyj001/loumiao/util/timer"
 
-	_ "github.com/snowyyj001/loumiao/config"
 	"github.com/snowyyj001/loumiao/gorpc"
 	"github.com/snowyyj001/loumiao/log"
 	"github.com/snowyyj001/loumiao/message"
@@ -135,6 +134,7 @@ func SendRpc(funcName string, data interface{}, target int) {
 		buff, _ := message.Encode(target, 0, "", data)
 		m.Data = buff
 	}
+	log.Debugf("SendRpc: %s", funcName)
 	//base64str := base64.StdEncoding.EncodeToString([]byte(funcName))
 	gorpc.MGR.Send("GateServer", "SendRpc", m)
 }

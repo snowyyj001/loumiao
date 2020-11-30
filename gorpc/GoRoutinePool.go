@@ -67,7 +67,16 @@ func (self *GoRoutinePool) GetRoutine(name int64) IGoRoutine {
 func (self *GoRoutinePool) CloseRoutine(name int64) {
 	igo := self.GetAndDelRoutine(name)
 	if igo != nil {
+		igo.DoDestory()
 		igo.Close()
+	}
+}
+
+//关闭单个actor，要等待工作队列清空才会关闭
+func (self *GoRoutinePool) CloseRoutineCleanly(name int64) {
+	igo := self.GetAndDelRoutine(name)
+	if igo != nil {
+		igo.CloseCleanly()
 	}
 }
 
@@ -78,19 +87,13 @@ func (self *GoRoutinePool) CloseAll() {
 		igo.DoDestory()
 	}
 	for _, igo := range self.go_name_Tmp {
-		igo.stop()
+		igo.Close()
 	}
 	self.actorLock.RUnlock()
 }
 
 //创建初始化服务
 func (self *GoRoutinePool) Start(igo IGoRoutine, name int64) bool {
-
-	//add first
-	ok := self.AddRoutine(igo, name)
-	if !ok {
-		return ok
-	}
 
 	//GoRoutineLogic
 	igo.init(util.Itoa64(name))
@@ -124,7 +127,23 @@ func (self *GoRoutinePool) DoStart() {
 
 //开启服务
 //启动单个服务
-func (self *GoRoutinePool) DoSingleStart(igo IGoRoutine, name int64) {
+//@igo: actor本身
+//@name: actor唯一标识
+//@doAdd: 是否添加进actor列表
+func (self *GoRoutinePool) DoSingleStart(igo IGoRoutine, name int64, doAdd bool) {
+
+	if doAdd {
+		//add first
+		ok := self.AddRoutine(igo, name)
+		if !ok {
+			return
+		}
+	}
+
+	if igo.IsRunning() {
+		return
+	}
+
 	ok := self.Start(igo, name)
 	if !ok {
 		return
@@ -135,7 +154,6 @@ func (self *GoRoutinePool) DoSingleStart(igo IGoRoutine, name int64) {
 	if igo.IsRunning() == false || igo.IsInited() == false {
 		self.DelRoutine(name)
 	}
-
 }
 
 //获取pool大小

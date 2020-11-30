@@ -187,6 +187,21 @@ func HDel(name, key string) (bool, error) {
 	return v, err
 }
 
+// //  hash ///
+// 删除指定的 hash 键
+func HMDel(name string, fields ...string) (bool, error) {
+	db := pool.Get()
+	defer db.Close()
+
+	args := []interface{}{name}
+	for _, field := range fields {
+		args = append(args, field)
+	}
+	var err error
+	v, err := redis.Bool(db.Do("HDEL", args...))
+	return v, err
+}
+
 // 查看hash 中指定是否存在
 func HExists(name, field string) (bool, error) {
 	db := pool.Get()
@@ -229,7 +244,7 @@ func HSet(name string, key string, value interface{}) (err error) {
 func HMSet(name string, obj interface{}) (err error) {
 	db := pool.Get()
 	defer db.Close()
-	_, err = db.Do("HSET", redis.Args{}.Add(name).AddFlat(&obj)...)
+	_, err = db.Do("HMSET", redis.Args{}.Add(name).AddFlat(obj)...)
 	return
 }
 
@@ -252,6 +267,18 @@ func HGetInt64(name, field string) (int64, error) {
 	db := pool.Get()
 	defer db.Close()
 	return redis.Int64(db.Do("HGET", name, field))
+}
+
+func Int64(val interface{}) (int64, error) {
+	return redis.Int64(val, nil)
+}
+
+func Int(val interface{}) (int, error) {
+	return redis.Int(val, nil)
+}
+
+func String(val interface{}) (string, error) {
+	return redis.String(val, nil)
 }
 
 // set 集合

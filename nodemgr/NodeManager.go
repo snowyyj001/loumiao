@@ -26,13 +26,15 @@ type NodeInfo struct {
 //gate和accout目前有监控服务器信息,account挑选gate和world给客户端使用
 //gate挑选zone给客户端使用
 var (
-	node_Map map[string]*NodeInfo //服务器信息
-	nodeLock sync.RWMutex
-	NodeUid  int //本服务器节点的uid，就是gateserver通过GetServerUid获取的id
+	node_Map      map[string]*NodeInfo //服务器信息
+	saddr_uid_Map map[int]string       //saddr -> uid
+	nodeLock      sync.RWMutex
+	NodeUid       int //本服务器节点的uid，就是gateserver通过GetServerUid获取的id
 )
 
 func init() {
 	node_Map = make(map[string]*NodeInfo)
+	saddr_uid_Map = make(map[int]string)
 
 }
 
@@ -43,6 +45,7 @@ func CreateNode(saddr string, uid int, atype int, group string) *NodeInfo {
 	node.Group = group
 	nodeLock.Lock()
 	node_Map[saddr] = node
+	saddr_uid_Map[uid] = saddr
 	nodeLock.Unlock()
 	return node
 }
@@ -71,6 +74,7 @@ func NewNodeDiscover(key string, val string, dis bool) {
 			node_Map[saddr] = node
 		}
 		json.Unmarshal([]byte(val), &node.NetNode)
+		saddr_uid_Map[node.Uid] = saddr
 		nodeLock.Unlock()
 	} else {
 		nodeLock.Lock()
@@ -160,38 +164,27 @@ func GetBalanceZone(group string) int {
 }
 
 func DisableNode(uid int) {
-	nodeLock.RLock()
-	for _, node := range node_Map {
-		if node.Uid == uid {
-			node.Number = -1
-			break
-		}
+	node := GetNode(uid)
+	if node != nil {
+		node.Number = -1
 	}
-	nodeLock.RUnlock()
-	return
 }
 
 func GetNode(uid int) (ret *NodeInfo) {
 	nodeLock.RLock()
-	for _, node := range node_Map {
-		if node.Uid == uid {
-			ret = node
-			break
-		}
+	saddr, ok := saddr_uid_Map[uid]
+	if ok {
+		ret, _ = node_Map[saddr]
 	}
 	nodeLock.RUnlock()
 	return
 }
 
 func GetActiveNode(uid int) (ret *NodeInfo) {
-	nodeLock.RLock()
-	for _, node := range node_Map {
-		if node.SocketActive && node.Number != -1 && node.Uid == uid {
-			ret = node
-			break
-		}
+	node := GetNode(uid)
+	if node != nil && node.SocketActive && node.Number != -1 {
+		ret = node
 	}
-	nodeLock.RUnlock()
 	return
 }
 

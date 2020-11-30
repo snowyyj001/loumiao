@@ -3,8 +3,13 @@ package gate
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 	"sync"
+
+	"github.com/snowyyj001/loumiao/msg"
+
+	"github.com/snowyyj001/loumiao/message"
 
 	"github.com/snowyyj001/loumiao/base"
 
@@ -139,9 +144,6 @@ func (self *GateServer) DoRegsiter() {
 	handler_Map["LouMiaoLoginGate"] = "GateServer"
 	self.RegisterGate("LouMiaoLoginGate", innerLouMiaoLoginGate)
 
-	handler_Map["LouMiaoHeartBeat"] = "GateServer"
-	self.RegisterGate("LouMiaoHeartBeat", innerLouMiaoHeartBeat)
-
 	handler_Map["LouMiaoRpcRegister"] = "GateServer"
 	self.RegisterGate("LouMiaoRpcRegister", innerLouMiaoRpcRegister)
 
@@ -156,9 +158,6 @@ func (self *GateServer) DoRegsiter() {
 
 	handler_Map["LouMiaoClientConnect"] = "GateServer"
 	self.RegisterGate("LouMiaoClientConnect", innerLouMiaoClientConnect)
-
-	handler_Map["LouMiaoClientDisConnect"] = "GateServer"
-	self.RegisterGate("LouMiaoClientDisConnect", innerLouMiaoClientDisConnect)
 
 	handler_Map["LouMiaoBindGate"] = "GateServer"
 	self.RegisterGate("LouMiaoBindGate", innerLouMiaoLouMiaoBindGate)
@@ -216,13 +215,18 @@ func (self *GateServer) DoOpen() {
 		//watch server addr, this is for server discover
 		//if config.NET_NODE_TYPE == config.ServerType_Gate {
 		//watch addr
-		//account也参与服发现，是为了及时感知服务器的关闭，因为scoket的断开通知可能比etcd的更迅速，etcd有延迟，GAME_LEASE_TIME/3
-		//目前account只和其他服务器(world)仅保持socket连接没有其他操作
 		_, err = self.clientEtcd.WatchServerList(define.ETCD_SADDR, self.newServerDiscover)
 		if err != nil {
 			log.Fatalf("etcd watch NET_GATE_SADDR error ", err)
 		}
 		//}
+	} else {
+		if config.NET_NODE_TYPE == config.ServerType_World {
+			_, err = self.clientEtcd.WatchServerList(define.ETCD_SADDR, self.newServerDiscover)
+			if err != nil {
+				log.Fatalf("etcd watch NET_GATE_SADDR error ", err)
+			}
+		}
 	}
 }
 
@@ -254,6 +258,10 @@ func (self *GateServer) newServerDiscover(key string, val string, dis bool) {
 		return
 	}
 	node.SocketActive = dis
+
+	if config.NET_NODE_TYPE == config.ServerType_World {
+		return
+	}
 
 	if atype == config.ServerType_Gate || atype == config.ServerType_Account { //filter gate and account
 		return
@@ -397,6 +405,13 @@ func (self *GateServer) getCluserServer(funcName string) *network.ClientSocket {
 	return uids[index]
 }
 
+func (self *GateServer) StopClient(userId int) {
+	sid := This.tokens_u[userId]
+	if sid > 0 {
+		self.closeClient(sid)
+	}
+}
+
 func (self *GateServer) closeClient(clientid int) {
 	if self.ServerType == network.CLIENT_CONNECT {
 		if config.NET_WEBSOCKET {
@@ -417,4 +432,19 @@ func (self *GateServer) SendServer(target int, buff []byte) {
 	} else {
 		log.Warningf("GateServer.SendServer target error: target=%d", target)
 	}
+}
+
+// 必须保证线程安全，即需要在gateserver的igo中调用该函数
+func (self *GateServer) SendRpc(funcName string, data interface{}, target int) {
+	var buff []byte
+	param := int32(1)
+	if reflect.TypeOf(data).Kind() == reflect.Slice { //bitstream
+		buff = data.([]byte)
+	} else {
+		buff, _ = message.Encode(target, 0, "", data)
+		param = 0
+	}
+
+	outdata := &msg.LouMiaoRpcMsg{TargetId: int64(target), FuncName: funcName, Buffer: buff, SourceId: int64(This.Id), ByteBuffer: param}
+	innerLouMiaoRpcMsg(self, target, outdata)
 }

@@ -6,6 +6,8 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/snowyyj001/loumiao/util/timer"
+
 	"github.com/snowyyj001/loumiao/log"
 	"github.com/snowyyj001/loumiao/util"
 )
@@ -23,15 +25,16 @@ const (
 type Cmdtype map[string]HanlderFunc
 
 type IGoRoutine interface {
-	DoInit() bool //初始化数据//非线程安全
-	DoRegsiter()  //注册消息//非线程安全
-	DoStart()     //启动完成//非线程安全
-	DoOpen()      //开始服务//非线程安全
-	DoDestory()   //销毁数据//非线程安全
-	init(string)  //GoRoutineLogic初始化
-	Close()       //关闭,线程是否安全要看调用方是否是自己
-	Run()         //开始执行
-	stop()        //停止执行
+	DoInit() bool  //初始化数据//非线程安全
+	DoRegsiter()   //注册消息//非线程安全
+	DoStart()      //启动完成//非线程安全
+	DoOpen()       //开始服务//非线程安全
+	DoDestory()    //销毁数据//线程是否安全要看调用方是否是自己
+	init(string)   //GoRoutineLogic初始化
+	Close()        //关闭,线程是否安全要看调用方是否是自己
+	CloseCleanly() //关闭,线程是否安全要看调用方是否是自己
+	Run()          //开始执行
+	stop()         //停止执行
 	GetName() string
 	SetName(str string)
 	GetJobChan() chan ChannelContext
@@ -74,20 +77,20 @@ type GoRoutineLogic struct {
 }
 
 func (self *GoRoutineLogic) DoInit() bool {
-	log.Infof("%s DoInit", self.Name)
+	//log.Infof("%s DoInit", self.Name)
 	return true
 }
 func (self *GoRoutineLogic) DoRegsiter() {
-	log.Infof("%s DoRegsiter", self.Name)
+	//log.Infof("%s DoRegsiter", self.Name)
 }
 func (self *GoRoutineLogic) DoStart() {
-	log.Infof("%s DoStart", self.Name)
+	//log.Infof("%s DoStart", self.Name)
 }
 func (self *GoRoutineLogic) DoOpen() {
-	log.Infof("%s DoOpen", self.Name)
+	//log.Infof("%s DoOpen", self.Name)
 }
 func (self *GoRoutineLogic) DoDestory() {
-	log.Infof("%s DoDestory", self.Name)
+	//log.Infof("%s DoDestory", self.Name)
 }
 func (self *GoRoutineLogic) GetName() string {
 	return self.Name
@@ -126,8 +129,8 @@ func (self *GoRoutineLogic) CallNetFunc(m *M) {
 func (self *GoRoutineLogic) RunTimer(delat int64, f func(int64)) {
 	self.timerCall = f
 	self.timerDuation = time.Duration(delat) * time.Millisecond
-	self.timer.Stop()
-	self.timer = time.NewTimer(self.timerDuation)
+	self.timer.Reset(self.timerDuation)
+	//self.timer = time.NewTimer(self.timerDuation)
 }
 
 //工作队列
@@ -139,10 +142,12 @@ func (self *GoRoutineLogic) woker() {
 	}()
 	utm := util.TimeStamp()
 	utmPre := utm
+
 	for {
+		//log.Debugf("woker run: %s", self.Name)
 		select {
 		case ct := <-self.jobChan:
-			//	log.Debugf("jobchan single %s %s", self.Name, ct.Handler)
+			//log.Debugf("jobchan single: %s %s", self.Name, ct.Handler)
 			if ct.Cb != nil && ct.ReadChan == nil {
 				self.CallFunc(ct.Cb, ct.Data)
 			} else {
@@ -162,9 +167,10 @@ func (self *GoRoutineLogic) woker() {
 					}
 				}
 			}
+			//log.Debugf("jobchan single done: %s %s", self.Name, ct.Handler)
 		case action := <-self.actionChan:
 			if action == ACTION_CLOSE {
-				return
+				goto LabelEnd
 			}
 
 		case <-self.timer.C:
@@ -177,6 +183,7 @@ func (self *GoRoutineLogic) woker() {
 		}
 	}
 
+LabelEnd:
 	self.stop()
 }
 
@@ -198,8 +205,23 @@ func (self *GoRoutineLogic) stop() {
 
 //关闭任务
 func (self *GoRoutineLogic) Close() {
-	self.DoDestory()
 	self.actionChan <- ACTION_CLOSE
+}
+
+//延迟关闭任务，等待工作队列清空
+func (self *GoRoutineLogic) CloseCleanly() {
+	self.DoDestory()
+	timer.NewTicker(1000, func(dt int64) bool {
+		if self.LeftJobNumber() == 0 {
+			timer.DelayJob(1000, func() {
+				self.actionChan <- ACTION_CLOSE
+				log.Debug("AAAAAAAAAAAAAAAAAAAA")
+			}, true)
+			return false
+		}
+		log.Debugf("CloseCleanly: %d", self.LeftJobNumber())
+		return true
+	})
 }
 
 //投递任务，给自己

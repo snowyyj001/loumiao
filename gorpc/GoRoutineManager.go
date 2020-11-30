@@ -49,6 +49,7 @@ func (self *GoRoutineMgr) GetRoutine(name string) IGoRoutine {
 func (self *GoRoutineMgr) Close(name string) {
 	igo := self.GetRoutine(name)
 	if igo != nil {
+		igo.DoDestory()
 		igo.Close()
 	}
 }
@@ -59,7 +60,7 @@ func (self *GoRoutineMgr) CloseAll() {
 		igo.DoDestory()
 	}
 	for _, igo := range self.go_name_Map {
-		igo.stop()
+		igo.Close()
 	}
 }
 

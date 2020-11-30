@@ -167,6 +167,16 @@ func DecodeJson(uid int, buff []byte, length int) (error, int, string, interface
 	return nil, target, msgName, packet
 }
 
+func Pack(packet interface{}) ([]byte, error) {
+	return proto.Marshal(packet.(proto.Message))
+}
+
+func UnPack(msgName string, buff []byte) (interface{}, error) {
+	packet := GetPakcet(msgName)
+	err := proto.Unmarshal(buff, packet.(proto.Message))
+	return packet, err
+}
+
 func DoInit() {
 	if config.NET_PROTOCOL == "JSON" {
 		Encode = EncodeJson

@@ -18,3 +18,8 @@ const ETCD_LOCKWORLD string = "/lockworldpos/"
 const (
 	TIME_LOCK_WUID = 3 //分布式锁超时时间-ETCD_LOCKWORLD
 )
+
+const (
+	CLIENT_CONNECT    = 0 //客户端建立连接
+	CLIENT_DISCONNECT = 1 //客户端断开连接
+)
