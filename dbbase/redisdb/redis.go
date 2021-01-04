@@ -2,6 +2,7 @@
 package redisdb
 
 import (
+	"fmt"
 	"math/rand"
 	"time"
 
@@ -24,6 +25,7 @@ var (
 //url：数据库地址
 ///例如： Redis.Dial("127.0.0.1:6379")
 func Dial(url string) error {
+	log.Debugf("redis Dial: %s", config.DBCfg.RedisUri)
 	pool = redis.NewPool(func() (redis.Conn, error) {
 		c, err := redis.Dial("tcp", url)
 		if err != nil {
@@ -33,7 +35,11 @@ func Dial(url string) error {
 	}, POOL_SIZE)
 
 	util.Assert(pool)
-
+	c, err := pool.Dial()
+	if util.CheckErr(err) {
+		return fmt.Errorf("redis Dial error: %s", url)
+	}
+	c.Close()
 	log.Infof("redis dail success: %s", url)
 
 	return nil
@@ -41,6 +47,7 @@ func Dial(url string) error {
 
 //连接数据库,使用config-redis默认参数
 func DialDefault() error {
+	log.Debugf("redis DialDefault: %s", config.DBCfg.RedisUri)
 	pool = redis.NewPool(func() (redis.Conn, error) {
 		c, err := redis.Dial("tcp", config.DBCfg.RedisUri)
 		if err != nil {
@@ -48,8 +55,12 @@ func DialDefault() error {
 		}
 		return c, nil
 	}, POOL_SIZE)
-
 	util.Assert(pool)
+	c, err := pool.Dial()
+	if util.CheckErr(err) {
+		return fmt.Errorf("redis DialDefault error: %s", config.DBCfg.RedisUri)
+	}
+	c.Close()
 	log.Infof("redis DialDefault success: %s", config.DBCfg.RedisUri)
 
 	return nil
@@ -141,6 +152,9 @@ func Exist(name string) (bool, error) {
 	db := pool.Get()
 	defer db.Close()
 	v, err := redis.Bool(db.Do("EXISTS", name))
+	if err != nil {
+		log.Error(err.Error())
+	}
 	return v, err
 }
 
@@ -149,6 +163,9 @@ func StringIncr(name string) (int, error) {
 	db := pool.Get()
 	defer db.Close()
 	v, err := redis.Int(db.Do("INCR", name))
+	if err != nil {
+		log.Error(err.Error())
+	}
 	return v, err
 }
 
@@ -158,6 +175,9 @@ func Expire(name string, newSecondsLifeTime int64) error {
 	defer db.Close()
 	// 设置key 的过期时间
 	_, err := db.Do("EXPIRE", name, newSecondsLifeTime)
+	if err != nil {
+		log.Error(err.Error())
+	}
 	return err
 }
 
@@ -166,6 +186,9 @@ func Delete(keys ...interface{}) (bool, error) {
 	db := pool.Get()
 	defer db.Close()
 	v, err := redis.Bool(db.Do("DEL", keys...))
+	if err != nil {
+		log.Error(err.Error())
+	}
 	return v, err
 }
 
@@ -174,6 +197,9 @@ func StrLen(name string) (int, error) {
 	db := pool.Get()
 	defer db.Close()
 	v, err := redis.Int(db.Do("STRLEN", name))
+	if err != nil {
+		log.Error(err.Error())
+	}
 	return v, err
 }
 
@@ -184,6 +210,9 @@ func HDel(name, key string) (bool, error) {
 	defer db.Close()
 	var err error
 	v, err := redis.Bool(db.Do("HDEL", name, key))
+	if err != nil {
+		log.Error(err.Error())
+	}
 	return v, err
 }
 
@@ -199,6 +228,9 @@ func HMDel(name string, fields ...string) (bool, error) {
 	}
 	var err error
 	v, err := redis.Bool(db.Do("HDEL", args...))
+	if err != nil {
+		log.Error(err.Error())
+	}
 	return v, err
 }
 
@@ -208,6 +240,9 @@ func HExists(name, field string) (bool, error) {
 	defer db.Close()
 	var err error
 	v, err := redis.Bool(db.Do("HEXISTS", name, field))
+	if err != nil {
+		log.Error(err.Error())
+	}
 	return v, err
 }
 
@@ -216,6 +251,9 @@ func HLen(name string) (int, error) {
 	db := pool.Get()
 	defer db.Close()
 	v, err := redis.Int(db.Do("HLEN", name))
+	if err != nil {
+		log.Error(err.Error())
+	}
 	return v, err
 }
 
@@ -228,7 +266,9 @@ func HMget(name string, fields ...string) ([]interface{}, error) {
 		args = append(args, field)
 	}
 	value, err := redis.Values(db.Do("HMGET", args...))
-
+	if err != nil {
+		log.Error(err.Error())
+	}
 	return value, err
 }
 
@@ -237,6 +277,9 @@ func HSet(name string, key string, value interface{}) (err error) {
 	db := pool.Get()
 	defer db.Close()
 	_, err = db.Do("HSET", name, key, value)
+	if err != nil {
+		log.Error(err.Error())
+	}
 	return
 }
 
@@ -245,6 +288,9 @@ func HMSet(name string, obj interface{}) (err error) {
 	db := pool.Get()
 	defer db.Close()
 	_, err = db.Do("HMSET", redis.Args{}.Add(name).AddFlat(obj)...)
+	if err != nil {
+		log.Error(err.Error())
+	}
 	return
 }
 
@@ -295,5 +341,8 @@ func ScardInt64s(name string) (int64, error) {
 	db := pool.Get()
 	defer db.Close()
 	v, err := redis.Int64(db.Do("SCARD", name))
+	if err != nil {
+		log.Error(err.Error())
+	}
 	return v, err
 }

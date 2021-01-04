@@ -57,18 +57,17 @@ func (self *GoRoutinePool) GetRoutine(name int64) IGoRoutine {
 	self.actorLock.RLock()
 	igo, ok := self.go_name_Tmp[name]
 	self.actorLock.RUnlock()
-	if ok {
+	if ok && igo.IsRunning() {
 		return igo
 	}
 	return nil
 }
 
-//关闭单个actor
+//关闭单个actor，立刻关闭
 func (self *GoRoutinePool) CloseRoutine(name int64) {
 	igo := self.GetAndDelRoutine(name)
 	if igo != nil {
-		igo.DoDestory()
-		igo.Close()
+		igo.Close() //直接关闭
 	}
 }
 
@@ -76,7 +75,7 @@ func (self *GoRoutinePool) CloseRoutine(name int64) {
 func (self *GoRoutinePool) CloseRoutineCleanly(name int64) {
 	igo := self.GetAndDelRoutine(name)
 	if igo != nil {
-		igo.CloseCleanly()
+		igo.CloseCleanly() //协程池的关闭要优雅
 	}
 }
 
@@ -88,6 +87,15 @@ func (self *GoRoutinePool) CloseAll() {
 	}
 	for _, igo := range self.go_name_Tmp {
 		igo.Close()
+	}
+	self.actorLock.RUnlock()
+}
+
+//遍历所有actor
+func (self *GoRoutinePool) RangeRoutine(hanlder func(igo IGoRoutine)) {
+	self.actorLock.RLock()
+	for _, igo := range self.go_name_Tmp {
+		hanlder(igo)
 	}
 	self.actorLock.RUnlock()
 }

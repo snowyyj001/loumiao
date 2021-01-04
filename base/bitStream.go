@@ -340,13 +340,18 @@ func (self *BitStream) ReadFloat64() float64 {
 	return float64(ret)
 }
 
+//根据buff构造一个bitstream，一般用来接收消息
 func NewBitStream(buf []byte, nLen int) *BitStream {
 	var bitstream BitStream
+	if nLen == 0 {
+		nLen = len(buf)
+	}
 	bitstream.BuildPacketStream(buf, nLen)
 	return &bitstream
 }
 
-func NewBitStream_1(nLen int) *BitStream { //this is the way
+//构造一个nLen大小的bitstream，一般用来发送消息
+func NewBitStream_1(nLen int) *BitStream { //_1, this is the way
 	var bitstream BitStream
 	buf := make([]byte, nLen)
 	bitstream.BuildPacketStream(buf, nLen)

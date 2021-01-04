@@ -1,8 +1,5 @@
 package define
 
-//服务器地址
-const ETCD_SADDR string = "/serveraddr/"
-
 //分布式锁-uid
 const ETCD_LOCKUID string = "/lockuid/"
 

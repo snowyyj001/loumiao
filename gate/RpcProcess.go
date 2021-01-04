@@ -21,7 +21,7 @@ import (
 
 //client connect
 func innerConnect(igo gorpc.IGoRoutine, socketId int, data interface{}) {
-	log.Debugf("GateServer innerConnect: %d", socketId)
+	//log.Debugf("GateServer innerConnect: %d", socketId)
 	//对于account来说，socket连接数就是在线人数
 	//对于gate来说，只有client发送完LouMiaoLoginGate消息，成功登录网关才算在线数
 	//本质上来说差别不大
@@ -33,7 +33,7 @@ func innerConnect(igo gorpc.IGoRoutine, socketId int, data interface{}) {
 
 //client disconnect
 func innerDisConnect(igo gorpc.IGoRoutine, socketId int, data interface{}) {
-	log.Debugf("GateServer innerDisConnect: %d", socketId)
+	//log.Debugf("GateServer innerDisConnect: %d", socketId)
 
 	if config.NET_NODE_TYPE == config.ServerType_Account {
 		This.OnlineNum--
@@ -48,18 +48,20 @@ func innerDisConnect(igo gorpc.IGoRoutine, socketId int, data interface{}) {
 		delete(This.tokens, socketId)
 		delete(This.tokens_u, userid)
 		delete(This.users_u, userid)
-
+		if This.ServerType == network.SERVER_CONNECT {
+			This.rpcGates = util.RemoveSlice(This.rpcGates, socketId)
+		}
 	}
 }
 
 //server connect
 func outerConnect(igo gorpc.IGoRoutine, socketId int, data interface{}) {
-	log.Debugf("GateServer outerConnect: %d", socketId)
+	//log.Debugf("GateServer outerConnect: %d", socketId)
 }
 
 //server disconnect
 func outerDisConnect(igo gorpc.IGoRoutine, socketId int, data interface{}) {
-	log.Debugf("GateServer outerDisConnect: %d", socketId)
+	//	log.Debugf("GateServer outerDisConnect: %d", socketId)
 
 	//if config.NET_NODE_TYPE == config.ServerType_Gate {
 	This.removeRpc(socketId)
@@ -76,6 +78,11 @@ func onClientConnected(uid int, tid int) {
 			buff, _ := message.Encode(0, 0, "LouMiaoClientConnect", req)
 			This.SendServer(tid, buff)
 			This.OnlineNum++
+		}
+		handler, ok := handler_Map["ON_CONNECT"]
+		if ok {
+			m := gorpc.M{Id: tid, Name: "ON_CONNECT", Data: uid}
+			gorpc.MGR.Send(handler, "ServiceHandler", m)
 		}
 	} else {
 		//register rpc if has
@@ -101,13 +108,20 @@ func onClientDisConnected(uid int, tid int) {
 		buff, _ := message.Encode(0, 0, "LouMiaoClientConnect", req)
 		This.SendServer(tid, buff)
 		This.OnlineNum--
+	} else {
+		handler, ok := handler_Map["ON_DISCONNECT"]
+		if ok {
+			m := gorpc.M{Id: tid, Name: "ON_DISCONNECT", Data: uid}
+			gorpc.MGR.Send(handler, "ServiceHandler", m)
+		}
 	}
 }
 
 //gate租约回调
 func leaseCallBack(success bool) {
 	if success { //成功续租
-		str := fmt.Sprintf("%s%s/%s", define.ETCD_NODESTATUS, config.SERVER_GROUP, config.NET_GATE_SADDR)
+		//str := fmt.Sprintf("%s%s/%s", define.ETCD_NODESTATUS, config.SERVER_GROUP, config.NET_GATE_SADDR)
+		str := fmt.Sprintf("%s/%s", define.ETCD_NODESTATUS, config.NET_GATE_SADDR)
 		This.clientEtcd.Put(str, util.Itoa(This.OnlineNum), true) //写入人数
 		//log.Debugf("leaseCallBack %s", str)
 	} else {
@@ -118,7 +132,7 @@ func leaseCallBack(success bool) {
 		} else {
 			log.Debugf("尝试重新续租成功")
 			if This.ServerType != network.CLIENT_CONNECT {
-				err := This.clientEtcd.PutService(fmt.Sprintf("%s%/%d", define.ETCD_SADDR, config.SERVER_GROUP, This.Id), config.NET_GATE_SADDR)
+				err := This.clientEtcd.PutService(This.m_etcdKey, config.NET_GATE_SADDR)
 				if err != nil {
 					log.Fatalf("leaseCallBack PutService error: %v", err)
 				}
@@ -160,6 +174,9 @@ func innerLouMiaoLoginGate(igo gorpc.IGoRoutine, socketId int, data interface{})
 			This.pInnerService.(*network.ServerSocket).StopClient(old_socketid)
 		}
 		delete(This.tokens, old_socketid)
+		if This.ServerType == network.SERVER_CONNECT {
+			This.rpcGates = util.RemoveSlice(This.rpcGates, old_socketid)
+		}
 	}
 	tokenid := int(m.TokenId)
 	worldid := int(m.WorldUid)
@@ -172,9 +189,15 @@ func innerLouMiaoLoginGate(igo gorpc.IGoRoutine, socketId int, data interface{})
 			return
 		}
 		This.users_u[userid] = worldid
+	} else if config.NET_NODE_TYPE == config.ServerType_Account {
+		This.users_u[userid] = socketId
+		worldid = socketId
 	}
 	This.tokens[socketId] = &Token{TokenId: tokenid, UserId: userid}
 	This.tokens_u[userid] = socketId
+	if This.ServerType == network.SERVER_CONNECT {
+		This.rpcGates = append(This.rpcGates, socketId)
+	}
 	onClientConnected(userid, worldid)
 	if config.NET_NODE_TYPE == config.ServerType_Gate { //tell the client login success
 		buff, _ := message.Encode(0, 0, "LouMiaoLoginGate", m)
@@ -527,20 +550,22 @@ func closeServer(igo gorpc.IGoRoutine, data interface{}) interface{} {
 
 	if uid == This.Id {
 		if This.ServerType == network.SERVER_CONNECT { //removed from server discover
-			This.clientEtcd.DelService(fmt.Sprintf("%s%s/%d", define.ETCD_SADDR, config.SERVER_GROUP, This.Id))
+			This.clientEtcd.DelService(This.m_etcdKey)
 		}
 	}
 
 	if This.ServerType == network.CLIENT_CONNECT {
 		rpcClient := This.GetRpcClient(uid)
 		if rpcClient != nil {
-			rpcClient.SetState(network.SSF_SHUT_DOWNING) //mark it to will be closed
+			//rpcClient.SetState(network.SSF_SHUT_DOWNING) //mark it to will be closed
+			This.removeRpcHanlder(uid)
 		}
 	} else {
 		socketId, _ := This.tokens_u[uid]
 		token, _ := This.tokens[socketId]
 		if token != nil {
-			token.TokenId = 0 //mark it to will be closed
+			//token.TokenId = 0 //mark it to will be closed
+			This.rpcGates = util.RemoveSlice(This.rpcGates, socketId)
 		}
 	}
 	return nil
@@ -567,7 +592,7 @@ func broadCastServers(buff []byte, serverType int) {
 
 	for _, client := range This.clients {
 		if serverType > 0 {
-			node := nodemgr.GetServerNode(client.GetSAddr())
+			node := nodemgr.GetNodeByAddr(client.GetSAddr())
 			if node.Type == serverType {
 				client.Send(buff)
 			}

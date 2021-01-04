@@ -89,14 +89,14 @@ func serverclientRoutine(pClient *ServerSocketClient) bool {
 	var buff = make([]byte, pClient.m_MaxReceiveBufferSize)
 	for {
 		if pClient.m_bShuttingDown {
-			log.Debugf("远程链接：%s已经被关闭！", pClient.m_Conn.RemoteAddr().String())
+			log.Debugf("远程链接：%s已经被关闭！", pClient.GetSAddr())
 			pClient.OnNetFail(0)
 			break
 		}
 
 		n, err := pClient.m_Conn.Read(buff)
 		if err == io.EOF {
-			log.Debugf("远程链接：%s已经关闭！", pClient.m_Conn.RemoteAddr().String())
+			log.Debugf("远程链接：%s已经关闭！", pClient.GetSAddr())
 			pClient.OnNetFail(1)
 			break
 		}

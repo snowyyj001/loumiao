@@ -200,26 +200,30 @@ func (self *GoRoutineLogic) stop() {
 		self.timer.Stop()
 		self.timer = nil
 	}
+	//当一个通道不再被任何协程所使用后，它将逐渐被垃圾回收掉，无论它是否已经被关闭
+	//这里不关闭jobChan和readChan，让gc处理他们
 	close(self.actionChan)
+
 }
 
 //关闭任务
 func (self *GoRoutineLogic) Close() {
+	self.Started = false //先标记关闭
 	self.actionChan <- ACTION_CLOSE
 }
 
 //延迟关闭任务，等待工作队列清空
 func (self *GoRoutineLogic) CloseCleanly() {
+	self.Started = false //先标记关闭
 	self.DoDestory()
 	timer.NewTicker(1000, func(dt int64) bool {
 		if self.LeftJobNumber() == 0 {
 			timer.DelayJob(1000, func() {
 				self.actionChan <- ACTION_CLOSE
-				log.Debug("AAAAAAAAAAAAAAAAAAAA")
 			}, true)
 			return false
 		}
-		log.Debugf("CloseCleanly: %d", self.LeftJobNumber())
+		//log.Debugf("CloseCleanly: %d", self.LeftJobNumber())
 		return true
 	})
 }

@@ -198,15 +198,12 @@ type ClientDis struct {
 	EtcdBase
 	otherFunc sync.Map //[string]HanlderFunc
 
-	ServerListFuc func(string, string, bool) //服发现
-	NodeListFuc   func(string, string, bool) //所有服发现
+	NodeListFuc   func(string, string, bool) //服发现
 	StatusListFuc func(string, string, bool) //状态更新
 }
 
 func (self *ClientDis) watchFuc(prefix, key, value string, put bool) {
 	switch prefix {
-	case define.ETCD_SADDR:
-		self.ServerListFuc(key, value, put)
 	case define.ETCD_NODEINFO:
 		self.NodeListFuc(key, value, put)
 	case define.ETCD_NODESTATUS:
@@ -267,35 +264,6 @@ func (self *ClientDis) extractOthers(hanlder HanlderFunc, resp *clientv3.GetResp
 //服发现
 //@prefix: 监听key值
 //@hanlder: key值变化回调
-func (self *ClientDis) WatchServerList(prefix string, hanlder func(string, string, bool)) ([]string, error) {
-	resp, err := self.client.Get(context.Background(), prefix, clientv3.WithPrefix())
-	if err != nil {
-		return nil, err
-	}
-	self.ServerListFuc = hanlder
-	addrs := self.extractAddrs(resp)
-
-	go self.watcher(prefix)
-	return addrs, nil
-}
-
-func (self *ClientDis) extractAddrs(resp *clientv3.GetResponse) []string {
-	addrs := make([]string, 0)
-	if resp == nil || resp.Kvs == nil {
-		return addrs
-	}
-	for i := range resp.Kvs {
-		if v := resp.Kvs[i].Value; v != nil {
-			self.ServerListFuc(string(resp.Kvs[i].Key), string(resp.Kvs[i].Value), true)
-			addrs = append(addrs, string(v))
-		}
-	}
-	return addrs
-}
-
-//所有服发现
-//@prefix: 监听key值
-//@hanlder: key值变化回调
 func (self *ClientDis) WatchNodeList(prefix string, hanlder func(string, string, bool)) ([]string, error) {
 	resp, err := self.client.Get(context.Background(), prefix, clientv3.WithPrefix())
 	if err != nil {
@@ -346,12 +314,14 @@ func (self *ClientDis) WatchStatusList(prefix string, hanlder func(string, strin
 
 //创建服务发现
 func NewClientDis(addr []string) (*ClientDis, error) {
+	log.Debugf("etcd connect: %v", addr)
 	conf := clientv3.Config{
 		Endpoints:   addr,
 		DialTimeout: 5 * time.Second,
 	}
 	if client, err := clientv3.New(conf); err == nil {
 		This = client
+		log.Infof("etcd connect success: %v", addr)
 		return &ClientDis{
 			EtcdBase: EtcdBase{client: client},
 		}, nil

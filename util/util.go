@@ -21,6 +21,10 @@ func Random(n int) int {
 	return int(rand2.Int31n(int32(n)))
 }
 
+func TimeStr() string {
+	return time.Now().Format("2006-01-02 15:04:05")
+}
+
 //时间戳秒
 func TimeStampSec() int64 {
 	return time.Now().Unix()

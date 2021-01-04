@@ -1,9 +1,11 @@
 package log
 
 import (
+	"fmt"
 	"log"
+	"os"
 
-	"github.com/phachon/go-logger"
+	go_logger "github.com/phachon/go-logger"
 	"github.com/snowyyj001/loumiao/config"
 )
 
@@ -14,7 +16,8 @@ var (
 func init() {
 	logger = go_logger.NewLogger()
 	logger.Detach("console")
-
+	os.Mkdir("logs", os.ModePerm)
+	os.Mkdir(fmt.Sprintf("logs/%s", config.SERVER_NAME), os.ModePerm)
 	if config.GAME_LOG_CONLOSE {
 		// 命令行输出配置
 		consoleConfig := &go_logger.ConsoleConfig{
@@ -25,11 +28,14 @@ func init() {
 		// 添加 console 为 logger 的一个输出
 		logger.Attach("console", config.GAME_LOG_LEVEL, consoleConfig)
 	} else {
+		filename := fmt.Sprintf("./logs/%s/%s.log", config.SERVER_NAME, config.SERVER_NAME)
+		//filename := fmt.Sprintf("./logs/%s.%s.log", config.SERVER_NAME, time.Now().Format("2006-01-02.15.04.05"))
+		dealLogs(filename)
 		// 文件输出配置
 		fileConfig := &go_logger.FileConfig{
-			Filename:   "./logs/server.log",  // 日志输出文件名，不自动存在
-			MaxSize:    0,                    // 文件最大值（KB），默认值0不限
-			MaxLine:    100000,               // 文件最大行数，默认 0 不限制
+			Filename:   filename,             // 日志输出文件名，不自动存在
+			MaxSize:    50 * 1024,            // 文件最大值（KB），默认值0不限
+			MaxLine:    0,                    // 文件最大行数，默认 0 不限制
 			DateSlice:  "d",                  // 文件根据日期切分， 支持 "Y" (年), "m" (月), "d" (日), "H" (时), 默认 "no"， 不切分
 			JsonFormat: config.GAME_LOG_JSON, // 写入文件的数据是否 json 格式化
 			Format:     "",                   // 如果写入文件的数据不 json 格式化，自定义日志格式

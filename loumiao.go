@@ -7,6 +7,8 @@ import (
 	"runtime"
 	"syscall"
 
+	"github.com/snowyyj001/loumiao/config"
+
 	"github.com/snowyyj001/loumiao/util/timer"
 
 	"github.com/snowyyj001/loumiao/gorpc"
@@ -49,7 +51,7 @@ func Run() {
 		igo := gorpc.MGR.GetRoutine("GateServer")
 		if igo != nil {
 			igo.DoOpen()
-			log.Notice("loumiao start success!")
+			log.Noticef("loumiao start success: %s", config.SERVER_NAME)
 		}
 	}, true)
 
@@ -65,7 +67,7 @@ func Run() {
 
 //关闭游戏
 func Stop() {
-	log.Infof("loumiao stop the server !")
+	log.Info("loumiao stop the server !")
 	c <- os.Kill
 }
 

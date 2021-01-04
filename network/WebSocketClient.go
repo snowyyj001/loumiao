@@ -13,7 +13,8 @@ type IWebSocketClient interface {
 
 type WebSocketClient struct {
 	Socket
-	m_pServer *WebSocket
+	m_pServer    *WebSocket
+	m_ClientAddr string
 }
 
 func (self *WebSocketClient) Start() bool {
@@ -79,14 +80,14 @@ func wserverclientRoutine(pClient *WebSocketClient) bool {
 
 	for {
 		if pClient.m_bShuttingDown {
-			log.Debugf("远程链接：%s已经被关闭！", pClient.m_WsConn.RemoteAddr().String())
+			log.Debugf("远程链接：%s已经被关闭！", pClient.GetSAddr())
 			pClient.OnNetFail(0)
 			break
 		}
 
 		mt, message, err := pClient.m_WsConn.ReadMessage()
 		if err != nil {
-			log.Debugf("远程链接：%s已经关闭！%v\n", pClient.m_WsConn.RemoteAddr().String(), err)
+			log.Debugf("远程链接：%s已经关闭！%v\n", pClient.GetSAddr(), err)
 			pClient.OnNetFail(1)
 			break
 		}

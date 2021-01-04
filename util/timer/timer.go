@@ -104,10 +104,14 @@ func (self *Timer) Stop() {
 //@cb:任务
 //@sync:是否同步执行
 func DelayJob(dt int64, cb func(), sync bool) {
-	<-time.After(time.Duration(dt) * time.Millisecond)
 	if sync {
+		<-time.After(time.Duration(dt) * time.Millisecond)
 		cb()
 	} else {
-		go cb()
+		go func() {
+			<-time.After(time.Duration(dt) * time.Millisecond)
+			cb()
+		}()
 	}
+
 }

@@ -45,16 +45,17 @@ func DBS() *gorm.DB {
 func Dial(tbs []interface{}) error {
 	for _, cfg := range config.DBCfg.SqlCfg {
 		url := fmt.Sprintf("%s:%s@tcp(%s)/%s?charset=utf8&parseTime=True&loc=Local", cfg.DBAccount, cfg.DBPass, cfg.SqlUri, cfg.DBName)
+		log.Debugf("mysql Dial: %s", url)
 		engine, err := gorm.Open("mysql", url)
 		if err != nil {
-			panic(err)
+			return err
 		}
 		engine.SingularTable(true)
 		engine.DB().SetMaxIdleConns(POOL_IDLE)
 		engine.DB().SetMaxOpenConns(POOL_MAX)
 		if cfg.Master == 1 { //主数据库
 			if Master != nil {
-				log.Fatalf("数据库配置错误：%v", cfg)
+				return fmt.Errorf("数据库配置错误：%v", cfg)
 			}
 			Master = engine
 		} else {
@@ -76,7 +77,8 @@ func Dial(tbs []interface{}) error {
 func DialDB(uri string, idle int, open int) (*gorm.DB, error) {
 	engine, err := gorm.Open("mysql", uri)
 	if err != nil {
-		panic(err)
+		log.Errorf("DialDB: %s", err.Error())
+		return nil, err
 	}
 	engine.SingularTable(true)
 	engine.DB().SetMaxIdleConns(idle)

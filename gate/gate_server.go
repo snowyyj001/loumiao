@@ -2,16 +2,10 @@
 package gate
 
 import (
+	"encoding/json"
 	"fmt"
-	"reflect"
 	"strings"
 	"sync"
-
-	"github.com/snowyyj001/loumiao/msg"
-
-	"github.com/snowyyj001/loumiao/message"
-
-	"github.com/snowyyj001/loumiao/base"
 
 	"github.com/snowyyj001/loumiao/config"
 	"github.com/snowyyj001/loumiao/define"
@@ -65,6 +59,9 @@ type GateServer struct {
 	OnlineNum  int
 	clientEtcd *etcd.ClientDis
 	rpcMap     map[string][]int
+	rpcGates   []int //space for time
+
+	m_etcdKey string
 
 	lock sync.Mutex
 
@@ -83,7 +80,7 @@ func (self *GateServer) DoInit() bool {
 			self.pService = new(network.ServerSocket)
 			self.pService.(*network.ServerSocket).SetMaxClients(config.NET_MAX_CONNS)
 		}
-		self.pService.Init(config.NET_GATE_SADDR)
+		self.pService.Init(config.NET_LISTEN_SADDR)
 		self.pService.BindPacketFunc(packetFunc)
 		self.pService.SetConnectType(network.CLIENT_CONNECT)
 	}
@@ -93,7 +90,7 @@ func (self *GateServer) DoInit() bool {
 	} else {
 		self.pInnerService = new(network.ServerSocket)
 		self.pInnerService.(*network.ServerSocket).SetMaxClients(config.NET_MAX_RPC_CONNS)
-		self.pInnerService.Init(config.NET_GATE_SADDR)
+		self.pInnerService.Init(config.NET_LISTEN_SADDR)
 		self.pInnerService.BindPacketFunc(packetFunc)
 		self.pInnerService.SetConnectType(network.SERVER_CONNECT)
 	}
@@ -168,61 +165,64 @@ func (self *GateServer) DoStart() {
 
 	if self.pService != nil {
 		if self.pService.Start() == false {
-			util.Assert(nil)
+			if !config.GAME_LOG_CONLOSE { //id not conlose, we can think it's publish env
+				util.Assert(nil)
+			}
 			return
 		}
 	}
 	if self.pInnerService != nil {
 		if self.pInnerService.Start() == false {
-			util.Assert(nil)
+			if !config.GAME_LOG_CONLOSE { //id not conlose, we can think it's publish env
+				util.Assert(nil)
+			}
 			return
 		}
 	}
 
-	//etcd client创建
+	//etcd client
 	client, err := etcd.NewClientDis(config.Cfg.EtcdAddr)
-	if err != nil {
-		base.Assert(err == nil, "NewClientDis error")
+	if util.CheckErr(err) {
+		if !config.GAME_LOG_CONLOSE { //id not conlose, we can think it's publish env
+			log.Fatalf("etcd connect failed: %v", config.Cfg.EtcdAddr)
+		}
 	}
-	self.Id = nodemgr.GetServerUid(client, config.NET_GATE_SADDR)
+
+	self.Id = config.Cfg.NetCfg.Uid
+	nodemgr.NodeUid = self.Id
+	self.m_etcdKey = fmt.Sprintf("%s%s", define.ETCD_NODEINFO, config.NET_GATE_SADDR)
 	self.clientEtcd = client
+
 	log.Infof("GateServer DoStart success: name=%s,saddr=%s,uid=%d", self.Name, config.NET_GATE_SADDR, self.Id)
 }
 
 //begin communicate with other nodes
 func (self *GateServer) DoOpen() {
-	self.clientEtcd.SetLeasefunc(leaseCallBack)                   //租约回调
-	self.clientEtcd.SetLease(int64(config.GAME_LEASE_TIME), true) //创建租约
+	self.clientEtcd.SetLeasefunc(leaseCallBack)
+	self.clientEtcd.SetLease(int64(config.GAME_LEASE_TIME), true)
 	//register my addr
 
-	err := self.clientEtcd.PutService(fmt.Sprintf("%s%s/%d/%d", define.ETCD_SADDR, config.SERVER_GROUP, self.Id, config.NET_NODE_TYPE), config.NET_GATE_SADDR)
+	obj, _ := json.Marshal(&config.Cfg.NetCfg)
+	err := self.clientEtcd.PutService(self.m_etcdKey, string(obj))
 	if err != nil {
 		log.Fatalf("etcd PutService error %v", err)
 	}
 
 	//server discover
 	if self.ServerType == network.CLIENT_CONNECT { //account/gate watch server
-		//watch all node, to manager server node, gate balance
-		_, err := self.clientEtcd.WatchNodeList(define.ETCD_NODEINFO, nodemgr.NewNodeDiscover)
-		if err != nil {
-			log.Fatalf("etcd watch ETCD_LOCKUID error ", err)
-		}
-		//watch all node, just for account, to gate balance
+		//watch status, for balance
 		err = self.clientEtcd.WatchStatusList(define.ETCD_NODESTATUS, nodemgr.NodeStatusUpdate)
 		if err != nil {
 			log.Fatalf("etcd watch ETCD_NODESTATUS error ", err)
 		}
-		//watch server addr, this is for server discover
-		//if config.NET_NODE_TYPE == config.ServerType_Gate {
-		//watch addr
-		_, err = self.clientEtcd.WatchServerList(define.ETCD_SADDR, self.newServerDiscover)
+		//watch all node, just for account, to gate balance
+		_, err = self.clientEtcd.WatchNodeList(define.ETCD_NODEINFO, self.newServerDiscover)
 		if err != nil {
 			log.Fatalf("etcd watch NET_GATE_SADDR error ", err)
 		}
-		//}
 	} else {
-		if config.NET_NODE_TYPE == config.ServerType_World {
-			_, err = self.clientEtcd.WatchServerList(define.ETCD_SADDR, self.newServerDiscover)
+		if config.NET_NODE_TYPE == config.ServerType_World { //need know the zone's state
+			_, err = self.clientEtcd.WatchNodeList(define.ETCD_NODEINFO, self.newServerDiscover)
 			if err != nil {
 				log.Fatalf("etcd watch NET_GATE_SADDR error ", err)
 			}
@@ -241,55 +241,39 @@ func (self *GateServer) RegisterSelfNet(hanlderName string, hanlderFunc gorpc.Ha
 }
 
 //goroutine unsafe
-func (self *GateServer) newServerDiscover(key string, val string, dis bool) {
-	var uid int
-	var group string
+func (self *GateServer) newServerDiscover(key, val string, dis bool) {
 	arrStr := strings.Split(key, "/")
-	group = arrStr[2]
-	uid = util.Atoi(arrStr[3])
-	atype := util.Atoi(arrStr[4])
-	log.Debugf("GateServer newServerDiscover: key=%s,val=%s,dis=%t", key, val, dis)
-
-	node := nodemgr.GetNode(uid)
-	if node == nil && len(val) > 0 {
-		node = nodemgr.CreateNode(val, uid, atype, group)
-	}
-	if node == nil {
-		return
-	}
-	node.SocketActive = dis
-
-	if config.NET_NODE_TYPE == config.ServerType_World {
-		return
-	}
-
-	if atype == config.ServerType_Gate || atype == config.ServerType_Account { //filter gate and account
-		return
-	}
-
-	if config.NET_NODE_TYPE == config.ServerType_Gate {
-		if group != config.SERVER_GROUP { //only the same group can be discovered
-			return
-		}
-	}
+	saddr := arrStr[2]
+	log.Debugf("newServerDiscover: key=%s,val=%s,dis=%t,debug=%s", key, val, dis, saddr)
 
 	if dis == true {
-		if node.Number > 0 {
-			log.Infof("newServerDiscover new server, but has already connected: saddr=%s,uid=%d", val, uid)
+		node := nodemgr.GetNodeByAddr(saddr)
+		if node != nil {
+			log.Warningf("newServerDiscover: saddr=%s,old server=%v,new server=%s", saddr, node, val)
+			return
+		}
+		node = &nodemgr.NodeInfo{}
+		json.Unmarshal([]byte(val), node)
+		node.SocketActive = true
+		nodemgr.AddNode(node)
+		if config.NET_NODE_TYPE == config.ServerType_World {
+			return
+		}
+		if node.Type == config.ServerType_Gate || node.Type == config.ServerType_Account { //filter gate and account
 			return
 		}
 		if config.NET_NODE_TYPE == config.ServerType_Account {
-			if atype != config.ServerType_World { //Account only connect to world
+			if node.Type != config.ServerType_World { //Account only connect to world
 				return
 			}
 		}
-		client := self.buildRpc(uid, val)
+		client := self.buildRpc(node.Uid, saddr)
 		if self.enableRpcClient(client) {
-			m := gorpc.M{Id: uid, Data: client}
+			m := gorpc.M{Id: node.Uid, Data: client}
 			gorpc.MGR.Send("GateServer", "NewRpc", m)
 		}
 	} else {
-		//self.removeRpc(uid)
+		nodemgr.RemoveNode(saddr)
 	}
 }
 
@@ -332,9 +316,22 @@ func (self *GateServer) buildRpc(uid int, addr string) *network.ClientSocket {
 }
 
 func (self *GateServer) removeRpc(uid int) {
+	_, ok := self.clients[uid]
+	if !ok {
+		return
+	}
 	log.Debugf("GateServer removeRpc: %d", uid)
+
 	delete(self.clients, uid)
 
+	//remove rpc handler
+	self.removeRpcHanlder(uid)
+
+	//reset node ststus
+	nodemgr.DisableNode(uid)
+}
+
+func (self *GateServer) removeRpcHanlder(uid int) {
 	//remove rpc handler
 	for key, arr := range self.rpcMap {
 		for i, val := range arr {
@@ -344,9 +341,6 @@ func (self *GateServer) removeRpc(uid int) {
 			}
 		}
 	}
-
-	//reset node ststus
-	nodemgr.DisableNode(uid)
 }
 
 func (self *GateServer) GetRpcClient(uid int) *network.ClientSocket {
@@ -359,24 +353,18 @@ func (self *GateServer) GetRpcClient(uid int) *network.ClientSocket {
 
 //rpc调用的gate选择
 func (self *GateServer) getCluserGateClientId() int {
-	if config.NET_NODE_TYPE == config.ServerType_Gate {
-		log.Fatalf("getCluserGate: gate can not call this func")
+	if self.ServerType == network.CLIENT_CONNECT {
+		log.Fatalf("getCluserGate: gate or login can not call this func")
 		return 0
 	} else {
-		var uids []int = make([]int, len(self.tokens_u))
-		var sz int
-		for _, v := range self.tokens_u { //过滤出可用的gate
-			token, _ := self.tokens[v]
-			if token != nil && token.TokenId > 0 {
-				uids[sz] = v
-				sz++
-			}
-		}
+		sz := len(self.rpcGates)
 		if sz == 0 {
+			log.Warning("0.getCluserGateClientId gate server finded ")
 			return 0
+		} else {
+			index := util.Random(sz) //choose a gate by random
+			return self.rpcGates[index]
 		}
-		index := util.Random(sz) //随机一个gate进行rpc转发
-		return uids[index]
 	}
 	return 0
 }
@@ -389,20 +377,10 @@ func (self *GateServer) getCluserServer(funcName string) *network.ClientSocket {
 		log.Warningf("0.getCluserServerUid no rpc server hanlder finded %s", funcName)
 		return nil
 	}
-	var uids []*network.ClientSocket = make([]*network.ClientSocket, len(self.clients))
-	var n int
-	for _, uid := range arr {
-		client, _ := self.clients[uid]
-		if client != nil && client.GetState() == network.SSF_CONNECT {
-			uids[n] = client
-			n++
-		}
-	}
-	if n == 0 {
-		return nil
-	}
-	index := util.Random(n) //随机一个gate进行rpc转发
-	return uids[index]
+	index := util.Random(sz) //choose a server by random
+	uid := arr[index]
+	client, _ := self.clients[uid]
+	return client
 }
 
 func (self *GateServer) StopClient(userId int) {
@@ -424,6 +402,7 @@ func (self *GateServer) closeClient(clientid int) {
 	}
 }
 
+// 向内部server直接发送buffer消息
 // 必须保证线程安全，即需要在gateserver的igo中调用该函数
 func (self *GateServer) SendServer(target int, buff []byte) {
 	rpcClient := self.GetRpcClient(target)
@@ -432,19 +411,4 @@ func (self *GateServer) SendServer(target int, buff []byte) {
 	} else {
 		log.Warningf("GateServer.SendServer target error: target=%d", target)
 	}
-}
-
-// 必须保证线程安全，即需要在gateserver的igo中调用该函数
-func (self *GateServer) SendRpc(funcName string, data interface{}, target int) {
-	var buff []byte
-	param := int32(1)
-	if reflect.TypeOf(data).Kind() == reflect.Slice { //bitstream
-		buff = data.([]byte)
-	} else {
-		buff, _ = message.Encode(target, 0, "", data)
-		param = 0
-	}
-
-	outdata := &msg.LouMiaoRpcMsg{TargetId: int64(target), FuncName: funcName, Buffer: buff, SourceId: int64(This.Id), ByteBuffer: param}
-	innerLouMiaoRpcMsg(self, target, outdata)
 }

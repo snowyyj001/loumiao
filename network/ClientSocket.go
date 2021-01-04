@@ -85,7 +85,7 @@ func (self *ClientSocket) Connect() bool {
 
 	tcpAddr, err := net.ResolveTCPAddr("tcp4", self.m_sAddr)
 	if err != nil {
-		log.Warningf("ClientSocket address error", self.m_sAddr)
+		log.Warningf("ClientSocket address error: %s", self.m_sAddr)
 		return false
 	}
 	//ln, err1 := net.DialTimeout("tcp4", self.m_sAddr, 5*time.Second)

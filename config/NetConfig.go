@@ -2,8 +2,11 @@ package config
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io/ioutil"
+	"os"
+	"strings"
 )
 
 const (
@@ -30,7 +33,9 @@ var (
 	NET_BUFFER_SIZE   = 1024 * 64  //最大消息包长度64k
 	NET_MAX_NUMBER    = 30000      //pcu
 
-	SERVER_GROUP = "A" //服务器分组
+	SERVER_GROUP     = "A" //服务器分组
+	SERVER_NAME      = "server"
+	NET_LISTEN_SADDR = "0.0.0.0:6789"
 )
 
 //uid通过etcd自动分配，一般不要手动分配uid，除非清楚知道自己在做什么,参考GetServerUid
@@ -44,6 +49,7 @@ type NetNode struct {
 	Uid       int    `json:"uid"`
 	MaxNum    int    `json:"maxnum"`
 	Group     string `json:"group"`
+	LogFile   int    `json:"logfile"` //如果-1，代表输出到控制台
 }
 
 type ServerCfg struct {
@@ -71,7 +77,29 @@ func init() {
 	NET_NODE_TYPE = Cfg.NetCfg.Type
 	NET_PROTOCOL = Cfg.NetCfg.Protocol
 	NET_WEBSOCKET = Cfg.NetCfg.WebSocket == 1
-	NET_GATE_SADDR = Cfg.NetCfg.SAddr
 	NET_MAX_NUMBER = Cfg.NetCfg.MaxNum
 	SERVER_GROUP = Cfg.NetCfg.Group
+	NET_GATE_SADDR = Cfg.NetCfg.SAddr
+	NET_LISTEN_SADDR = NET_GATE_SADDR
+	GAME_LOG_CONLOSE = Cfg.NetCfg.LogFile == -1
+	if GAME_LOG_CONLOSE {
+		GAME_LOG_LEVEL = 7
+	} else {
+		GAME_LOG_LEVEL = Cfg.NetCfg.LogFile
+	}
+
+	argv := len(os.Args)
+	fmt.Println("启动参数个数argv: ", argv)
+	fmt.Println("启动参数值argc：", os.Args)
+	if argv > 6 {
+		flag.StringVar(&SERVER_NAME, "n", "server", "server name")
+		flag.StringVar(&NET_GATE_SADDR, "s", "127.0.0.1:6789", "server listen address") //	"127.0.0.1:6789"
+		flag.IntVar(&Cfg.NetCfg.Uid, "u", 0, "server uid")
+
+		flag.Parse() //parse之后参数才会被解析复制
+
+		arrStr := strings.Split(NET_GATE_SADDR, ":")
+		NET_LISTEN_SADDR = fmt.Sprintf("0.0.0.0:%s", arrStr[1])
+		Cfg.NetCfg.SAddr = NET_GATE_SADDR
+	}
 }

@@ -1,6 +1,7 @@
 package lnats
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -8,11 +9,16 @@ import (
 	"github.com/snowyyj001/loumiao/base"
 	"github.com/snowyyj001/loumiao/config"
 	"github.com/snowyyj001/loumiao/log"
+	"github.com/snowyyj001/loumiao/util"
 )
 
 var (
 	lnc *nats.Conn
 )
+
+func FormatTopic(topic, prefix string) string {
+	return fmt.Sprintf("%s-%s", prefix, topic)
+}
 
 //不带分组得消息订阅发布，会采用one-many的方式
 //带分组的方式，会采用one-one的方式
@@ -79,12 +85,52 @@ func PublishInt(topic string, message int) error {
 	return lnc.Publish(topic, base.Int64ToBytes(int64(message)))
 }
 
+//请求消息
+func Request(topic string, message []byte) []byte {
+	msg, err := lnc.Request(topic, message, 3*time.Second)
+	if err != nil {
+		return []byte{}
+	}
+	return msg.Data
+}
+
+//回复消息
+func Response(topic string, call func([]byte) []byte) error {
+	_, err := lnc.Subscribe(topic, func(m *nats.Msg) {
+		data := call(m.Data)
+		m.Respond(data)
+	})
+	return err
+}
+
+//请求消息
+func RequestTag(topic string, prefix string, message []byte) []byte {
+	newtopic := FormatTopic(topic, prefix)
+	msg, err := lnc.Request(newtopic, message, 3*time.Second)
+	if err != nil {
+		return []byte{}
+	}
+	return msg.Data
+}
+
+//回复消息
+func ResponseTag(topic string, prefix string, call func([]byte) []byte) error {
+	newtopic := FormatTopic(topic, prefix)
+	_, err := lnc.Subscribe(newtopic, func(m *nats.Msg) {
+		data := call(m.Data)
+		m.Respond(data)
+	})
+	return err
+}
+
 func Init(addr []string) {
 	target := strings.Join(addr, ",")
 	name := nats.Name(config.NET_GATE_SADDR)
 	nc, err := nats.Connect(target, name)
-	if err != nil {
-		log.Fatal(err.Error())
+	if util.CheckErr(err) {
+		if !config.GAME_LOG_CONLOSE { //id not conlose, we can think it's publish env
+			log.Fatalf("nats connect failed: %s", target)
+		}
 	} else {
 		log.Infof("nats connect success: nickname=%s,target=%s", config.NET_GATE_SADDR, target)
 	}
