@@ -5,7 +5,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/snowyyj001/loumiao/log"
+	"github.com/snowyyj001/loumiao/llog"
 )
 
 type IServerSocket interface {
@@ -52,21 +52,21 @@ func (self *ServerSocket) Start() bool {
 	self.m_bShuttingDown = false
 
 	if self.m_sAddr == "" {
-		log.Error("ServerSocket Start error, saddr is null")
+		llog.Error("ServerSocket Start error, saddr is null")
 		return false
 	}
 
 	tcpAddr, err := net.ResolveTCPAddr("tcp4", self.m_sAddr)
 	if err != nil {
-		log.Errorf("%v", err)
+		llog.Errorf("%v", err)
 	}
 	ln, err := net.ListenTCP("tcp4", tcpAddr)
 	if err != nil {
-		log.Errorf("%v", err)
+		llog.Errorf("%v", err)
 		return false
 	}
 
-	log.Infof("ServerSocket 启动监听，等待链接！%s", self.m_sAddr)
+	llog.Infof("ServerSocket 启动监听，等待链接！%s", self.m_sAddr)
 
 	self.m_Listen = ln
 	//延迟，监听关闭
@@ -113,10 +113,10 @@ func (self *ServerSocket) AddClinet(tcpConn *net.TCPConn, addr string, connectTy
 		self.m_ClientLocker.Unlock()
 		pClient.Start()
 		self.m_nClientCount++
-		log.Debugf("客户端：%s已连接[%d]", tcpConn.RemoteAddr().String(), pClient.m_ClientId)
+		llog.Debugf("客户端：%s已连接[%d]", tcpConn.RemoteAddr().String(), pClient.m_ClientId)
 		return pClient
 	} else {
-		log.Errorf("%s", "无法创建客户端连接对象")
+		llog.Errorf("%s", "无法创建客户端连接对象")
 	}
 	return nil
 }
@@ -125,14 +125,14 @@ func (self *ServerSocket) DelClinet(pClient *ServerSocketClient) bool {
 	self.m_Pool.Put(pClient)
 	self.m_ClientLocker.Lock()
 	delete(self.m_ClientList, pClient.m_ClientId)
-	log.Debugf("客户端：%s已断开连接[%d]", pClient.m_Conn.RemoteAddr().String(), pClient.m_ClientId)
+	llog.Debugf("客户端：%s已断开连接[%d]", pClient.m_Conn.RemoteAddr().String(), pClient.m_ClientId)
 	self.m_ClientLocker.Unlock()
 	self.m_nClientCount--
 	return true
 }
 
 func (self *ServerSocket) StopClient(id int) {
-	log.Debugf("ServerSocket.StopClient: %d", id)
+	llog.Debugf("ServerSocket.StopClient: %d", id)
 	pClinet := self.GetClientById(id)
 	if pClinet != nil {
 		pClinet.Stop()
@@ -161,7 +161,7 @@ func (self *ServerSocket) SendById(id int, buff []byte) int {
 	if pClient != nil {
 		pClient.Send(buff)
 	} else {
-		log.Warningf("ServerSocket发送数据失败[%d]", id)
+		llog.Warningf("ServerSocket发送数据失败[%d]", id)
 	}
 	return 0
 }
@@ -202,7 +202,7 @@ func (self *ServerSocket) SetMaxClients(maxnum int) {
 func SendClient(pClient *ServerSocketClient, buff []byte) {
 	defer func() {
 		if err := recover(); err != nil {
-			log.Errorf("SendRpc", err) // 这里的err其实就是panic传入的内容，55
+			llog.Errorf("SendRpc", err) // 这里的err其实就是panic传入的内容，55
 		}
 	}()
 
@@ -220,7 +220,7 @@ func serverRoutine(server *ServerSocket) {
 		}
 
 		if server.m_nClientCount >= server.m_nMaxClients {
-			log.Warning("serverRoutine: too many conns")
+			llog.Warning("serverRoutine: too many conns")
 			return
 		}
 

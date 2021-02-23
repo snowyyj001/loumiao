@@ -4,7 +4,7 @@ import (
 	"io"
 	"net"
 
-	"github.com/snowyyj001/loumiao/log"
+	"github.com/snowyyj001/loumiao/llog"
 	"github.com/snowyyj001/loumiao/message"
 )
 
@@ -21,7 +21,7 @@ func handleError(err error) {
 	if err == nil {
 		return
 	}
-	log.Errorf("错误：%s\n", err.Error())
+	llog.Errorf("错误：%s\n", err.Error())
 }
 
 func (self *ServerSocketClient) Start() bool {
@@ -46,7 +46,7 @@ func (self *ServerSocketClient) Start() bool {
 func (self *ServerSocketClient) Send(buff []byte) int {
 	defer func() {
 		if err := recover(); err != nil {
-			log.Errorf("ServerSocketClient Send", err)
+			llog.Errorf("ServerSocketClient Send", err)
 		}
 	}()
 
@@ -59,13 +59,13 @@ func (self *ServerSocketClient) Send(buff []byte) int {
 }
 
 func (self *ServerSocketClient) OnNetConn() {
-	buff, nLen := message.Encode(0, 0, "CONNECT", nil)
+	buff, nLen := message.Encode(0, "CONNECT", nil)
 	self.HandlePacket(self.m_ClientId, buff, nLen)
 }
 
 func (self *ServerSocketClient) OnNetFail(error int) {
 	self.Stop()
-	buff, nLen := message.Encode(0, 0, "DISCONNECT", nil)
+	buff, nLen := message.Encode(0, "DISCONNECT", nil)
 	self.HandlePacket(self.m_ClientId, buff, nLen)
 }
 
@@ -83,20 +83,20 @@ func serverclientRoutine(pClient *ServerSocketClient) bool {
 
 	defer func() {
 		if err := recover(); err != nil {
-			log.Errorf("serverclientRoutine: %v", err)
+			llog.Errorf("serverclientRoutine: %v", err)
 		}
 	}()
 	var buff = make([]byte, pClient.m_MaxReceiveBufferSize)
 	for {
 		if pClient.m_bShuttingDown {
-			log.Debugf("远程链接：%s已经被关闭！", pClient.GetSAddr())
+			llog.Debugf("远程链接：%s已经被关闭！", pClient.GetSAddr())
 			pClient.OnNetFail(0)
 			break
 		}
 
 		n, err := pClient.m_Conn.Read(buff)
 		if err == io.EOF {
-			log.Debugf("远程链接：%s已经关闭！", pClient.GetSAddr())
+			llog.Debugf("远程链接：%s已经关闭！", pClient.GetSAddr())
 			pClient.OnNetFail(1)
 			break
 		}

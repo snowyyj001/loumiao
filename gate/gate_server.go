@@ -11,16 +11,15 @@ import (
 	"github.com/snowyyj001/loumiao/define"
 	"github.com/snowyyj001/loumiao/etcd"
 	"github.com/snowyyj001/loumiao/gorpc"
-	"github.com/snowyyj001/loumiao/log"
+	"github.com/snowyyj001/loumiao/llog"
 	"github.com/snowyyj001/loumiao/network"
 	"github.com/snowyyj001/loumiao/nodemgr"
 	"github.com/snowyyj001/loumiao/util"
 )
 
 var (
-	This          *GateServer
-	handler_Map   map[string]string
-	filterWarning map[string]bool
+	This        *GateServer
+	handler_Map map[string]string
 )
 
 type Token struct {
@@ -69,7 +68,7 @@ type GateServer struct {
 }
 
 func (self *GateServer) DoInit() bool {
-	log.Infof("%s DoInit", self.Name)
+	llog.Infof("%s DoInit", self.Name)
 	This = self
 
 	if self.ServerType == network.CLIENT_CONNECT { //对外(login,gate)
@@ -101,9 +100,6 @@ func (self *GateServer) DoInit() bool {
 	self.rpcMap = make(map[string][]int) //base64(funcname) -> [uid,uid,...]
 
 	handler_Map = make(map[string]string)
-	filterWarning = make(map[string]bool)
-	filterWarning["CONNECT"] = true
-	filterWarning["DISCONNECT"] = true
 
 	if self.InitFunc != nil {
 		self.InitFunc()
@@ -113,7 +109,7 @@ func (self *GateServer) DoInit() bool {
 }
 
 func (self *GateServer) DoRegsiter() {
-	log.Info("GateServer DoRegsiter")
+	llog.Info("GateServer DoRegsiter")
 
 	self.Register("RegisterNet", registerNet)
 	self.Register("UnRegisterNet", unRegisterNet)
@@ -121,12 +117,13 @@ func (self *GateServer) DoRegsiter() {
 	self.Register("SendMulClient", sendMulClient)
 	self.Register("NewRpc", newRpc)
 	self.Register("SendRpc", sendRpc)
+	self.Register("BroadCastRpc", broadCastRpc)
 	self.Register("SendGate", sendGate)
 	self.Register("RecvPackMsg", recvPackMsg)
 	self.Register("ReportOnLineNum", reportOnLineNum)
 	self.Register("CloseServer", closeServer)
 
-	handler_Map["CONNECT"] = "GateServer"
+	handler_Map["CONNECT"] = "GateServer" //equal to RegisterSelfNet
 	self.RegisterGate("CONNECT", innerConnect)
 
 	handler_Map["DISCONNECT"] = "GateServer"
@@ -147,6 +144,9 @@ func (self *GateServer) DoRegsiter() {
 	handler_Map["LouMiaoRpcMsg"] = "GateServer"
 	self.RegisterGate("LouMiaoRpcMsg", innerLouMiaoRpcMsg)
 
+	handler_Map["LouMiaoBroadCastMsg"] = "GateServer"
+	self.RegisterGate("LouMiaoBroadCastMsg", innerLouMiaoBroadCastMsg)
+
 	handler_Map["LouMiaoNetMsg"] = "GateServer"
 	self.RegisterGate("LouMiaoNetMsg", innerLouMiaoNetMsg)
 
@@ -161,39 +161,30 @@ func (self *GateServer) DoRegsiter() {
 }
 
 func (self *GateServer) DoStart() {
-	log.Info("GateServer DoStart")
-
-	if self.pService != nil {
-		if self.pService.Start() == false {
-			if !config.GAME_LOG_CONLOSE { //id not conlose, we can think it's publish env
-				util.Assert(nil)
-			}
-			return
-		}
-	}
-	if self.pInnerService != nil {
-		if self.pInnerService.Start() == false {
-			if !config.GAME_LOG_CONLOSE { //id not conlose, we can think it's publish env
-				util.Assert(nil)
-			}
-			return
-		}
-	}
+	llog.Info("GateServer DoStart")
 
 	//etcd client
 	client, err := etcd.NewClientDis(config.Cfg.EtcdAddr)
 	if util.CheckErr(err) {
-		if !config.GAME_LOG_CONLOSE { //id not conlose, we can think it's publish env
-			log.Fatalf("etcd connect failed: %v", config.Cfg.EtcdAddr)
+		llog.Fatalf("etcd connect failed: %v", config.Cfg.EtcdAddr)
+	}
+
+	if self.pService != nil {
+		if self.pService.Start() == false {
+			util.Assert(nil)
+		}
+	}
+	if self.pInnerService != nil {
+		if self.pInnerService.Start() == false {
+			util.Assert(nil)
 		}
 	}
 
 	self.Id = config.Cfg.NetCfg.Uid
-	nodemgr.NodeUid = self.Id
 	self.m_etcdKey = fmt.Sprintf("%s%s", define.ETCD_NODEINFO, config.NET_GATE_SADDR)
 	self.clientEtcd = client
 
-	log.Infof("GateServer DoStart success: name=%s,saddr=%s,uid=%d", self.Name, config.NET_GATE_SADDR, self.Id)
+	llog.Infof("GateServer DoStart success: name=%s,saddr=%s,uid=%d", self.Name, config.NET_GATE_SADDR, self.Id)
 }
 
 //begin communicate with other nodes
@@ -205,7 +196,7 @@ func (self *GateServer) DoOpen() {
 	obj, _ := json.Marshal(&config.Cfg.NetCfg)
 	err := self.clientEtcd.PutService(self.m_etcdKey, string(obj))
 	if err != nil {
-		log.Fatalf("etcd PutService error %v", err)
+		llog.Fatalf("etcd PutService error %v", err)
 	}
 
 	//server discover
@@ -213,18 +204,18 @@ func (self *GateServer) DoOpen() {
 		//watch status, for balance
 		err = self.clientEtcd.WatchStatusList(define.ETCD_NODESTATUS, nodemgr.NodeStatusUpdate)
 		if err != nil {
-			log.Fatalf("etcd watch ETCD_NODESTATUS error ", err)
+			llog.Fatalf("etcd watch ETCD_NODESTATUS error ", err)
 		}
 		//watch all node, just for account, to gate balance
 		_, err = self.clientEtcd.WatchNodeList(define.ETCD_NODEINFO, self.newServerDiscover)
 		if err != nil {
-			log.Fatalf("etcd watch NET_GATE_SADDR error ", err)
+			llog.Fatalf("etcd watch NET_GATE_SADDR error ", err)
 		}
 	} else {
 		if config.NET_NODE_TYPE == config.ServerType_World { //need know the zone's state
 			_, err = self.clientEtcd.WatchNodeList(define.ETCD_NODEINFO, self.newServerDiscover)
 			if err != nil {
-				log.Fatalf("etcd watch NET_GATE_SADDR error ", err)
+				llog.Fatalf("etcd watch NET_GATE_SADDR error ", err)
 			}
 		}
 	}
@@ -233,7 +224,7 @@ func (self *GateServer) DoOpen() {
 //simple register self net hanlder, this func can only be called before igo started
 func (self *GateServer) RegisterSelfNet(hanlderName string, hanlderFunc gorpc.HanlderNetFunc) {
 	if self.IsRunning() {
-		log.Fatal("RegisterSelfNet error, igo has already started")
+		llog.Fatal("RegisterSelfNet error, igo has already started")
 		return
 	}
 	handler_Map[hanlderName] = "GateServer"
@@ -244,12 +235,12 @@ func (self *GateServer) RegisterSelfNet(hanlderName string, hanlderFunc gorpc.Ha
 func (self *GateServer) newServerDiscover(key, val string, dis bool) {
 	arrStr := strings.Split(key, "/")
 	saddr := arrStr[2]
-	log.Debugf("newServerDiscover: key=%s,val=%s,dis=%t,debug=%s", key, val, dis, saddr)
+	llog.Debugf("newServerDiscover: key=%s,val=%s,dis=%t,debug=%s", key, val, dis, saddr)
 
 	if dis == true {
 		node := nodemgr.GetNodeByAddr(saddr)
 		if node != nil {
-			log.Warningf("newServerDiscover: saddr=%s,old server=%v,new server=%s", saddr, node, val)
+			llog.Warningf("newServerDiscover: saddr=%s,old server=%v,new server=%s", saddr, node, val)
 			return
 		}
 		node = &nodemgr.NodeInfo{}
@@ -279,10 +270,10 @@ func (self *GateServer) newServerDiscover(key, val string, dis bool) {
 
 func (self *GateServer) enableRpcClient(client *network.ClientSocket) bool {
 	if client.Start() {
-		log.Infof("GateServer rpc connected %s success", client.GetSAddr())
+		llog.Infof("GateServer rpc connected %s success", client.GetSAddr())
 		return true
 	} else {
-		log.Warningf("GateServer rpc connect failed %s", client.GetSAddr())
+		llog.Warningf("GateServer rpc connect failed %s", client.GetSAddr())
 		return false
 	}
 	return true
@@ -297,7 +288,7 @@ func (self *GateServer) DoDestory() {
 //goroutine unsafe
 //net msg handler,this func belong to socket's goroutine
 func packetFunc(socketid int, buff []byte, nlen int) bool {
-	//log.Debugf("packetFunc: socketid=%d, bufferlen=%d", socketid, nlen)
+	//llog.Debugf("packetFunc: socketid=%d, bufferlen=%d", socketid, nlen)
 	m := gorpc.MI{Id: socketid, Name: nlen, Data: buff}
 	gorpc.MGR.Send("GateServer", "RecvPackMsg", m)
 
@@ -320,7 +311,7 @@ func (self *GateServer) removeRpc(uid int) {
 	if !ok {
 		return
 	}
-	log.Debugf("GateServer removeRpc: %d", uid)
+	llog.Debugf("GateServer removeRpc: %d", uid)
 
 	delete(self.clients, uid)
 
@@ -354,12 +345,12 @@ func (self *GateServer) GetRpcClient(uid int) *network.ClientSocket {
 //rpc调用的gate选择
 func (self *GateServer) getCluserGateClientId() int {
 	if self.ServerType == network.CLIENT_CONNECT {
-		log.Fatalf("getCluserGate: gate or login can not call this func")
+		llog.Fatalf("getCluserGate: gate or login can not call this func")
 		return 0
 	} else {
 		sz := len(self.rpcGates)
 		if sz == 0 {
-			log.Warning("0.getCluserGateClientId gate server finded ")
+			llog.Warning("0.getCluserGateClientId no gate server finded ")
 			return 0
 		} else {
 			index := util.Random(sz) //choose a gate by random
@@ -374,7 +365,7 @@ func (self *GateServer) getCluserServer(funcName string) *network.ClientSocket {
 	arr := self.rpcMap[funcName]
 	sz := len(arr)
 	if sz == 0 {
-		log.Warningf("0.getCluserServerUid no rpc server hanlder finded %s", funcName)
+		llog.Warningf("0.getCluserServerUid no rpc server hanlder finded %s", funcName)
 		return nil
 	}
 	index := util.Random(sz) //choose a server by random
@@ -409,6 +400,6 @@ func (self *GateServer) SendServer(target int, buff []byte) {
 	if rpcClient != nil {
 		rpcClient.Send(buff)
 	} else {
-		log.Warningf("GateServer.SendServer target error: target=%d", target)
+		llog.Warningf("GateServer.SendServer target error: target=%d", target)
 	}
 }

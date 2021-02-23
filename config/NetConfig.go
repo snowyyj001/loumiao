@@ -18,23 +18,26 @@ const (
 	ServerType_DB               //5 数据库
 	ServerType_Log              //6 日志
 	ServerType_IM               //7 聊天
-	ServerType_WEBSERVER        //8 web
+	ServerType_WEB_GM           //8 web gm
+	ServerType_WEB_LOGIN        //9 web login
 )
 
 var (
-	NET_NODE_ID    = -1               //节点id(机器标识,1~1024)
+	NET_NODE_ID    = -1               //节点id(服标识)
 	NET_NODE_TYPE  = -1               //节点类型ServerType_*
 	NET_GATE_SADDR = "127.0.0.1:6789" //网关监听地址
 
-	NET_PROTOCOL      = "PROTOBUF" //消息协议格式："PROTOBUF" or "JSON"
-	NET_WEBSOCKET     = false      //使用websocket or socket
-	NET_MAX_CONNS     = 65535      //最大连接数
-	NET_MAX_RPC_CONNS = 1024       //rpc最大连接数
-	NET_BUFFER_SIZE   = 1024 * 64  //最大消息包长度64k
-	NET_MAX_NUMBER    = 30000      //pcu
+	NET_PROTOCOL            = "PROTOBUF"  //消息协议格式："PROTOBUF" or "JSON"
+	NET_WEBSOCKET           = false       //使用websocket or socket
+	NET_MAX_CONNS           = 65535       //最大连接数
+	NET_MAX_RPC_CONNS       = 1024        //rpc最大连接数
+	NET_BUFFER_SIZE         = 1024 * 64   //最大消息包长度64k(对外)
+	NET_CLUSTER_BUFFER_SIZE = 1024 * 1024 //最大消息包长度1M(对内)
+	NET_MAX_NUMBER          = 30000       //pcu
 
-	SERVER_GROUP     = "A" //服务器分组
-	SERVER_NAME      = "server"
+	SERVER_GROUP     = "A"      //服务器分组
+	SERVER_NAME      = "server" //服务器名字
+	SERVER_NODE_UID  = 0        //服务器uid
 	NET_LISTEN_SADDR = "0.0.0.0:6789"
 )
 
@@ -74,6 +77,7 @@ func init() {
 	}
 
 	NET_NODE_ID = Cfg.NetCfg.Id
+	SERVER_NODE_UID = Cfg.NetCfg.Uid
 	NET_NODE_TYPE = Cfg.NetCfg.Type
 	NET_PROTOCOL = Cfg.NetCfg.Protocol
 	NET_WEBSOCKET = Cfg.NetCfg.WebSocket == 1
@@ -98,8 +102,9 @@ func init() {
 
 		flag.Parse() //parse之后参数才会被解析复制
 
-		arrStr := strings.Split(NET_GATE_SADDR, ":")
-		NET_LISTEN_SADDR = fmt.Sprintf("0.0.0.0:%s", arrStr[1])
+		arrStr := strings.Split(NET_GATE_SADDR, ":")            //服发现使用正常的局域网ip
+		NET_LISTEN_SADDR = fmt.Sprintf("0.0.0.0:%s", arrStr[1]) //socket监听,监听所有网卡绑定的ip，格式(0.0.0.0:port)(web监听格式也可以是(:port))
 		Cfg.NetCfg.SAddr = NET_GATE_SADDR
+		SERVER_NODE_UID = Cfg.NetCfg.Uid
 	}
 }

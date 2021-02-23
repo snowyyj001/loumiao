@@ -7,7 +7,7 @@ import (
 	"github.com/snowyyj001/loumiao/base"
 
 	"github.com/snowyyj001/loumiao/config"
-	"github.com/snowyyj001/loumiao/log"
+	"github.com/snowyyj001/loumiao/llog"
 
 	"github.com/gorilla/websocket"
 )
@@ -87,9 +87,6 @@ type (
 func (self *Socket) Init(saddr string) bool {
 	self.m_sAddr = saddr
 	self.m_nState = SSF_SHUT_DOWN
-	self.m_MaxSendBufferSize = config.NET_BUFFER_SIZE
-	self.m_MaxReceiveBufferSize = config.NET_BUFFER_SIZE
-	self.m_nConnectType = SERVER_CONNECT
 	return true
 }
 
@@ -176,6 +173,13 @@ func (self *Socket) SetMaxSendBufferSize(maxSendSize int) {
 
 func (self *Socket) SetConnectType(nType int) {
 	self.m_nConnectType = nType
+	if self.m_nConnectType == SERVER_CONNECT {
+		self.m_MaxSendBufferSize = config.NET_BUFFER_SIZE
+		self.m_MaxReceiveBufferSize = config.NET_BUFFER_SIZE
+	} else {
+		self.m_MaxSendBufferSize = config.NET_CLUSTER_BUFFER_SIZE
+		self.m_MaxReceiveBufferSize = config.NET_CLUSTER_BUFFER_SIZE
+	}
 }
 
 func (self *Socket) SetTcpConn(conn net.Conn) {
@@ -192,7 +196,7 @@ func (self *Socket) SetWsConn(conn *websocket.Conn) {
 
 func (self *Socket) BindPacketFunc(callfunc HandleFunc) {
 	if callfunc == nil {
-		log.Error("BindPacketFunc: callfunc is nil") // 接受包错误
+		llog.Error("BindPacketFunc: callfunc is nil") // 接受包错误
 	}
 	self.m_PacketFunc = callfunc
 }
@@ -204,30 +208,32 @@ func (self *Socket) HandlePacket(Id int, buff []byte, nlen int) bool {
 func (self *Socket) ReceivePacket(Id int, dat []byte) bool {
 	defer func() {
 		if err := recover(); err != nil {
-			log.Errorf("ReceivePacket", err) // 接受包错误
+			llog.Errorf("ReceivePacket", err) // 接受包错误
 		}
 	}()
-	//log.Debugf("收到消息包 %v", dat)
+	//llog.Debugf("收到消息包 %v %d", dat, len(dat))
 	self.m_pInBufferLen += len(dat)
 	self.m_pInBuffer = append(self.m_pInBuffer, dat...)
 	for {
-		if self.m_pInBufferLen < 12 {
+		if self.m_pInBufferLen < 8 {
 			break
 		}
-		mbuff1 := self.m_pInBuffer[0:2]
-		nLen1 := int(base.BytesToUInt16(mbuff1, binary.BigEndian)) //消息总长度
+		mbuff1 := self.m_pInBuffer[0:4]
+		nLen1 := int(base.BytesToUInt32(mbuff1, binary.BigEndian)) //消息总长度
+		//llog.Debugf("当前消息包长度 %d", nLen1)
+
 		if nLen1 > self.m_pInBufferLen {
 			break
 		}
 		if nLen1 > self.m_MaxReceiveBufferSize {
-			log.Errorf("ReceivePacket: 包长度越界[%d][%d]", nLen1, self.m_MaxReceiveBufferSize) // 接受包错误
+			llog.Errorf("ReceivePacket: 包长度越界[%d][%d]", nLen1, self.m_MaxReceiveBufferSize) // 接受包错误
 			self.Close()
 			return false
 		}
 
 		ok := self.HandlePacket(Id, self.m_pInBuffer, int(nLen1))
 		if ok == false {
-			log.Warningf("ReceivePacket HandlePacket error")
+			llog.Error("ReceivePacket HandlePacket error")
 			return false
 		}
 		self.m_pInBufferLen -= int(nLen1)

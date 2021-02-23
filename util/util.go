@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/snowyyj001/loumiao/log"
+	"github.com/snowyyj001/loumiao/llog"
 )
 
 func init() {
@@ -21,8 +21,29 @@ func Random(n int) int {
 	return int(rand2.Int31n(int32(n)))
 }
 
+//随机数[n1,n2)
+func Randomd(n1, n2 int) int {
+	return n1 + int(rand2.Int31n(int32(n2-n1)))
+}
+
+//随机数[0,n)
+func Random64(n int64) int64 {
+	return rand2.Int63n(n)
+}
+
+//随机数[n1,n2)
+func Randomd64(n1, n2 int64) int64 {
+	return n1 + rand2.Int63n(n2-n1)
+}
+
+//当前格式化时间字符串
 func TimeStr() string {
 	return time.Now().Format("2006-01-02 15:04:05")
+}
+
+//当前格式化时间字符串
+func TimeStrFormat(mat string) string {
+	return time.Now().Format(mat)
 }
 
 //时间戳秒
@@ -45,13 +66,13 @@ func Assert(data interface{}) {
 		var buf [4096]byte
 		n := runtime.Stack(buf[:], false)
 		data := string(buf[:n])
-		log.Fatalf("FatalNil: %s", data)
+		llog.Fatalf("FatalNil: %s", data)
 	}
 }
 
 func CheckErr(err error) bool {
 	if err != nil {
-		log.Error("CheckErr: " + err.Error())
+		llog.Error("CheckErr: " + err.Error())
 		return true
 	}
 	return false
@@ -93,9 +114,17 @@ func Md5(str string) string {
 func Atoi(num string) int {
 	val, err := strconv.Atoi(num)
 	if err != nil {
-		log.Errorf("Atoi strconv.Atoi failed " + err.Error())
+		llog.Errorf("Atoi strconv.Atoi failed " + err.Error())
 	}
 	return val
+}
+
+func Atoi64(num string) int64 {
+	val, err := strconv.Atoi(num)
+	if err != nil {
+		llog.Errorf("Atoi strconv.Atoi64 failed " + err.Error())
+	}
+	return int64(val)
 }
 
 func Itoa(num int) string {

@@ -9,7 +9,7 @@ import (
 	"github.com/gomodule/redigo/redis"
 
 	"github.com/snowyyj001/loumiao/config"
-	"github.com/snowyyj001/loumiao/log"
+	"github.com/snowyyj001/loumiao/llog"
 	"github.com/snowyyj001/loumiao/util"
 )
 
@@ -25,7 +25,7 @@ var (
 //url：数据库地址
 ///例如： Redis.Dial("127.0.0.1:6379")
 func Dial(url string) error {
-	log.Debugf("redis Dial: %s", config.DBCfg.RedisUri)
+	llog.Debugf("redis Dial: %s", config.DBCfg.RedisUri)
 	pool = redis.NewPool(func() (redis.Conn, error) {
 		c, err := redis.Dial("tcp", url)
 		if err != nil {
@@ -40,14 +40,14 @@ func Dial(url string) error {
 		return fmt.Errorf("redis Dial error: %s", url)
 	}
 	c.Close()
-	log.Infof("redis dail success: %s", url)
+	llog.Infof("redis dail success: %s", url)
 
 	return nil
 }
 
 //连接数据库,使用config-redis默认参数
 func DialDefault() error {
-	log.Debugf("redis DialDefault: %s", config.DBCfg.RedisUri)
+	llog.Debugf("redis DialDefault: %s", config.DBCfg.RedisUri)
 	pool = redis.NewPool(func() (redis.Conn, error) {
 		c, err := redis.Dial("tcp", config.DBCfg.RedisUri)
 		if err != nil {
@@ -61,7 +61,7 @@ func DialDefault() error {
 		return fmt.Errorf("redis DialDefault error: %s", config.DBCfg.RedisUri)
 	}
 	c.Close()
-	log.Infof("redis DialDefault success: %s", config.DBCfg.RedisUri)
+	llog.Infof("redis DialDefault success: %s", config.DBCfg.RedisUri)
 
 	return nil
 }
@@ -88,17 +88,21 @@ func Set(args ...interface{}) {
 
 //redis分布式锁,尝试expiretime毫秒后拿不到锁就返回0,否则返回锁的随机值
 //@key: 锁key
-//@expiretime: 锁的过期时间,毫秒
-func Lock(key string, expiretime int) int {
+//@expiretime: 锁的过期时间,毫秒,0代表立即返回锁结果
+func AquireLock(key string, expiretime int) int {
 	db := pool.Get()
 	defer db.Close()
-	val := rand.Int()
-	ret, err := db.Do("SET", key, val, "NX", "PX", expiretime)
-	if ret == nil {
+	val := rand.Intn(20000000) + 1
+	et := expiretime
+	if et <= 0 { //默认任何锁都是2s的过期时间
+		et = 2000
+	}
+	ret, err := db.Do("SET", key, val, "NX", "PX", et)
+	if ret == nil && expiretime > 0 {
 		nt := util.TimeStamp()
 		for {
 			time.Sleep(50 * time.Millisecond) //等待50ms再次尝试
-			ret, err = db.Do("SET", key, val, "NX", "PX", expiretime)
+			ret, err = db.Do("SET", key, val, "NX", "PX", et)
 			if ret != nil {
 				break
 			}
@@ -108,15 +112,18 @@ func Lock(key string, expiretime int) int {
 		}
 	}
 	if err != nil {
-		log.Errorf("redis Lock error: key=%d, error=%s", key, err.Error())
+		llog.Errorf("redis Lock error: key=%d, error=%s", key, err.Error())
 	}
 	if ret != nil {
-		return 0
+		return val
 	}
-	return val
+	return 0 //没有拿到锁
 }
 
 func UnLock(key string, val int) {
+	if val <= 0 {
+		return
+	}
 	db := pool.Get()
 	defer db.Close()
 	luascript := `
@@ -153,7 +160,7 @@ func Exist(name string) (bool, error) {
 	defer db.Close()
 	v, err := redis.Bool(db.Do("EXISTS", name))
 	if err != nil {
-		log.Error(err.Error())
+		llog.Error(err.Error())
 	}
 	return v, err
 }
@@ -164,7 +171,7 @@ func StringIncr(name string) (int, error) {
 	defer db.Close()
 	v, err := redis.Int(db.Do("INCR", name))
 	if err != nil {
-		log.Error(err.Error())
+		llog.Error(err.Error())
 	}
 	return v, err
 }
@@ -176,7 +183,7 @@ func Expire(name string, newSecondsLifeTime int64) error {
 	// 设置key 的过期时间
 	_, err := db.Do("EXPIRE", name, newSecondsLifeTime)
 	if err != nil {
-		log.Error(err.Error())
+		llog.Error(err.Error())
 	}
 	return err
 }
@@ -187,7 +194,7 @@ func Delete(keys ...interface{}) (bool, error) {
 	defer db.Close()
 	v, err := redis.Bool(db.Do("DEL", keys...))
 	if err != nil {
-		log.Error(err.Error())
+		llog.Error(err.Error())
 	}
 	return v, err
 }
@@ -198,7 +205,7 @@ func StrLen(name string) (int, error) {
 	defer db.Close()
 	v, err := redis.Int(db.Do("STRLEN", name))
 	if err != nil {
-		log.Error(err.Error())
+		llog.Error(err.Error())
 	}
 	return v, err
 }
@@ -211,7 +218,7 @@ func HDel(name, key string) (bool, error) {
 	var err error
 	v, err := redis.Bool(db.Do("HDEL", name, key))
 	if err != nil {
-		log.Error(err.Error())
+		llog.Error(err.Error())
 	}
 	return v, err
 }
@@ -229,7 +236,7 @@ func HMDel(name string, fields ...string) (bool, error) {
 	var err error
 	v, err := redis.Bool(db.Do("HDEL", args...))
 	if err != nil {
-		log.Error(err.Error())
+		llog.Error(err.Error())
 	}
 	return v, err
 }
@@ -241,7 +248,7 @@ func HExists(name, field string) (bool, error) {
 	var err error
 	v, err := redis.Bool(db.Do("HEXISTS", name, field))
 	if err != nil {
-		log.Error(err.Error())
+		llog.Error(err.Error())
 	}
 	return v, err
 }
@@ -252,13 +259,13 @@ func HLen(name string) (int, error) {
 	defer db.Close()
 	v, err := redis.Int(db.Do("HLEN", name))
 	if err != nil {
-		log.Error(err.Error())
+		llog.Error(err.Error())
 	}
 	return v, err
 }
 
 // 传入的 字段列表获得对应的值
-func HMget(name string, fields ...string) ([]interface{}, error) {
+func HMget(name string, fields ...string) ([]string, error) {
 	db := pool.Get()
 	defer db.Close()
 	args := []interface{}{name}
@@ -267,9 +274,9 @@ func HMget(name string, fields ...string) ([]interface{}, error) {
 	}
 	value, err := redis.Values(db.Do("HMGET", args...))
 	if err != nil {
-		log.Error(err.Error())
+		llog.Error(err.Error())
 	}
-	return value, err
+	return redis.Strings(value, err)
 }
 
 // 设置单个值, value 还可以是一个 map slice 等
@@ -278,18 +285,19 @@ func HSet(name string, key string, value interface{}) (err error) {
 	defer db.Close()
 	_, err = db.Do("HSET", name, key, value)
 	if err != nil {
-		log.Error(err.Error())
+		llog.Error(err.Error())
 	}
 	return
 }
 
-// 设置多个值 , obj 可以是指针 slice map struct
-func HMSet(name string, obj interface{}) (err error) {
+// 设置多个值
+func HMSet(name string, fields ...interface{}) (err error) {
 	db := pool.Get()
 	defer db.Close()
-	_, err = db.Do("HMSET", redis.Args{}.Add(name).AddFlat(obj)...)
+	//fmt.Println("HMSet", redis.Args{}.Add(name).Add(fields...))
+	_, err = db.Do("HMSET", redis.Args{}.Add(name).Add(fields...)...)
 	if err != nil {
-		log.Error(err.Error())
+		llog.Error(err.Error())
 	}
 	return
 }
@@ -328,12 +336,11 @@ func String(val interface{}) (string, error) {
 }
 
 // set 集合
-
 // 获取 set 集合中所有的元素, 想要什么类型的自己指定
 func Smembers(args ...interface{}) (interface{}, error) {
 	db := pool.Get()
 	defer db.Close()
-	return db.Do("smembers", args)
+	return db.Do("SMEMBES", args)
 }
 
 // 获取集合中元素的个数
@@ -342,7 +349,22 @@ func ScardInt64s(name string) (int64, error) {
 	defer db.Close()
 	v, err := redis.Int64(db.Do("SCARD", name))
 	if err != nil {
-		log.Error(err.Error())
+		llog.Error(err.Error())
 	}
 	return v, err
+}
+
+// sort set 有序集合
+// 获取 sort set 集合中指定范围元素, 想要什么类型的自己指定, 递减排列
+func ZRevrangeInt64(key string, start, stop int) ([]int64, error) {
+	db := pool.Get()
+	defer db.Close()
+	return redis.Int64s(db.Do("ZREVRANGE", key, start, stop, "WITHSCORES"))
+}
+
+// 向 sort set 集合中添加一个或多个成员，或者更新已存在成员的分数
+func ZAdd(key string, args ...interface{}) (int, error) {
+	db := pool.Get()
+	defer db.Close()
+	return redis.Int(db.Do("ZADD", redis.Args{}.Add(key).AddFlat(args)...))
 }

@@ -8,7 +8,7 @@ import (
 	nats "github.com/nats-io/nats.go"
 	"github.com/snowyyj001/loumiao/base"
 	"github.com/snowyyj001/loumiao/config"
-	"github.com/snowyyj001/loumiao/log"
+	"github.com/snowyyj001/loumiao/llog"
 	"github.com/snowyyj001/loumiao/util"
 )
 
@@ -22,6 +22,7 @@ func FormatTopic(topic, prefix string) string {
 
 //不带分组得消息订阅发布，会采用one-many的方式
 //带分组的方式，会采用one-one的方式
+
 //同步订阅消息,带分组
 func QueueSubscribeSync(topic, queue string) ([]byte, error) {
 	// Subscribe
@@ -126,13 +127,25 @@ func ResponseTag(topic string, prefix string, call func([]byte) []byte) error {
 func Init(addr []string) {
 	target := strings.Join(addr, ",")
 	name := nats.Name(config.NET_GATE_SADDR)
-	nc, err := nats.Connect(target, name)
+
+	nc, err := nats.Connect(target, name,
+		nats.DisconnectHandler(func(nc *nats.Conn) {
+			llog.Warningf("NATS client connection got disconnected: %s", nc.LastError())
+		}),
+		nats.ReconnectHandler(func(nc *nats.Conn) {
+			llog.Warningf("NATS client reconnected after a previous disconnection, connected to %s", nc.ConnectedUrl())
+		}),
+		nats.ClosedHandler(func(nc *nats.Conn) {
+			llog.Warningf("NATS client connection closed: %s", nc.LastError())
+		}),
+		nats.ErrorHandler(func(nc *nats.Conn, sub *nats.Subscription, err error) {
+			llog.Errorf("NATS client on %s encountered an error: %s", nc.ConnectedUrl(), err.Error())
+		}))
+
 	if util.CheckErr(err) {
-		if !config.GAME_LOG_CONLOSE { //id not conlose, we can think it's publish env
-			log.Fatalf("nats connect failed: %s", target)
-		}
+		llog.Fatalf("nats connect failed: %s", target)
 	} else {
-		log.Infof("nats connect success: nickname=%s,target=%s", config.NET_GATE_SADDR, target)
+		llog.Infof("nats connect success: nickname=%s,target=%s", config.NET_GATE_SADDR, target)
 	}
 	lnc = nc
 }

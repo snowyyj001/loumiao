@@ -1,9 +1,10 @@
 package containers_test
 
 import (
-	"loumiao/base/containers"
 	"testing"
 	"time"
+
+	"github.com/snowyyj001/loumiao/base/containers"
 )
 
 func TestIntComparator(t *testing.T) {

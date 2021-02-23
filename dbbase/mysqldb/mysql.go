@@ -5,29 +5,42 @@ import (
 	"fmt"
 	"sync/atomic"
 
-	"github.com/snowyyj001/loumiao/log"
-
-	_ "github.com/go-sql-driver/mysql"
-	"github.com/jinzhu/gorm"
-
 	"github.com/snowyyj001/loumiao/config"
+	"github.com/snowyyj001/loumiao/llog"
+	"gorm.io/driver/mysql"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
+	"gorm.io/gorm/schema"
 )
 
 const (
-	POOL_IDLE = 10
+	POOL_IDLE = 20
 	POOL_MAX  = 100
 )
 
 var (
-	Master *gorm.DB
-	Slaves []*gorm.DB
-	SLen   int32
-	SIndex int32
+	Master   *gorm.DB
+	Slaves   []*gorm.DB
+	SLen     int32
+	SIndex   int32
+	logLevel logger.LogLevel = logger.Info
 )
+
+type ORMDB struct {
+	m_Db *gorm.DB
+}
+
+func (self *ORMDB) DB() *gorm.DB {
+	return self.m_Db
+}
 
 //主数据库
 func DBM() *gorm.DB {
 	return Master
+}
+
+func MTble(tname string) *gorm.DB {
+	return Master.Table(tname)
 }
 
 //从数据库
@@ -41,18 +54,28 @@ func DBS() *gorm.DB {
 
 }
 
+func STble(tname string) *gorm.DB {
+	return DBS().Table(tname)
+}
+
 //连接数据库,使用config-mysql参数
 func Dial(tbs []interface{}) error {
 	for _, cfg := range config.DBCfg.SqlCfg {
-		url := fmt.Sprintf("%s:%s@tcp(%s)/%s?charset=utf8&parseTime=True&loc=Local", cfg.DBAccount, cfg.DBPass, cfg.SqlUri, cfg.DBName)
-		log.Debugf("mysql Dial: %s", url)
-		engine, err := gorm.Open("mysql", url)
+		uri := fmt.Sprintf("%s:%s@tcp(%s)/%s?charset=utf8&parseTime=True&loc=Local", cfg.DBAccount, cfg.DBPass, cfg.SqlUri, cfg.DBName)
+		llog.Debugf("mysql Dial: %s", uri)
+		engine, err := gorm.Open(mysql.Open(uri), &gorm.Config{
+			NamingStrategy: schema.NamingStrategy{
+				SingularTable: true, // 使用单数表名，启用该选项，此时，`User` 的表名应该是 `user`
+			},
+			Logger:                 newloger().LogMode(logLevel),
+			SkipDefaultTransaction: true, //创建、更新、删除，禁用事务提交的方式
+		})
 		if err != nil {
 			return err
 		}
-		engine.SingularTable(true)
-		engine.DB().SetMaxIdleConns(POOL_IDLE)
-		engine.DB().SetMaxOpenConns(POOL_MAX)
+		sqlDB, _ := engine.DB()
+		sqlDB.SetMaxIdleConns(POOL_IDLE)
+		sqlDB.SetMaxOpenConns(POOL_MAX)
 		if cfg.Master == 1 { //主数据库
 			if Master != nil {
 				return fmt.Errorf("数据库配置错误：%v", cfg)
@@ -68,47 +91,66 @@ func Dial(tbs []interface{}) error {
 		create(tbs)
 	}
 
-	log.Infof("mysql dail success: %v", config.DBCfg.SqlCfg)
+	llog.Infof("mysql dail success: %v", config.DBCfg.SqlCfg)
 
 	return nil
 }
 
-//连接数据库,使用指定参数
-func DialDB(uri string, idle int, open int) (*gorm.DB, error) {
-	engine, err := gorm.Open("mysql", uri)
+func DialDB(uri string, idle int, maxconn int) *gorm.DB {
+	engine, err := gorm.Open(mysql.Open(uri), &gorm.Config{
+		NamingStrategy: schema.NamingStrategy{
+			SingularTable: true, // 使用单数表名，启用该选项，此时，`User` 的表名应该是 `user`
+		},
+		Logger:                                   newloger().LogMode(logLevel),
+		SkipDefaultTransaction:                   true, //创建、更新、删除，禁用事务提交的方式
+		DisableForeignKeyConstraintWhenMigrating: true, //不自动创建外键约束
+	})
 	if err != nil {
-		log.Errorf("DialDB: %s", err.Error())
-		return nil, err
+		return nil
 	}
-	engine.SingularTable(true)
-	engine.DB().SetMaxIdleConns(idle)
-	engine.DB().SetMaxOpenConns(open)
-	return engine, nil
+	sqlDB, _ := engine.DB()
+	sqlDB.SetMaxIdleConns(idle)
+	sqlDB.SetMaxOpenConns(maxconn)
+
+	return engine
+}
+
+func DialOrm(uri string, idle int, maxconn int) *ORMDB {
+	var orm *ORMDB = new(ORMDB)
+	orm.m_Db = DialDB(uri, idle, maxconn)
+	return orm
 }
 
 //创建数据表
 func create(tbs []interface{}) {
 	for _, tb := range tbs {
-		if !Master.HasTable(tb) {
-			if err := Master.Set("gorm:table_options", "ENGINE=InnoDB DEFAULT CHARSET=utf8").CreateTable(tb).Error; err != nil {
-				panic(err)
-			}
-		} else {
-			Master.AutoMigrate(tb)
-		}
+		Master.Table(tb.(schema.Tabler).TableName()).Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(tb)
 	}
 }
 
-//关闭连接
-func Close() {
-	if Master != nil {
-		Master.Close()
-		Master = nil
+//使用主库添加st结构
+func MInsert(st schema.Tabler) *gorm.DB {
+	return Master.Table(st.TableName()).Create(st)
+}
+
+//使用主库更新st结构的attrs字段
+func MUpdate(st schema.Tabler, attrs ...interface{}) {
+	sz := len(attrs)
+	if sz == 0 {
+		Master.Table(st.TableName()).Select("*").Updates(st)
+	} else { //这里拆分attrs为两部分，以符合Select函数的参数要求，这很奇葩
+		first := attrs[0]
+		var second []interface{}
+		for k, arg := range attrs {
+			if k > 0 {
+				second = append(second, arg)
+			}
+		}
+		Master.Table(st.TableName()).Select(first, second...).Updates(st)
 	}
-	for _, slave := range Slaves {
-		slave.Close()
-	}
-	Slaves = []*gorm.DB{}
-	SLen = 0
-	SIndex = 0
+}
+
+//使用主库删除st结构
+func MDelete(st schema.Tabler) {
+	Master.Table(st.TableName()).Delete(st)
 }

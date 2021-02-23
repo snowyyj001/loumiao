@@ -9,7 +9,7 @@ import (
 	"github.com/snowyyj001/loumiao/base"
 
 	"github.com/snowyyj001/loumiao/config"
-	"github.com/snowyyj001/loumiao/log"
+	"github.com/snowyyj001/loumiao/llog"
 	"github.com/snowyyj001/loumiao/util"
 
 	"github.com/golang/protobuf/proto"
@@ -17,24 +17,22 @@ import (
 
 //消息pack,unpack格式
 //消息buffer以大端传输
-//2+4+4+2+name+msg
+//2+4+2+name+msg
 //1，2字节代表消息报总长度
 //3，4，5，6字节代表目标服务器id
-//7，8，9，10字节保留字段
-//11，12字节代表消息名长度
+//7，8字节代表消息名长度
 
 //target: 目标服务器id
-//reserve: 保留字段
 //name: 消息名
 //msg: 具体的消息包
-var Encode func(target int, reserve int, name string, packet interface{}) ([]byte, int)
+var Encode func(target int, name string, packet interface{}) ([]byte, int)
 
 //uid: 服务器id
 //buff: 消息包
 //length: 包长度
 var Decode func(uid int, buff []byte, length int) (error, int, string, interface{})
 
-func EncodeProBuff(target int, reserve int, name string, packet interface{}) ([]byte, int) {
+func EncodeProBuff(target int, name string, packet interface{}) ([]byte, int) {
 	var pd proto.Message
 	if name == "" {
 		pd = packet.(proto.Message)
@@ -45,18 +43,17 @@ func EncodeProBuff(target int, reserve int, name string, packet interface{}) ([]
 	var err error
 	if packet != nil {
 		pd = packet.(proto.Message)
-		buff, err = proto.Marshal(pd)
+		buff, err = proto.Marshal(pd) //buff不为nil，是[]byte{},如果pd没有数据的话
 	}
 	if util.CheckErr(err) {
 		return nil, 0
 	}
 
 	pLen := len(name)
-	nLen := 12 + pLen + len(buff)
+	nLen := 8 + pLen + len(buff)
 
-	binary.Write(bytesBuffer, binary.BigEndian, int16(nLen))
-	binary.Write(bytesBuffer, binary.BigEndian, int32(target))
-	binary.Write(bytesBuffer, binary.BigEndian, int32(reserve))
+	binary.Write(bytesBuffer, binary.BigEndian, int32(nLen))
+	binary.Write(bytesBuffer, binary.BigEndian, int16(target))
 	binary.Write(bytesBuffer, binary.BigEndian, int16(pLen))
 	binary.Write(bytesBuffer, binary.BigEndian, []byte(name))
 
@@ -68,42 +65,41 @@ func EncodeProBuff(target int, reserve int, name string, packet interface{}) ([]
 }
 
 func DecodeProBuff(uid int, buff []byte, length int) (error, int, string, interface{}) {
-	mbuff1 := buff[2:6]
-	target := int(base.BytesToInt32(mbuff1, binary.BigEndian))
+	mbuff1 := buff[4:6]
+	target := int(base.BytesToUInt16(mbuff1, binary.BigEndian))
 
 	if target > 0 && target != uid { //do not need decode anymore, a msg to other server
 		return nil, target, "", nil
 	}
 
-	mbuff1 = buff[6:10]
-	reserve := base.BytesToUInt32(mbuff1, binary.BigEndian)
-	if reserve < 0 {
-		return fmt.Errorf("DecodeProBuff: reserve is illegal: %d", reserve), 0, "", nil
-	}
-
-	mbuff1 = buff[10:12]
+	mbuff1 = buff[6:8]
 	nameLen := base.BytesToUInt16(mbuff1, binary.BigEndian)
 	if nameLen <= 0 {
 		return fmt.Errorf("DecodeProBuff: msgname len is illegal: %d", nameLen), 0, "", nil
 	}
+	msgName := string(buff[8 : 8+nameLen])
+	if length == 8+int(nameLen) { //just for on CONNECT/DISCONNECT or []byte{}
+		if filterWarning[msgName] {
+			return nil, target, msgName, nil
+		} else {
+			return nil, target, msgName, GetPakcet(msgName)
+		}
 
-	msgName := string(buff[12 : 12+nameLen])
-	if length == 12+int(nameLen) { //just for on CONNECT/DISCONNECT
-		return nil, target, msgName, nil
 	}
+	//fmt.Println("msgName = ", msgName)
 	packet := GetPakcet(msgName)
 	if packet == nil {
-		return fmt.Errorf("DecodeProBuff: packet[%s] may not registered", msgName), 0, "", nil
+		return fmt.Errorf("DecodeProBuff: packet[%s] may not registered, uid=%d,target=%d", msgName, uid, target), 0, "", nil
 	}
-	err := proto.Unmarshal(buff[12+nameLen:length], packet.(proto.Message))
+	err := proto.Unmarshal(buff[8+nameLen:length], packet.(proto.Message))
 	if util.CheckErr(err) {
-		log.Errorf("DecodeProBuff: Unmarshal[%s] error", msgName)
+		llog.Errorf("DecodeProBuff: Unmarshal[%s] error", msgName)
 		return err, target, "", nil
 	}
 	return nil, target, msgName, packet
 }
 
-func EncodeJson(target int, reserve int, name string, packet interface{}) ([]byte, int) {
+func EncodeJson(target int, name string, packet interface{}) ([]byte, int) {
 	if name == "" {
 		name = GetMessageName(packet)
 	}
@@ -119,11 +115,10 @@ func EncodeJson(target int, reserve int, name string, packet interface{}) ([]byt
 	}
 
 	pLen := len(name)
-	nLen := 12 + pLen + len(buff)
+	nLen := 8 + pLen + len(buff)
 
-	binary.Write(bytesBuffer, binary.BigEndian, int16(nLen))
-	binary.Write(bytesBuffer, binary.BigEndian, int32(target))
-	binary.Write(bytesBuffer, binary.BigEndian, int32(reserve))
+	binary.Write(bytesBuffer, binary.BigEndian, int32(nLen))
+	binary.Write(bytesBuffer, binary.BigEndian, int16(target))
 	binary.Write(bytesBuffer, binary.BigEndian, int16(pLen))
 	binary.Write(bytesBuffer, binary.BigEndian, []byte(name))
 	if buff != nil {
@@ -133,35 +128,34 @@ func EncodeJson(target int, reserve int, name string, packet interface{}) ([]byt
 }
 
 func DecodeJson(uid int, buff []byte, length int) (error, int, string, interface{}) {
-	mbuff1 := buff[2:6]
-	target := int(base.BytesToUInt32(mbuff1, binary.BigEndian))
+	mbuff1 := buff[4:6]
+	target := int(base.BytesToUInt16(mbuff1, binary.BigEndian))
 
 	if target > 0 && target != uid { //do not need decode anymore, a msg to other server
 		return nil, target, "", nil
 	}
 
-	mbuff1 = buff[6:10]
-	reserve := base.BytesToUInt32(mbuff1, binary.BigEndian)
-	if reserve < 0 {
-		return fmt.Errorf("DecodeJson: reserve is illegal: %d", reserve), 0, "", nil
-	}
-	mbuff1 = buff[10:12]
+	mbuff1 = buff[6:8]
 	nameLen := base.BytesToUInt16(mbuff1, binary.BigEndian)
 	if nameLen <= 0 {
 		return fmt.Errorf("DecodeJson: msgname len is illegal: %d", nameLen), 0, "", nil
 	}
-	msgName := string(buff[12 : 12+nameLen])
-	if length == 12+int(nameLen) { //just for on CONNECT/DISCONNECT
-		return nil, target, msgName, nil
+	msgName := string(buff[8 : 8+nameLen])
+	if length == 8+int(nameLen) { //just for on CONNECT/DISCONNECT or []byte{}
+		if filterWarning[msgName] {
+			return nil, target, msgName, nil
+		} else {
+			return nil, target, msgName, GetPakcet(msgName)
+		}
 	}
 
 	packet := GetPakcet(msgName)
 	if packet == nil {
-		return fmt.Errorf("DecodeJson: packet[%s] may not registered", msgName), 0, "", nil
+		return fmt.Errorf("DecodeJson: packet[%s] may not registered, uid=%d,target=%d", msgName, uid, target), 0, "", nil
 	}
-	err := json.Unmarshal(buff[12+nameLen:length], packet)
+	err := json.Unmarshal(buff[8+nameLen:length], packet)
 	if util.CheckErr(err) {
-		log.Errorf("DecodeJson: Unmarshal[%s] error", msgName)
+		llog.Errorf("DecodeJson: Unmarshal[%s] error", msgName)
 		return err, target, "", nil
 	}
 	return nil, target, msgName, packet

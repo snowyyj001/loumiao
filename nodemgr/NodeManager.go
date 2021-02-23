@@ -11,8 +11,8 @@ import (
 
 type NodeInfo struct {
 	config.NetNode      //所有的服务器列表，如果要删除，需要删除etcd里面的内容
-	Number         int  //-1代表服务器未激活,服务器通过ETCD_NODESTATUS上报状态，就算激活，即number >= 0
-	SocketActive   bool //服务被主动关闭，但有可能不会立即退出
+	Number         int  //-1代表服务器未激活,服务器通过ETCD_NODESTATUS上报状态，就算激活，即number >= 0，socket断开或etcd断开都意味着节点不可用，已经关闭
+	SocketActive   bool //服务被主动关闭，节点还可用（因为节点是有状态的，为了不丢失数据），但节点不再被集群主动发现使用，
 }
 
 //负载均衡策略都是挑选number最小的
@@ -22,13 +22,11 @@ var (
 	node_Map      map[string]*NodeInfo //服务器信息
 	saddr_uid_Map map[int]string       //saddr -> uid
 	nodeLock      sync.RWMutex
-	NodeUid       int //本服务器节点的uid
 )
 
 func init() {
 	node_Map = make(map[string]*NodeInfo)
 	saddr_uid_Map = make(map[int]string)
-
 }
 
 func AddNode(node *NodeInfo) {
@@ -49,7 +47,7 @@ func RemoveNode(saddr string) {
 }
 
 func GetNodeByAddr(saddr string) *NodeInfo {
-	//log.Debugf("GetNodeByAddr: %s", saddr)
+	//llog.Debugf("GetNodeByAddr: %s", saddr)
 	nodeLock.RLock()
 	node, _ := node_Map[saddr]
 	nodeLock.RUnlock()
@@ -64,7 +62,7 @@ func NodeStatusUpdate(key string, val string, dis bool) {
 	saddr = arrStr[2]
 	//group = arrStr[2]
 
-	//log.Debugf("NodeStatusUpdate: key=%s,val=%s,dis=%t", key, val, dis)
+	//llog.Debugf("NodeStatusUpdate: key=%s,val=%s,dis=%t", key, val, dis)
 	/*	if config.NET_NODE_TYPE == config.ServerType_Gate {
 		if group != config.SERVER_GROUP {
 			return
@@ -162,27 +160,27 @@ func GetServerUid(cli etcd.IEtcdBase, key string) int {
 	sk := fmt.Sprintf("%s%s", define.ETCD_NODEINFO, key)
 	gresp, err := cli.Get(sk)
 	if err != nil {
-		log.Fatal("GetServerUid get failed " + err.Error())
+		llog.Fatal("GetServerUid get failed " + err.Error())
 	}
 	if len(gresp.Kvs) > 0 { //server has been assigned value
 		node := config.NetNode{}
 		err = json.Unmarshal(gresp.Kvs[0].Value, &node)
 		if err != nil {
-			log.Fatal("GetServerUid etcd value bad " + string(gresp.Kvs[0].Value))
+			llog.Fatal("GetServerUid etcd value bad " + string(gresp.Kvs[0].Value))
 		}
 		NodeUid = node.Uid
-		//log.Debugf("GetServerUid %s, %v", key, node)
+		//llog.Debugf("GetServerUid %s, %v", key, node)
 		return node.Uid
 	}
 
 	var session *concurrency.Session
 	session, err = concurrency.NewSession(cli.GetClient())
 	if err != nil {
-		log.Fatal("GetServerUid NewSession failed " + err.Error())
+		llog.Fatal("GetServerUid NewSession failed " + err.Error())
 	}
 	m := concurrency.NewMutex(session, define.ETCD_LOCKUID)
 	if err = m.Lock(context.TODO()); err != nil {
-		log.Fatal("GetServerUid NewMutex failed " + err.Error())
+		llog.Fatal("GetServerUid NewMutex failed " + err.Error())
 	}
 	var topvalue int
 	if config.Cfg.NetCfg.Uid != 0 { //手工分配了uid

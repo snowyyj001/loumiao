@@ -6,13 +6,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/snowyyj001/loumiao/log"
+	"github.com/snowyyj001/loumiao/llog"
+	"go.etcd.io/etcd/clientv3"
+	"go.etcd.io/etcd/clientv3/concurrency"
+	"go.etcd.io/etcd/mvcc/mvccpb"
 
 	"github.com/snowyyj001/loumiao/define"
-
-	"github.com/coreos/etcd/clientv3"
-	"github.com/coreos/etcd/clientv3/concurrency"
-	"github.com/coreos/etcd/mvcc/mvccpb"
 )
 
 type HanlderFunc func(string, string, bool)
@@ -63,7 +62,7 @@ func (self *EtcdBase) Put(key string, val string, withlease bool) error {
 
 //删除value
 func (self *EtcdBase) Delete(key string) error {
-	log.Debugf("etcd delete: %s", key)
+	llog.Debugf("etcd delete: %s", key)
 	_, err := self.client.Delete(context.TODO(), key)
 	return err
 }
@@ -115,7 +114,7 @@ func (self *EtcdBase) listenLeaseRespChan() {
 		select {
 		case leaseKeepResp := <-self.keepAliveChan:
 			if leaseKeepResp == nil {
-				log.Debugf("已经关闭续租功能")
+				llog.Debugf("已经关闭续租功能")
 				self.lease = nil
 				if self.leasefunc != nil {
 					self.leasefunc(false)
@@ -140,15 +139,15 @@ func (self *EtcdBase) RevokeLease() error {
 
 //获取一个分布式锁,expire秒后会超时返回nil
 //@prefix: 锁key
-//@expire: 超时时间,秒
+//@expire: 超时时间,毫秒
 func AquireLock(prefix string, expire int) *concurrency.Mutex {
 	if This == nil {
 		return nil
 	}
 	var session *concurrency.Session
-	session, err := concurrency.NewSession(This, concurrency.WithTTL(expire))
+	session, err := concurrency.NewSession(This, concurrency.WithTTL(10))
 	if err != nil {
-		log.Error("EtcdBase Lock NewSession failed " + err.Error())
+		llog.Error("EtcdBase Lock NewSession failed " + err.Error())
 		return nil
 	}
 	m := concurrency.NewMutex(session, prefix)
@@ -156,14 +155,21 @@ func AquireLock(prefix string, expire int) *concurrency.Mutex {
 	// 如果这里使用context.WithTimeout(context.TODO(), expire*time.Second)
 	// 表示获取锁expire秒如果没有获取成功则返回error
 	//if err = m.Lock(context.TODO()); err != nil {
-	ct, _ := context.WithTimeout(context.TODO(), time.Duration(expire)*time.Second)
+	ct, _ := context.WithTimeout(context.TODO(), time.Duration(expire)*time.Millisecond)
 	if err = m.Lock(ct); err != nil {
-		log.Error("EtcdBase Lock NewMutex Lock lock failed " + err.Error())
+		//llog.Error("EtcdBase Lock NewMutex Lock lock failed " + err.Error())
+		session.Close()
 		return nil
 	}
 	//注意在获取锁后要调用该函数在session的租约到期后才会释放锁
-	session.Orphan()
+	//session.Orphan()
 	return m
+}
+
+func UnLock(key string, lockval *concurrency.Mutex) {
+	if lockval != nil {
+		lockval.Unlock(context.TODO())
+	}
 }
 
 //创建etcd服务
@@ -213,7 +219,7 @@ func (self *ClientDis) watchFuc(prefix, key, value string, put bool) {
 		if ok {
 			cb.(HanlderFunc)(key, value, put)
 		} else {
-			log.Warningf("etcd WatchFuc prefix no handler: %s", prefix)
+			llog.Warningf("etcd WatchFuc prefix no handler: %s", prefix)
 		}
 	}
 }
@@ -314,14 +320,20 @@ func (self *ClientDis) WatchStatusList(prefix string, hanlder func(string, strin
 
 //创建服务发现
 func NewClientDis(addr []string) (*ClientDis, error) {
-	log.Debugf("etcd connect: %v", addr)
+	llog.Debugf("etcd connect: %v", addr)
 	conf := clientv3.Config{
 		Endpoints:   addr,
-		DialTimeout: 5 * time.Second,
+		DialTimeout: 3 * time.Second,
 	}
 	if client, err := clientv3.New(conf); err == nil {
 		This = client
-		log.Infof("etcd connect success: %v", addr)
+		timeoutCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		_, err = client.Status(timeoutCtx, conf.Endpoints[0])
+		if err != nil {
+			return nil, err
+		}
+		llog.Infof("etcd connect success: %v", addr)
 		return &ClientDis{
 			EtcdBase: EtcdBase{client: client},
 		}, nil

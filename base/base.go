@@ -3,15 +3,14 @@ package base
 import (
 	"bytes"
 	"encoding/binary"
+	"log"
 	"math"
 	"strconv"
-
-	"github.com/snowyyj001/loumiao/log"
 )
 
 func Assert(x bool, y string) {
 	if bool(x) == false {
-		log.Fatalf("\nFatal :{%s}", y)
+		log.Fatalf("Assert: %s", y)
 	}
 }
 

@@ -5,7 +5,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/snowyyj001/loumiao/log"
+	"github.com/snowyyj001/loumiao/llog"
 
 	"github.com/gorilla/websocket"
 )
@@ -69,11 +69,11 @@ func (self *WebSocket) Start() bool {
 	go func() {
 		err := http.ListenAndServe(self.m_sAddr, nil)
 		if err != nil {
-			log.Errorf("WebSocket ListenAndServe: %v", err)
+			llog.Errorf("WebSocket ListenAndServe: %v", err)
 			return
 		}
 	}()
-	log.Infof("websocket 启动监听，等待链接！%s", self.m_sAddr)
+	llog.Infof("websocket 启动监听，等待链接！%s", self.m_sAddr)
 
 	//延迟，监听关闭
 	//defer ln.Close()
@@ -118,10 +118,10 @@ func (self *WebSocket) AddClinet(wConn *websocket.Conn, addr string, connectType
 		self.m_ClientLocker.Unlock()
 		pClient.Start()
 		self.m_nClientCount++
-		log.Debugf("客户端：%s已连接[%d]！", wConn.RemoteAddr().String(), pClient.m_ClientId)
+		llog.Debugf("客户端：%s已连接[%d]！", wConn.RemoteAddr().String(), pClient.m_ClientId)
 		return pClient
 	} else {
-		log.Errorf("%s", "无法创建客户端连接对象")
+		llog.Errorf("%s", "无法创建客户端连接对象")
 	}
 	return nil
 }
@@ -130,7 +130,7 @@ func (self *WebSocket) DelClinet(pClient *WebSocketClient) bool {
 	self.m_Pool.Put(pClient)
 	self.m_ClientLocker.Lock()
 	delete(self.m_ClientList, pClient.m_ClientId)
-	log.Debugf("客户端：%s已断开连接[%d]！", pClient.m_WsConn.RemoteAddr().String(), pClient.m_ClientId)
+	llog.Debugf("客户端：%s已断开连接[%d]！", pClient.m_WsConn.RemoteAddr().String(), pClient.m_ClientId)
 	self.m_ClientLocker.Unlock()
 	self.m_nClientCount--
 	return true
@@ -165,7 +165,7 @@ func (self *WebSocket) SendById(id int, buff []byte) int {
 	if pClient != nil {
 		pClient.Send(buff)
 	} else {
-		log.Warningf("WebSocket发送数据失败[%d]", id)
+		llog.Warningf("WebSocket发送数据失败[%d]", id)
 	}
 	return 0
 }
@@ -205,7 +205,7 @@ func (self *WebSocket) SetMaxClients(maxnum int) {
 func serveWs(w http.ResponseWriter, r *http.Request) {
 	c, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Errorf("serveWs upgrade:", err)
+		llog.Errorf("serveWs upgrade:", err)
 		return
 	}
 	pClient := This.AddClinet(c, r.RemoteAddr, This.m_nConnectType)

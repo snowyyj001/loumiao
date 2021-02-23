@@ -1,21 +1,22 @@
 /*
 * Snowflake
 *
-* 1                                               42           52             64
-* +-----------------------------------------------+------------+---------------+
-* | timestamp(ms)                                 | workerid   | sequence      |
-* +-----------------------------------------------+------------+---------------+
-* | 0000000000 0000000000 0000000000 0000000000 0 | 0000000000 | 0000000000 00 |
-* +-----------------------------------------------+------------+---------------+
+* 1                                               39              41             64
+* +-----------------------------------------------+---------------+---------------+
+* | timestamp(ms)                                 |  workerid     | sequence      |
+* +-----------------------------------------------+---------------+---------------+
+* | 0000000000 0000000000 0000000000 000000000    | 0000000000 00 | 0000000000 00 |
+* +-----------------------------------------------+---------------+---------------+
 *
-* 1. 41位时间截(毫秒级)，注意这是时间截的差值（当前时间截 - 开始时间截)。可以使用约70年: (1L << 41) / (1000L * 60 * 60 * 24 * 365) = 69
-* 2. 10位数据机器位，可以部署在1024个节点
-* 3. 12位序列，毫秒内的计数，同一机器，同一时间截并发4096个序号
+* 1. 39位时间截(毫秒级)，注意这是时间截的差值（当前时间截 - 开始时间截)。可以使用约17年: (1L << 39) / (1000L * 60 * 60 * 24 * 365) = 17
+* 2. 12位数据机器位，可以部署在4095个节点
+* 3. 12位序列，毫秒内的计数，同一机器，同一时间截并发4095个序号
  */
 package util
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -23,8 +24,8 @@ import (
 )
 
 const (
-	twepoch        = int64(1483228800000)             //开始时间截 (2017-01-01)
-	workeridBits   = uint(10)                         //机器id所占的位数
+	twepoch        = int64(1609344000000)             //开始时间截 (2021-1-1)
+	workeridBits   = uint(12)                         //机器id所占的位数
 	sequenceBits   = uint(12)                         //序列所占的位数
 	workeridMax    = int64(-1 ^ (-1 << workeridBits)) //支持的最大机器id数量
 	sequenceMask   = int64(-1 ^ (-1 << sequenceBits)) //
@@ -57,7 +58,6 @@ func NewSnowflake(workerid int64) error {
 		workerid:  workerid,
 		sequence:  0,
 	}
-
 	return nil
 }
 
@@ -71,7 +71,7 @@ func (s *Snowflake) Generate() int64 {
 	if s.timestamp == now {
 		s.sequence = (s.sequence + 1) & sequenceMask
 
-		if s.sequence == 0 {
+		if s.sequence == 0 { //毫秒内序列溢出
 			for now <= s.timestamp {
 				now = time.Now().UnixNano() / 1000000
 			}
@@ -88,9 +88,13 @@ func (s *Snowflake) Generate() int64 {
 	return r
 }
 
-func UUID() int64 {
+func UUID() int64 { //该函数调用应该在config.SERVER_NODE_UID赋值之后
+	if config.SERVER_NODE_UID <= 0 {
+		fmt.Errorf("wrong server uid: %d", config.SERVER_NODE_UID)
+		return 0
+	}
 	if SnowFlakeInst == nil {
-		NewSnowflake(int64(config.NET_NODE_ID))
+		NewSnowflake(int64(config.SERVER_NODE_UID))
 	}
 	return SnowFlakeInst.Generate()
 }

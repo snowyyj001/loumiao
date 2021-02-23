@@ -2,7 +2,8 @@ package maps
 
 import (
 	"fmt"
-	"loumiao/base/containers"
+
+	"github.com/snowyyj001/loumiao/base/containers"
 )
 
 // Map interface that all Maps implement

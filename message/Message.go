@@ -18,16 +18,23 @@ type MsgPool struct {
 
 var (
 	Packet_CreateFactorStringMap map[string]*MsgPool
+	filterWarning                map[string]bool
 )
 
 func init() {
 	//Packet_CreateFactorStringMap = make(map[string]func() interface{})
 	Packet_CreateFactorStringMap = make(map[string]*MsgPool)
+	filterWarning = make(map[string]bool)
+	filterWarning["CONNECT"] = true
+	filterWarning["DISCONNECT"] = true
+	filterWarning["C_CONNECT"] = true
+	filterWarning["C_DISCONNECT"] = true
 }
 
 //注册网络消息
 func RegisterPacket(packet interface{}) {
 	packetName := GetMessageName(packet)
+	//fmt.Println("RegisterPacket", packetName)
 	pt := reflect.TypeOf(packet).Elem()
 	/*	packetFunc := func() interface{} {
 		packet := reflect.New(pt).Interface()

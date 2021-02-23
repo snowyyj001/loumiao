@@ -3,7 +3,7 @@ package gorpc
 import (
 	"sync"
 
-	"github.com/snowyyj001/loumiao/log"
+	"github.com/snowyyj001/loumiao/llog"
 	"github.com/snowyyj001/loumiao/util"
 )
 
@@ -24,7 +24,7 @@ func (self *GoRoutinePool) AddRoutine(rou IGoRoutine, name int64) bool {
 	self.actorLock.Lock()
 	if self.go_name_Tmp[name] != nil {
 		self.actorLock.Unlock()
-		log.Errorf("GoRoutinePool AddRoutine error: %d has already been added", name)
+		llog.Errorf("GoRoutinePool AddRoutine error: %d has already been added", name)
 		return false
 	}
 	self.go_name_Tmp[name] = rou
@@ -52,8 +52,8 @@ func (self *GoRoutinePool) GetAndDelRoutine(name int64) IGoRoutine {
 	return nil
 }
 
-//获得一个actor
-func (self *GoRoutinePool) GetRoutine(name int64) IGoRoutine {
+//获得一个runing的actor
+func (self *GoRoutinePool) GetRunRoutine(name int64) IGoRoutine {
 	self.actorLock.RLock()
 	igo, ok := self.go_name_Tmp[name]
 	self.actorLock.RUnlock()
@@ -63,10 +63,19 @@ func (self *GoRoutinePool) GetRoutine(name int64) IGoRoutine {
 	return nil
 }
 
+//获得一个actor
+func (self *GoRoutinePool) GetRoutine(name int64) IGoRoutine {
+	self.actorLock.RLock()
+	igo, _ := self.go_name_Tmp[name]
+	self.actorLock.RUnlock()
+	return igo
+}
+
 //关闭单个actor，立刻关闭
 func (self *GoRoutinePool) CloseRoutine(name int64) {
 	igo := self.GetAndDelRoutine(name)
 	if igo != nil {
+		igo.DoDestory()
 		igo.Close() //直接关闭
 	}
 }
@@ -75,6 +84,7 @@ func (self *GoRoutinePool) CloseRoutine(name int64) {
 func (self *GoRoutinePool) CloseRoutineCleanly(name int64) {
 	igo := self.GetAndDelRoutine(name)
 	if igo != nil {
+		igo.DoDestory()
 		igo.CloseCleanly() //协程池的关闭要优雅
 	}
 }

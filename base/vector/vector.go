@@ -8,7 +8,7 @@ import (
 
 func assert(x bool, y string) {
 	if bool(x) == false {
-		log.Printf("\nFatal :{%s}", y)
+		log.Fatalf("Assert: %s", y)
 	}
 }
 

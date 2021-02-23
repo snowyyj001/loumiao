@@ -1,7 +1,7 @@
 package gorpc
 
 import (
-	"github.com/snowyyj001/loumiao/log"
+	"github.com/snowyyj001/loumiao/llog"
 )
 
 //服务启动后，不允许再开新的service
@@ -25,7 +25,7 @@ func init() {
 
 func (self *GoRoutineMgr) AddRoutine(rou IGoRoutine, name string) {
 	if self.go_name_Map[name] != nil || self.go_name_Tmp[name] != nil {
-		log.Fatalf("AddRoutine fatal: %s has already been added", name)
+		llog.Fatalf("AddRoutine fatal: %s has already been added", name)
 		return
 	}
 	if self.is_starting {
@@ -133,11 +133,11 @@ func (self *GoRoutineMgr) DoSingleStart(name string) {
 func (self *GoRoutineMgr) Send(target string, funcName string, data interface{}) {
 	igo := self.GetRoutine(target)
 	if igo == nil {
-		log.Warningf("GoRoutineMgr.Send target[%s] is nil: %s", target, funcName)
+		llog.Warningf("GoRoutineMgr.Send target[%s] is nil: %s", target, funcName)
 		return
 	}
 	if len(igo.GetJobChan()) > igo.GetChanLen()*2 {
-		log.Warningf("GoRoutineMgr.Send:[%s (chan overlow[%d, %d])] %s", target, igo.GetJobChan(), igo.GetChanLen(), funcName)
+		llog.Warningf("GoRoutineMgr.Send:[%s (chan overlow[%d, %d])] %s", target, igo.GetJobChan(), igo.GetChanLen(), funcName)
 		return
 	}
 	job := ChannelContext{funcName, data, nil, nil}

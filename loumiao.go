@@ -12,7 +12,7 @@ import (
 	"github.com/snowyyj001/loumiao/util/timer"
 
 	"github.com/snowyyj001/loumiao/gorpc"
-	"github.com/snowyyj001/loumiao/log"
+	"github.com/snowyyj001/loumiao/llog"
 	"github.com/snowyyj001/loumiao/message"
 )
 
@@ -51,23 +51,23 @@ func Run() {
 		igo := gorpc.MGR.GetRoutine("GateServer")
 		if igo != nil {
 			igo.DoOpen()
-			log.Noticef("loumiao start success: %s", config.SERVER_NAME)
+			llog.Noticef("loumiao start success: %s", config.SERVER_NAME)
 		}
 	}, true)
 
 	c = make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, os.Kill, syscall.SIGTERM)
 	sig := <-c
-	log.Infof("loumiao closing down (signal: %v)", sig)
+	llog.Infof("loumiao closing down (signal: %v)", sig)
 
 	gorpc.MGR.CloseAll()
 
-	log.Infof("loumiao done !")
+	llog.Infof("loumiao done !")
 }
 
 //关闭游戏
 func Stop() {
-	log.Info("loumiao stop the server !")
+	llog.Info("loumiao stop the server !")
 	c <- os.Kill
 }
 
@@ -86,7 +86,7 @@ func UnRegisterNetHandler(igo gorpc.IGoRoutine, name string) {
 //@clientid: 客户端userid
 //@data: 消息结构体指针
 func SendClient(clientid int, data interface{}) {
-	buff, _ := message.Encode(0, 0, "", data)
+	buff, _ := message.Encode(0, "", data)
 	m := gorpc.M{Id: clientid, Data: buff}
 	server := gorpc.MGR.GetRoutine("GateServer")
 	job := gorpc.ChannelContext{"SendClient", m, nil, nil}
@@ -95,7 +95,7 @@ func SendClient(clientid int, data interface{}) {
 
 //发送给客户端消息
 func SendMulClient(igo gorpc.IGoRoutine, clientids []int, data interface{}) {
-	buff, _ := message.Encode(0, 0, "", data)
+	buff, _ := message.Encode(0, "", data)
 	m := gorpc.MS{Ids: clientids, Data: buff}
 	server := gorpc.MGR.GetRoutine("GateServer")
 	job := gorpc.ChannelContext{"SendMulClient", m, nil, nil}
@@ -133,19 +133,37 @@ func SendRpc(funcName string, data interface{}, target int) {
 		m.Data = data
 		m.Param = 1
 	} else {
-		buff, _ := message.Encode(target, 0, "", data)
+		buff, _ := message.Encode(target, "", data)
 		m.Data = buff
 	}
-	log.Debugf("SendRpc: %s", funcName)
+	llog.Debugf("SendRpc: %s, %d", funcName, target)
 	//base64str := base64.StdEncoding.EncodeToString([]byte(funcName))
 	gorpc.MGR.Send("GateServer", "SendRpc", m)
+}
+
+//远程rpc消息广播调用-*********还没测试
+//@funcName: rpc函数
+//@data: 函数参数,如果data是[]byte类型，则代表使用bitstream或自定义二进制内容，否则data应该是一个messgae注册的pb或json结构体
+//@target: 目标server的type
+func BroadCastRpc(funcName string, data interface{}, target int) {
+	m := gorpc.MM{Id: target, Name: funcName}
+	if reflect.TypeOf(data).Kind() == reflect.Slice { //bitstream
+		m.Data = data
+		m.Param = 1
+	} else {
+		buff, _ := message.Encode(target, "", data)
+		m.Data = buff
+	}
+	llog.Debugf("BroadCastRpc: %s, %d", funcName, target)
+	//base64str := base64.StdEncoding.EncodeToString([]byte(funcName))
+	gorpc.MGR.Send("GateServer", "BroadCastRpc", m)
 }
 
 //发送给gate的网络消息
 //@clientid: 目标gate的uid，如果clientid=0，则会随机选择一个gate发送
 //@data: 发送消息
 func SendGate(clientid int, data interface{}) {
-	buff, _ := message.Encode(clientid, 0, "", data)
+	buff, _ := message.Encode(clientid, "", data)
 	m := gorpc.M{Id: clientid, Data: buff}
 	gorpc.MGR.Send("GateServer", "SendGate", m)
 }

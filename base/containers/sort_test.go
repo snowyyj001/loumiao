@@ -1,9 +1,10 @@
 package containers_test
 
 import (
-	"loumiao/base/containers"
 	"math/rand"
 	"testing"
+
+	"github.com/snowyyj001/loumiao/base/containers"
 )
 
 func TestSortInts(t *testing.T) {

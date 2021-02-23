@@ -1,6 +1,6 @@
 package maps
 
-import "loumiao/base/containers"
+import "github.com/snowyyj001/loumiao/base/containers"
 
 func assertIteratorImplementation() {
 	var _ containers.ReverseIteratorWithKey = (*Iterator)(nil)

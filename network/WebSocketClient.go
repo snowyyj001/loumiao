@@ -1,7 +1,7 @@
 package network
 
 import (
-	"github.com/snowyyj001/loumiao/log"
+	"github.com/snowyyj001/loumiao/llog"
 	"github.com/snowyyj001/loumiao/message"
 
 	"github.com/gorilla/websocket"
@@ -36,7 +36,7 @@ func (self *WebSocketClient) Start() bool {
 func (self *WebSocketClient) Send(buff []byte) int {
 	defer func() {
 		if err := recover(); err != nil {
-			log.Errorf("WebSocketClient Send", err)
+			llog.Errorf("WebSocketClient Send", err)
 		}
 	}()
 
@@ -50,14 +50,14 @@ func (self *WebSocketClient) Send(buff []byte) int {
 }
 
 func (self *WebSocketClient) OnNetConn() {
-	buff, nLen := message.Encode(0, 0, "CONNECT", nil)
+	buff, nLen := message.Encode(0, "CONNECT", nil)
 	//bufflittle := common.BigEngianToLittle(buff, nLen)
 	self.HandlePacket(self.m_ClientId, buff, nLen)
 }
 
 func (self *WebSocketClient) OnNetFail(error int) {
 	self.Stop()
-	buff, nLen := message.Encode(0, 0, "DISCONNECT", nil)
+	buff, nLen := message.Encode(0, "DISCONNECT", nil)
 	//bufflittle := common.BigEngianToLittle(buff, nLen)
 	self.HandlePacket(self.m_ClientId, buff, nLen)
 }
@@ -80,14 +80,14 @@ func wserverclientRoutine(pClient *WebSocketClient) bool {
 
 	for {
 		if pClient.m_bShuttingDown {
-			log.Debugf("远程链接：%s已经被关闭！", pClient.GetSAddr())
+			llog.Debugf("远程链接：%s已经被关闭！", pClient.GetSAddr())
 			pClient.OnNetFail(0)
 			break
 		}
 
 		mt, message, err := pClient.m_WsConn.ReadMessage()
 		if err != nil {
-			log.Debugf("远程链接：%s已经关闭！%v\n", pClient.GetSAddr(), err)
+			llog.Debugf("远程链接：%s已经关闭！%v\n", pClient.GetSAddr(), err)
 			pClient.OnNetFail(1)
 			break
 		}

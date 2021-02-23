@@ -8,7 +8,7 @@ import (
 
 	"github.com/snowyyj001/loumiao/util/timer"
 
-	"github.com/snowyyj001/loumiao/log"
+	"github.com/snowyyj001/loumiao/llog"
 	"github.com/snowyyj001/loumiao/util"
 )
 
@@ -77,20 +77,20 @@ type GoRoutineLogic struct {
 }
 
 func (self *GoRoutineLogic) DoInit() bool {
-	//log.Infof("%s DoInit", self.Name)
+	//llog.Infof("%s DoInit", self.Name)
 	return true
 }
 func (self *GoRoutineLogic) DoRegsiter() {
-	//log.Infof("%s DoRegsiter", self.Name)
+	//llog.Infof("%s DoRegsiter", self.Name)
 }
 func (self *GoRoutineLogic) DoStart() {
-	//log.Infof("%s DoStart", self.Name)
+	//llog.Infof("%s DoStart", self.Name)
 }
 func (self *GoRoutineLogic) DoOpen() {
-	//log.Infof("%s DoOpen", self.Name)
+	//llog.Infof("%s DoOpen", self.Name)
 }
 func (self *GoRoutineLogic) DoDestory() {
-	//log.Infof("%s DoDestory", self.Name)
+	//llog.Infof("%s DoDestory", self.Name)
 }
 func (self *GoRoutineLogic) GetName() string {
 	return self.Name
@@ -137,23 +137,23 @@ func (self *GoRoutineLogic) RunTimer(delat int64, f func(int64)) {
 func (self *GoRoutineLogic) woker() {
 	defer func() {
 		if err := recover(); err != nil {
-			log.Errorf("GoRoutineLogic woker: %v", err)
+			llog.Errorf("GoRoutineLogic woker: %v", err)
 		}
 	}()
 	utm := util.TimeStamp()
 	utmPre := utm
 
 	for {
-		//log.Debugf("woker run: %s", self.Name)
+		//llog.Debugf("woker run: %s", self.Name)
 		select {
 		case ct := <-self.jobChan:
-			//log.Debugf("jobchan single: %s %s", self.Name, ct.Handler)
+			//llog.Debugf("jobchan single: %s %s", self.Name, ct.Handler)
 			if ct.Cb != nil && ct.ReadChan == nil {
 				self.CallFunc(ct.Cb, ct.Data)
 			} else {
 				var hd = self.Cmd[ct.Handler]
 				if hd == nil {
-					log.Warningf("GoRoutineLogic[%s] handler is nil: %s", self.Name, ct.Handler)
+					llog.Warningf("GoRoutineLogic[%s] handler is nil: %s", self.Name, ct.Handler)
 				} else {
 					if self.GoFun {
 						go self.CallGoFunc(hd, &ct)
@@ -167,7 +167,7 @@ func (self *GoRoutineLogic) woker() {
 					}
 				}
 			}
-			//log.Debugf("jobchan single done: %s %s", self.Name, ct.Handler)
+			//llog.Debugf("jobchan single done: %s %s", self.Name, ct.Handler)
 		case action := <-self.actionChan:
 			if action == ACTION_CLOSE {
 				goto LabelEnd
@@ -210,12 +210,12 @@ func (self *GoRoutineLogic) stop() {
 func (self *GoRoutineLogic) Close() {
 	self.Started = false //先标记关闭
 	self.actionChan <- ACTION_CLOSE
+	llog.Debugf("GoRoutineLogic.Close: %s", self.Name)
 }
 
 //延迟关闭任务，等待工作队列清空
 func (self *GoRoutineLogic) CloseCleanly() {
 	self.Started = false //先标记关闭
-	self.DoDestory()
 	timer.NewTicker(1000, func(dt int64) bool {
 		if self.LeftJobNumber() == 0 {
 			timer.DelayJob(1000, func() {
@@ -223,7 +223,7 @@ func (self *GoRoutineLogic) CloseCleanly() {
 			}, true)
 			return false
 		}
-		//log.Debugf("CloseCleanly: %d", self.LeftJobNumber())
+		//llog.Debugf("CloseCleanly: %d", self.LeftJobNumber())
 		return true
 	})
 }
@@ -234,7 +234,7 @@ func (self *GoRoutineLogic) Send(handler_name string, sdata interface{}) {
 		return
 	}
 	if len(self.GetJobChan()) > self.GetChanLen()*2 {
-		log.Noticef("GoRoutineLogic[%s].Send too many job chan: %s", self.Name, handler_name)
+		llog.Noticef("GoRoutineLogic[%s].Send too many job chan: %s", self.Name, handler_name)
 		return
 	}
 	job := ChannelContext{handler_name, sdata, nil, nil}
@@ -247,11 +247,11 @@ func (self *GoRoutineLogic) SendBack(server IGoRoutine, handler_name string, sda
 		return
 	}
 	if server == nil {
-		log.Noticef("GoRoutineLogic[%s].SendBack target[%s] is nil: %s", self.Name, server.GetName(), handler_name)
+		llog.Noticef("GoRoutineLogic[%s].SendBack target[%s] is nil: %s", self.Name, server.GetName(), handler_name)
 		return
 	}
 	if len(server.GetJobChan()) > server.GetChanLen()*2 {
-		log.Noticef("GoRoutineLogic[%s].SendBack[%s] too many job chan: %s", self.Name, server.GetName(), handler_name)
+		llog.Noticef("GoRoutineLogic[%s].SendBack[%s] too many job chan: %s", self.Name, server.GetName(), handler_name)
 		return
 	}
 	job := ChannelContext{handler_name, sdata, self.jobChan, Cb}
@@ -264,11 +264,11 @@ func (self *GoRoutineLogic) Call(server IGoRoutine, handler_name string, sdata i
 		return nil
 	}
 	if server == nil {
-		log.Noticef("GoRoutineLogic[%s].Call target[%s] is nil: %s", self.Name, server.GetName(), handler_name)
+		llog.Noticef("GoRoutineLogic[%s].Call target[%s] is nil: %s", self.Name, server.GetName(), handler_name)
 		return nil
 	}
 	if len(server.GetJobChan()) > server.GetChanLen()*2 {
-		log.Noticef("GoRoutineLogic[%s].Call target[%s] too many jon chan: %s", self.Name, server.GetName(), handler_name)
+		llog.Noticef("GoRoutineLogic[%s].Call target[%s] too many jon chan: %s", self.Name, server.GetName(), handler_name)
 		return nil
 	}
 	job := ChannelContext{handler_name, sdata, self.readChan, nil}
@@ -277,7 +277,7 @@ func (self *GoRoutineLogic) Call(server IGoRoutine, handler_name string, sdata i
 		rdata := <-self.readChan
 		return rdata.Data
 	case <-time.After(CALL_TIMEOUT * time.Second):
-		log.Noticef("GoRoutineLogic[%s] Call timeout: %s", self.Name, handler_name)
+		llog.Noticef("GoRoutineLogic[%s] Call timeout: %s", self.Name, handler_name)
 		return nil
 	}
 }
@@ -287,7 +287,7 @@ func (self *GoRoutineLogic) CallFunc(cb HanlderFunc, data interface{}) interface
 		if r := recover(); r != nil {
 			buf := make([]byte, 4096)
 			l := runtime.Stack(buf, false)
-			log.Errorf("%s CallFunc %v: %s\n%v", self.Name, r, buf[:l], data)
+			llog.Errorf("%s CallFunc %v: %s\n%v", self.Name, r, buf[:l], data)
 		}
 	}()
 
@@ -356,7 +356,7 @@ func (self *GoRoutineLogic) init(name string) {
 }
 
 func ServiceHandler(igo IGoRoutine, data interface{}) interface{} {
-	//log.Debugf("ServiceHandler[%s]: %v", igo.GetName(), data)
+	//llog.Debugf("ServiceHandler[%s]: %v", igo.GetName(), data)
 	m := data.(M)
 	igo.CallNetFunc(&m)
 	return nil

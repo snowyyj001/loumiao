@@ -1,4 +1,4 @@
-package log
+package llog
 
 import (
 	"fmt"
@@ -29,7 +29,7 @@ func init() {
 		logger.Attach("console", config.GAME_LOG_LEVEL, consoleConfig)
 	} else {
 		filename := fmt.Sprintf("./logs/%s/%s.log", config.SERVER_NAME, config.SERVER_NAME)
-		//filename := fmt.Sprintf("./logs/%s.%s.log", config.SERVER_NAME, time.Now().Format("2006-01-02.15.04.05"))
+		//filename := fmt.Sprintf("./logs/%s.%s.llog", config.SERVER_NAME, time.Now().Format("2006-01-02.15.04.05"))
 		dealLogs(filename)
 		// 文件输出配置
 		fileConfig := &go_logger.FileConfig{
@@ -45,92 +45,94 @@ func init() {
 	}
 }
 
-//log emergency level
+//llog emergency level
 func Emergency(msg string) {
 	logger.Emergency(msg)
 }
 
-//log emergency format
+//llog emergency format
 func Emergencyf(format string, a ...interface{}) {
 	logger.Emergencyf(format, a...)
 }
 
-//log alert level
+//llog alert level
 func Alert(msg string) {
 	logger.Alert(msg)
 }
 
-//log alert format
+//llog alert format
 func Alertf(format string, a ...interface{}) {
 	logger.Alertf(format, a...)
 }
 
-//log critical level
+//llog critical level
 func Critical(msg string) {
 	logger.Critical(msg)
 }
 
-//log critical format
+//llog critical format
 func Criticalf(format string, a ...interface{}) {
 	logger.Criticalf(format, a...)
 }
 
-//log error level
+//llog error level
 func Error(msg string) {
 	logger.Error(msg)
 }
 
-//log error format
+//llog error format
 func Errorf(format string, a ...interface{}) {
 	logger.Errorf(format, a...)
 }
 
-//log warning level
+//llog warning level
 func Warning(msg string) {
 	logger.Warning(msg)
 }
 
-//log warning format
+//llog warning format
 func Warningf(format string, a ...interface{}) {
 	logger.Warningf(format, a...)
 }
 
-//log notice level
+//llog notice level
 func Notice(msg string) {
 	logger.Notice(msg)
 }
 
-//log notice format
+//llog notice format
 func Noticef(format string, a ...interface{}) {
 	logger.Noticef(format, a...)
 }
 
-//log info level
+//llog info level
 func Info(msg string) {
 	logger.Info(msg)
 }
 
-//log info format
+//llog info format
 func Infof(format string, a ...interface{}) {
 	logger.Infof(format, a...)
 }
 
-//log debug level
+//llog debug level
 func Debug(msg string) {
 	logger.Debug(msg)
 }
 
-//log debug format
+//llog debug format
 func Debugf(format string, a ...interface{}) {
 	logger.Debugf(format, a...)
 }
 
-//log Fatal
+//llog Fatal
 func Fatal(msg string) {
+	Error(msg)
 	log.Fatal(msg)
 }
 
-//log Fatal
+//llog Fatal
 func Fatalf(msg string, a ...interface{}) {
+	Errorf(msg, a)
 	log.Fatalf(msg, a)
 }
