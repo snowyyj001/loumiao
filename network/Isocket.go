@@ -3,6 +3,7 @@ package network
 import (
 	"encoding/binary"
 	"net"
+	"runtime"
 
 	"github.com/snowyyj001/loumiao/base"
 
@@ -15,8 +16,7 @@ import (
 const (
 	SSF_ACCEPT = iota
 	SSF_CONNECT
-	SSF_SHUT_DOWN    //已经关闭
-	SSF_SHUT_DOWNING //将要关闭
+	SSF_SHUT_DOWN //已经关闭
 )
 
 const (
@@ -28,6 +28,13 @@ const (
 const (
 	MAX_WRITE_CHAN = 32
 )
+
+func handleError(err error) {
+	if err == nil {
+		return
+	}
+	llog.Errorf("错误：%s\n", err.Error())
+}
 
 type (
 	HandleFunc func(int, []byte, int) bool //回调函数
@@ -147,12 +154,16 @@ func (self *Socket) Clear() {
 }
 
 func (self *Socket) Close() {
+	if !self.m_bShuttingDown {
+		return
+	}
 	if self.m_Conn != nil {
 		self.m_Conn.Close()
 	}
 	if self.m_WsConn != nil {
 		self.m_WsConn.Close()
 	}
+	self.m_bShuttingDown = true
 }
 
 func (self *Socket) GetMaxReceiveBufferSize() int {
@@ -207,8 +218,10 @@ func (self *Socket) HandlePacket(Id int, buff []byte, nlen int) bool {
 
 func (self *Socket) ReceivePacket(Id int, dat []byte) bool {
 	defer func() {
-		if err := recover(); err != nil {
-			llog.Errorf("ReceivePacket", err) // 接受包错误
+		if r := recover(); r != nil {
+			buf := make([]byte, 2048)
+			l := runtime.Stack(buf, false)
+			llog.Errorf("Isocket.ReceivePacket %v: %s", r, buf[:l])
 		}
 	}()
 	//llog.Debugf("收到消息包 %v %d", dat, len(dat))

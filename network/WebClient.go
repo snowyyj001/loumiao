@@ -2,11 +2,13 @@ package network
 
 import (
 	"fmt"
-	"net/url"
 
-	"github.com/snowyyj001/loumiao/message"
+	"net/url"
+	"runtime"
 
 	"github.com/gorilla/websocket"
+	"github.com/snowyyj001/loumiao/llog"
+	"github.com/snowyyj001/loumiao/message"
 )
 
 type WebClient struct {
@@ -43,18 +45,12 @@ func (self *WebClient) Stop() bool {
 	if self.m_bShuttingDown {
 		return true
 	}
-
 	self.m_bShuttingDown = true
+	self.Close()
 	return true
 }
 
 func (self *WebClient) Send(buff []byte) int {
-	defer func() {
-		if err := recover(); err != nil {
-			fmt.Println("WebClient Send", err)
-		}
-	}()
-
 	if self.m_WsConn == nil {
 		return 0
 	}
@@ -99,15 +95,16 @@ func (self *WebClient) OnNetFail(int) {
 }
 
 func wsclientRoutine(pClient *WebClient) bool {
+	defer func() {
+		if r := recover(); r != nil {
+			buf := make([]byte, 2048)
+			l := runtime.Stack(buf, false)
+			llog.Errorf("WebClient.wsclientRoutine %v: %s", r, buf[:l])
+		}
+	}()
 	if pClient.m_WsConn == nil {
 		return false
 	}
-
-	defer func() {
-		if err := recover(); err != nil {
-			fmt.Println("wsclientRoutine", err)
-		}
-	}()
 
 	for {
 		if pClient.m_bShuttingDown {
@@ -134,6 +131,6 @@ func wsclientRoutine(pClient *WebClient) bool {
 
 	}
 
-	pClient.Close()
+	pClient.Stop()
 	return true
 }

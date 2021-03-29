@@ -7,6 +7,8 @@ import (
 	"runtime"
 	"syscall"
 
+	"github.com/snowyyj001/loumiao/msg"
+
 	"github.com/snowyyj001/loumiao/config"
 
 	"github.com/snowyyj001/loumiao/util/timer"
@@ -94,12 +96,20 @@ func SendClient(clientid int, data interface{}) {
 }
 
 //发送给客户端消息
-func SendMulClient(igo gorpc.IGoRoutine, clientids []int, data interface{}) {
+//@clientids: 客户端userid, 空代表全服发送
+//@data: 消息结构体指针
+func SendMulClient(clientids []int, data interface{}) {
 	buff, _ := message.Encode(0, "", data)
 	m := gorpc.MS{Ids: clientids, Data: buff}
 	server := gorpc.MGR.GetRoutine("GateServer")
 	job := gorpc.ChannelContext{"SendMulClient", m, nil, nil}
 	server.GetJobChan() <- job
+}
+
+//广播消息
+//@data: 消息结构体指针
+func BroadCastMsg(data interface{}) {
+	SendMulClient(nil, data)
 }
 
 //获得rpc注册名
@@ -176,4 +186,13 @@ func SendAcotr(actorName string, actorHandler string, data interface{}) {
 	server := gorpc.MGR.GetRoutine(actorName)
 	job := gorpc.ChannelContext{actorHandler, data, nil, nil}
 	server.GetJobChan() <- job
+}
+
+//world通知其他server关于client的gate信息,其他server只有知道了client属于哪个gate才能发送消息给client
+//@userid: client的userid
+//@targetuid: 目标服务器uid
+//@gateuid: client所属的gate uid
+func BindGate(userid int64, targetuid int, gateuid int) {
+	req := &msg.LouMiaoBindGate{Uid: int32(gateuid), UserId: userid}
+	SendRpc("LouMiaoBindGate", req, targetuid)
 }

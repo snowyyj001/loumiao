@@ -1,7 +1,6 @@
 package network
 
 import (
-	"fmt"
 	"io"
 	"net"
 	"runtime"
@@ -54,13 +53,6 @@ func (self *ClientSocket) Stop() bool {
 }
 
 func (self *ClientSocket) Send(buff []byte) int {
-	defer func() {
-		if err := recover(); err != nil {
-
-			fmt.Println("ClientSocket Send", err)
-		}
-	}()
-
 	if self.m_Conn == nil {
 		return 0
 	}
@@ -117,19 +109,16 @@ func (self *ClientSocket) OnNetFail(int) {
 }
 
 func clientRoutine(pClient *ClientSocket) bool {
+	defer func() {
+		if r := recover(); r != nil {
+			buf := make([]byte, 2048)
+			l := runtime.Stack(buf, false)
+			llog.Errorf("ClientSocket.clientRoutine %v: %s", r, buf[:l])
+		}
+	}()
 	if pClient.m_Conn == nil {
 		return false
 	}
-
-	defer func() {
-		if err := recover(); err != nil {
-			var buf [4096]byte
-			n := runtime.Stack(buf[:], false)
-			data := string(buf[:n])
-			llog.Error(data)
-			llog.Errorf("clientRoutine error: %v", err)
-		}
-	}()
 	var buff = make([]byte, pClient.m_MaxReceiveBufferSize)
 	for {
 		if pClient.m_bShuttingDown {
@@ -156,6 +145,6 @@ func clientRoutine(pClient *ClientSocket) bool {
 		}
 	}
 
-	pClient.Clear()
+	pClient.Stop()
 	return true
 }

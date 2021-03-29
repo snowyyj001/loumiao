@@ -127,7 +127,16 @@ func (self *GoRoutineLogic) CallNetFunc(m *M) {
 
 //同步定时任务
 func (self *GoRoutineLogic) RunTimer(delat int64, f func(int64)) {
-	self.timerCall = f
+	self.timerCall = func(dt int64) {
+		defer func() {
+			if r := recover(); r != nil {
+				buf := make([]byte, 2048)
+				l := runtime.Stack(buf, false)
+				llog.Errorf("GoRoutineLogic.RunTimer[%s] %v: %s", self.Name, r, buf[:l])
+			}
+		}()
+		f(dt)
+	}
 	self.timerDuation = time.Duration(delat) * time.Millisecond
 	self.timer.Reset(self.timerDuation)
 	//self.timer = time.NewTimer(self.timerDuation)
@@ -136,8 +145,10 @@ func (self *GoRoutineLogic) RunTimer(delat int64, f func(int64)) {
 //工作队列
 func (self *GoRoutineLogic) woker() {
 	defer func() {
-		if err := recover(); err != nil {
-			llog.Errorf("GoRoutineLogic woker: %v", err)
+		if r := recover(); r != nil {
+			buf := make([]byte, 2048)
+			l := runtime.Stack(buf, false)
+			llog.Errorf("GoRoutineLogic.woker[%s] %v: %s", self.Name, r, buf[:l])
 		}
 	}()
 	utm := util.TimeStamp()
@@ -285,9 +296,9 @@ func (self *GoRoutineLogic) Call(server IGoRoutine, handler_name string, sdata i
 func (self *GoRoutineLogic) CallFunc(cb HanlderFunc, data interface{}) interface{} {
 	defer func() {
 		if r := recover(); r != nil {
-			buf := make([]byte, 4096)
+			buf := make([]byte, 2048)
 			l := runtime.Stack(buf, false)
-			llog.Errorf("%s CallFunc %v: %s\n%v", self.Name, r, buf[:l], data)
+			llog.Errorf("GoRoutineLogic.CallFunc[%s] %v: %s", self.Name, r, buf[:l])
 		}
 	}()
 

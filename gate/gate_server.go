@@ -40,7 +40,7 @@ users_u: key是client的userid,value是world的uid
 当loumiao是server时:
 tokens：key是gate的socketid，Token.UserId是gate的uid， Token.TokenId是自己的uid(0代表该gate将要被关闭)
 tokens_u：key是gate的uid,value是socketid
-users_u: key是client的userid,value是gate的uid
+users_u: key是client的userid,value是gate的uid {gate通过LouMiaoClientConnect通知world，world通过LouMiaoBindGate通知其他server}
 */
 
 type GateServer struct {
@@ -59,6 +59,7 @@ type GateServer struct {
 	clientEtcd *etcd.ClientDis
 	rpcMap     map[string][]int
 	rpcGates   []int //space for time
+	opened     bool
 
 	m_etcdKey string
 
@@ -98,6 +99,8 @@ func (self *GateServer) DoInit() bool {
 	self.tokens_u = make(map[int]int)
 	self.users_u = make(map[int]int)
 	self.rpcMap = make(map[string][]int) //base64(funcname) -> [uid,uid,...]
+
+	self.opened = false
 
 	handler_Map = make(map[string]string)
 
@@ -160,6 +163,7 @@ func (self *GateServer) DoRegsiter() {
 	self.RegisterGate("LouMiaoBindGate", innerLouMiaoLouMiaoBindGate)
 }
 
+//begin communicate with other nodes
 func (self *GateServer) DoStart() {
 	llog.Info("GateServer DoStart")
 
@@ -168,33 +172,15 @@ func (self *GateServer) DoStart() {
 	if util.CheckErr(err) {
 		llog.Fatalf("etcd connect failed: %v", config.Cfg.EtcdAddr)
 	}
-
-	if self.pService != nil {
-		if self.pService.Start() == false {
-			util.Assert(nil)
-		}
-	}
-	if self.pInnerService != nil {
-		if self.pInnerService.Start() == false {
-			util.Assert(nil)
-		}
-	}
-
 	self.Id = config.Cfg.NetCfg.Uid
 	self.m_etcdKey = fmt.Sprintf("%s%s", define.ETCD_NODEINFO, config.NET_GATE_SADDR)
 	self.clientEtcd = client
-
-	llog.Infof("GateServer DoStart success: name=%s,saddr=%s,uid=%d", self.Name, config.NET_GATE_SADDR, self.Id)
-}
-
-//begin communicate with other nodes
-func (self *GateServer) DoOpen() {
 	self.clientEtcd.SetLeasefunc(leaseCallBack)
 	self.clientEtcd.SetLease(int64(config.GAME_LEASE_TIME), true)
-	//register my addr
 
+	//register my addr
 	obj, _ := json.Marshal(&config.Cfg.NetCfg)
-	err := self.clientEtcd.PutService(self.m_etcdKey, string(obj))
+	err = self.clientEtcd.PutService(self.m_etcdKey, string(obj))
 	if err != nil {
 		llog.Fatalf("etcd PutService error %v", err)
 	}
@@ -219,6 +205,24 @@ func (self *GateServer) DoOpen() {
 			}
 		}
 	}
+
+	llog.Infof("GateServer DoStart success: name=%s,saddr=%s,uid=%d", self.Name, config.NET_GATE_SADDR, self.Id)
+}
+
+//begin start socket servie
+func (self *GateServer) DoOpen() {
+	if self.pService != nil {
+		if self.pService.Start() == false {
+			util.Assert(nil)
+		}
+	}
+	if self.pInnerService != nil {
+		if self.pInnerService.Start() == false {
+			util.Assert(nil)
+		}
+	}
+	self.opened = true
+	llog.Infof("GateServer DoOpen success: name=%s,saddr=%s,uid=%d", self.Name, config.NET_GATE_SADDR, self.Id)
 }
 
 //simple register self net hanlder, this func can only be called before igo started
@@ -283,6 +287,7 @@ func (self *GateServer) DoDestory() {
 	if self.clientEtcd != nil {
 		self.clientEtcd.RevokeLease()
 	}
+	This.opened = false
 }
 
 //goroutine unsafe

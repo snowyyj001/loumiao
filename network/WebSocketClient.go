@@ -34,12 +34,6 @@ func (self *WebSocketClient) Start() bool {
 }
 
 func (self *WebSocketClient) Send(buff []byte) int {
-	defer func() {
-		if err := recover(); err != nil {
-			llog.Errorf("WebSocketClient Send", err)
-		}
-	}()
-
 	if self.m_WsConn == nil {
 		return 0
 	}
@@ -56,10 +50,19 @@ func (self *WebSocketClient) OnNetConn() {
 }
 
 func (self *WebSocketClient) OnNetFail(error int) {
-	self.Stop()
 	buff, nLen := message.Encode(0, "DISCONNECT", nil)
 	//bufflittle := common.BigEngianToLittle(buff, nLen)
 	self.HandlePacket(self.m_ClientId, buff, nLen)
+	self.Stop()
+}
+
+func (self *WebSocketClient) Stop() bool {
+	if self.m_bShuttingDown {
+		return false
+	}
+	self.m_bShuttingDown = true
+	self.Close()
+	return true
 }
 
 func (self *WebSocketClient) Close() {
@@ -103,6 +106,6 @@ func wserverclientRoutine(pClient *WebSocketClient) bool {
 		}
 	}
 
-	pClient.Close()
+	pClient.Stop()
 	return true
 }

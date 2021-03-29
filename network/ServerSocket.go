@@ -32,7 +32,6 @@ type ServerSocket struct {
 	m_ClientList    map[int]*ServerSocketClient
 	m_ClientLocker  *sync.RWMutex
 	m_Listen        *net.TCPListener
-	m_Pool          sync.Pool
 	m_Lock          sync.Mutex
 }
 
@@ -40,12 +39,6 @@ func (self *ServerSocket) Init(saddr string) bool {
 	self.Socket.Init(saddr)
 	self.m_ClientList = make(map[int]*ServerSocketClient)
 	self.m_ClientLocker = &sync.RWMutex{}
-	self.m_Pool = sync.Pool{
-		New: func() interface{} {
-			var s = &ServerSocketClient{}
-			return s
-		},
-	}
 	return true
 }
 func (self *ServerSocket) Start() bool {
@@ -122,7 +115,6 @@ func (self *ServerSocket) AddClinet(tcpConn *net.TCPConn, addr string, connectTy
 }
 
 func (self *ServerSocket) DelClinet(pClient *ServerSocketClient) bool {
-	self.m_Pool.Put(pClient)
 	self.m_ClientLocker.Lock()
 	delete(self.m_ClientList, pClient.m_ClientId)
 	llog.Debugf("客户端：%s已断开连接[%d]", pClient.m_Conn.RemoteAddr().String(), pClient.m_ClientId)
@@ -132,7 +124,6 @@ func (self *ServerSocket) DelClinet(pClient *ServerSocketClient) bool {
 }
 
 func (self *ServerSocket) StopClient(id int) {
-	llog.Debugf("ServerSocket.StopClient: %d", id)
 	pClinet := self.GetClientById(id)
 	if pClinet != nil {
 		pClinet.Stop()
@@ -140,7 +131,7 @@ func (self *ServerSocket) StopClient(id int) {
 }
 
 func (self *ServerSocket) LoadClient() *ServerSocketClient {
-	s := self.m_Pool.Get().(*ServerSocketClient)
+	s := &ServerSocketClient{}
 	s.m_MaxReceiveBufferSize = self.m_MaxReceiveBufferSize
 	s.m_MaxSendBufferSize = self.m_MaxSendBufferSize
 	return s
@@ -150,9 +141,8 @@ func (self *ServerSocket) Stop() bool {
 	if self.m_bShuttingDown {
 		return true
 	}
-
 	self.m_bShuttingDown = true
-	self.m_nState = SSF_SHUT_DOWN
+	self.Close()
 	return true
 }
 
@@ -190,9 +180,9 @@ func (self *ServerSocket) OnNetFail(int) {
 }
 
 func (self *ServerSocket) Close() {
-	defer self.m_Listen.Close()
+	self.m_Listen.Close()
 	self.Clear()
-	//self.m_Pool.Put(self)
+
 }
 
 func (self *ServerSocket) SetMaxClients(maxnum int) {
@@ -200,12 +190,6 @@ func (self *ServerSocket) SetMaxClients(maxnum int) {
 }
 
 func SendClient(pClient *ServerSocketClient, buff []byte) {
-	defer func() {
-		if err := recover(); err != nil {
-			llog.Errorf("SendRpc", err) // 这里的err其实就是panic传入的内容，55
-		}
-	}()
-
 	if pClient != nil {
 		pClient.Send(buff)
 	}

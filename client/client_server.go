@@ -2,6 +2,8 @@
 package client
 
 import (
+	"runtime"
+
 	"github.com/snowyyj001/loumiao/config"
 	"github.com/snowyyj001/loumiao/gorpc"
 	"github.com/snowyyj001/loumiao/llog"
@@ -51,8 +53,10 @@ func (self *ClientServer) DoDestory() {
 
 func PacketFunc(socketid int, buff []byte, nlen int) bool {
 	defer func() {
-		if err := recover(); err != nil {
-			llog.Errorf("MsgProcess PacketFunc: %v", err)
+		if r := recover(); r != nil {
+			buf := make([]byte, 2048)
+			l := runtime.Stack(buf, false)
+			llog.Errorf("ClientServer.PacketFunc %v: %s", r, buf[:l])
 		}
 	}()
 	err, name, pm := message.Decode(buff, nlen)

@@ -33,7 +33,7 @@ type WebSocket struct {
 	m_bNagle        bool
 	m_ClientList    map[int]*WebSocketClient
 	m_ClientLocker  *sync.RWMutex
-	m_Pool          sync.Pool
+	m_httpServer    *http.Server
 	m_Lock          sync.Mutex
 }
 
@@ -49,12 +49,6 @@ func (self *WebSocket) Init(saddr string) bool {
 	self.Socket.Init(saddr)
 	self.m_ClientList = make(map[int]*WebSocketClient)
 	self.m_ClientLocker = &sync.RWMutex{}
-	self.m_Pool = sync.Pool{
-		New: func() interface{} {
-			var s = &WebSocketClient{}
-			return s
-		},
-	}
 	return true
 }
 func (self *WebSocket) Start() bool {
@@ -66,8 +60,9 @@ func (self *WebSocket) Start() bool {
 
 	http.HandleFunc("/", serveHome)
 	http.HandleFunc("/ws", serveWs)
+	self.m_httpServer = &http.Server{Addr: self.m_sAddr}
 	go func() {
-		err := http.ListenAndServe(self.m_sAddr, nil)
+		err := self.m_httpServer.ListenAndServe()
 		if err != nil {
 			llog.Errorf("WebSocket ListenAndServe: %v", err)
 			return
@@ -127,7 +122,6 @@ func (self *WebSocket) AddClinet(wConn *websocket.Conn, addr string, connectType
 }
 
 func (self *WebSocket) DelClinet(pClient *WebSocketClient) bool {
-	self.m_Pool.Put(pClient)
 	self.m_ClientLocker.Lock()
 	delete(self.m_ClientList, pClient.m_ClientId)
 	llog.Debugf("客户端：%s已断开连接[%d]！", pClient.m_WsConn.RemoteAddr().String(), pClient.m_ClientId)
@@ -144,7 +138,7 @@ func (self *WebSocket) StopClient(id int) {
 }
 
 func (self *WebSocket) LoadClient() *WebSocketClient {
-	s := self.m_Pool.Get().(*WebSocketClient)
+	s := &WebSocketClient{}
 	s.m_MaxReceiveBufferSize = self.m_MaxReceiveBufferSize
 	s.m_MaxSendBufferSize = self.m_MaxSendBufferSize
 	return s
@@ -154,9 +148,8 @@ func (self *WebSocket) Stop() bool {
 	if self.m_bShuttingDown {
 		return true
 	}
-
 	self.m_bShuttingDown = true
-	self.m_nState = SSF_SHUT_DOWN
+	self.Close()
 	return true
 }
 
@@ -194,8 +187,8 @@ func (self *WebSocket) OnNetFail(int) {
 }
 
 func (self *WebSocket) Close() {
+	self.m_httpServer.Close()
 	self.Clear()
-	//self.m_Pool.Put(self)
 }
 
 func (self *WebSocket) SetMaxClients(maxnum int) {

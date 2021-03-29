@@ -430,7 +430,7 @@ type LouMiaoBroadCastMsg struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Type       int32  `protobuf:"varint,1,opt,name=Type,proto3" json:"Type,omitempty"` //>0指定目标服务器类型
+	Type       int32  `protobuf:"varint,1,opt,name=Type,proto3" json:"Type,omitempty"` //指定目标服务器类型
 	FuncName   string `protobuf:"bytes,2,opt,name=FuncName,proto3" json:"FuncName,omitempty"`
 	Buffer     []byte `protobuf:"bytes,3,opt,name=Buffer,proto3" json:"Buffer,omitempty"`
 	ByteBuffer int32  `protobuf:"varint,4,opt,name=ByteBuffer,proto3" json:"ByteBuffer,omitempty"` //消息内容是否为二进制格式

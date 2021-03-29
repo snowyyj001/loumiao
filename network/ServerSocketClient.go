@@ -3,6 +3,7 @@ package network
 import (
 	"io"
 	"net"
+	"runtime"
 
 	"github.com/snowyyj001/loumiao/llog"
 	"github.com/snowyyj001/loumiao/message"
@@ -15,13 +16,6 @@ type IServerSocketClient interface {
 type ServerSocketClient struct {
 	Socket
 	m_pServer *ServerSocket
-}
-
-func handleError(err error) {
-	if err == nil {
-		return
-	}
-	llog.Errorf("错误：%s\n", err.Error())
 }
 
 func (self *ServerSocketClient) Start() bool {
@@ -44,12 +38,6 @@ func (self *ServerSocketClient) Start() bool {
 }
 
 func (self *ServerSocketClient) Send(buff []byte) int {
-	defer func() {
-		if err := recover(); err != nil {
-			llog.Errorf("ServerSocketClient Send", err)
-		}
-	}()
-
 	n, err := self.m_Conn.Write(buff)
 	handleError(err)
 	if n > 0 {
@@ -63,10 +51,22 @@ func (self *ServerSocketClient) OnNetConn() {
 	self.HandlePacket(self.m_ClientId, buff, nLen)
 }
 
-func (self *ServerSocketClient) OnNetFail(error int) {
-	self.Stop()
+func (self *ServerSocketClient) OnNetFail(errcode int) {
 	buff, nLen := message.Encode(0, "DISCONNECT", nil)
 	self.HandlePacket(self.m_ClientId, buff, nLen)
+
+	//llog.Debugf("ServerSocketClient.OnNetFail %d", errcode)
+	self.Stop()
+}
+
+func (self *ServerSocketClient) Stop() bool {
+	//llog.Debugf("ServerSocketClient.Stop %d, %d", self.m_ClientId, self.m_bShuttingDown)
+	if self.m_bShuttingDown {
+		return false
+	}
+	self.m_bShuttingDown = true
+	self.Close()
+	return true
 }
 
 func (self *ServerSocketClient) Close() {
@@ -77,15 +77,16 @@ func (self *ServerSocketClient) Close() {
 }
 
 func serverclientRoutine(pClient *ServerSocketClient) bool {
+	defer func() {
+		if r := recover(); r != nil {
+			buf := make([]byte, 2048)
+			l := runtime.Stack(buf, false)
+			llog.Errorf("ServerSocketClient.serverclientRoutine %v: %s", r, buf[:l])
+		}
+	}()
 	if pClient.m_Conn == nil {
 		return false
 	}
-
-	defer func() {
-		if err := recover(); err != nil {
-			llog.Errorf("serverclientRoutine: %v", err)
-		}
-	}()
 	var buff = make([]byte, pClient.m_MaxReceiveBufferSize)
 	for {
 		if pClient.m_bShuttingDown {
@@ -96,24 +97,25 @@ func serverclientRoutine(pClient *ServerSocketClient) bool {
 
 		n, err := pClient.m_Conn.Read(buff)
 		if err == io.EOF {
-			llog.Debugf("远程链接：%s已经关闭！", pClient.GetSAddr())
+			llog.Infof("远程m_Conn：%s已经关闭！", pClient.GetSAddr())
 			pClient.OnNetFail(1)
 			break
 		}
 		if err != nil {
-			handleError(err)
+			llog.Errorf("远程read错误: %s！", pClient.GetSAddr())
 			pClient.OnNetFail(2)
 			break
 		}
 		if n > 0 {
 			ok := pClient.ReceivePacket(pClient.m_ClientId, buff[:n])
 			if !ok {
+				llog.Errorf("远程ReceivePacket错误: %s！", pClient.GetSAddr())
 				pClient.OnNetFail(3)
 				break
 			}
 		}
 	}
 
-	pClient.Close()
+	pClient.Stop()
 	return true
 }

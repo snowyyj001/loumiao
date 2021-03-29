@@ -132,8 +132,12 @@ func (self *EtcdBase) listenLeaseRespChan() {
 
 //撤销租约
 func (self *EtcdBase) RevokeLease() error {
+	if self.leaseResp == nil {
+		return fmt.Errorf("RevokeLease: lease has already been ewvoked")
+	}
 	self.canclefunc()
 	_, err := self.lease.Revoke(context.TODO(), self.leaseResp.ID)
+	self.leaseResp = nil
 	return err
 }
 
