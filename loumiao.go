@@ -90,9 +90,7 @@ func UnRegisterNetHandler(igo gorpc.IGoRoutine, name string) {
 func SendClient(clientid int, data interface{}) {
 	buff, _ := message.Encode(0, "", data)
 	m := gorpc.M{Id: clientid, Data: buff}
-	server := gorpc.MGR.GetRoutine("GateServer")
-	job := gorpc.ChannelContext{"SendClient", m, nil, nil}
-	server.GetJobChan() <- job
+	gorpc.MGR.Send("GateServer", "SendClient", m)
 }
 
 //发送给客户端消息
@@ -101,9 +99,7 @@ func SendClient(clientid int, data interface{}) {
 func SendMulClient(clientids []int, data interface{}) {
 	buff, _ := message.Encode(0, "", data)
 	m := gorpc.MS{Ids: clientids, Data: buff}
-	server := gorpc.MGR.GetRoutine("GateServer")
-	job := gorpc.ChannelContext{"SendMulClient", m, nil, nil}
-	server.GetJobChan() <- job
+	gorpc.MGR.Send("GateServer", "SendMulClient", m)
 }
 
 //广播消息
@@ -183,9 +179,7 @@ func SendGate(clientid int, data interface{}) {
 //@actorHandler: 目标actor的处理函数
 //@data: 函数参数
 func SendAcotr(actorName string, actorHandler string, data interface{}) {
-	server := gorpc.MGR.GetRoutine(actorName)
-	job := gorpc.ChannelContext{actorHandler, data, nil, nil}
-	server.GetJobChan() <- job
+	gorpc.MGR.Send(actorName, actorHandler, data)
 }
 
 //world通知其他server关于client的gate信息,其他server只有知道了client属于哪个gate才能发送消息给client
