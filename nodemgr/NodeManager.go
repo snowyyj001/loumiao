@@ -22,6 +22,7 @@ var (
 	node_Map      map[string]*NodeInfo //服务器信息
 	saddr_uid_Map map[int]string       //saddr -> uid
 	nodeLock      sync.RWMutex
+	SocketActive  bool //本子节点网络状态
 )
 
 func init() {

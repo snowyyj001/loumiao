@@ -27,8 +27,6 @@ type ServerSocket struct {
 	m_nMinClients   int
 	m_nIdSeed       int32
 	m_bShuttingDown bool
-	m_bCanAccept    bool
-	m_bNagle        bool
 	m_ClientList    map[int]*ServerSocketClient
 	m_ClientLocker  *sync.RWMutex
 	m_Listen        *net.TCPListener
@@ -42,6 +40,10 @@ func (self *ServerSocket) Init(saddr string) bool {
 	return true
 }
 func (self *ServerSocket) Start() bool {
+	if self.m_nConnectType == 0 {
+		llog.Error("ServerSocket.Start error : unkonwen socket type")
+		return false
+	}
 	self.m_bShuttingDown = false
 
 	if self.m_sAddr == "" {
@@ -60,7 +62,6 @@ func (self *ServerSocket) Start() bool {
 	}
 
 	llog.Infof("ServerSocket 启动监听，等待链接！%s", self.m_sAddr)
-
 	self.m_Listen = ln
 	//延迟，监听关闭
 	//defer ln.Close()
@@ -109,7 +110,8 @@ func (self *ServerSocket) AddClinet(tcpConn *net.TCPConn, addr string, connectTy
 		llog.Debugf("客户端：%s已连接[%d]", tcpConn.RemoteAddr().String(), pClient.m_ClientId)
 		return pClient
 	} else {
-		llog.Errorf("%s", "无法创建客户端连接对象")
+		tcpConn.Close()
+		llog.Errorf("ServerSocket.AddClinet %s", "无法创建客户端连接对象")
 	}
 	return nil
 }
@@ -126,7 +128,7 @@ func (self *ServerSocket) DelClinet(pClient *ServerSocketClient) bool {
 func (self *ServerSocket) StopClient(id int) {
 	pClinet := self.GetClientById(id)
 	if pClinet != nil {
-		pClinet.Stop()
+		pClinet.Close()
 	}
 }
 
@@ -135,15 +137,6 @@ func (self *ServerSocket) LoadClient() *ServerSocketClient {
 	s.m_MaxReceiveBufferSize = self.m_MaxReceiveBufferSize
 	s.m_MaxSendBufferSize = self.m_MaxSendBufferSize
 	return s
-}
-
-func (self *ServerSocket) Stop() bool {
-	if self.m_bShuttingDown {
-		return true
-	}
-	self.m_bShuttingDown = true
-	self.Close()
-	return true
 }
 
 func (self *ServerSocket) SendById(id int, buff []byte) int {
@@ -189,29 +182,23 @@ func (self *ServerSocket) SetMaxClients(maxnum int) {
 	self.m_nMaxClients = maxnum
 }
 
-func SendClient(pClient *ServerSocketClient, buff []byte) {
-	if pClient != nil {
-		pClient.Send(buff)
-	}
-}
-
 func serverRoutine(server *ServerSocket) {
 	for {
 		tcpConn, err := server.m_Listen.AcceptTCP()
-		handleError(err)
 		if err != nil {
-			return
+			llog.Errorf("ServerScoket serverRoutine listen err: %s", err.Error())
+			break
 		}
 
 		if server.m_nClientCount >= server.m_nMaxClients {
+			tcpConn.Close()
 			llog.Warning("serverRoutine: too many conns")
-			return
+			continue
 		}
 
-		//延迟，关闭链接
-		//defer tcpConn.Close()
 		handleConn(server, tcpConn, tcpConn.RemoteAddr().String())
 	}
+	server.Close()
 }
 
 func handleConn(server *ServerSocket, tcpConn *net.TCPConn, addr string) bool {

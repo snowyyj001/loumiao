@@ -90,7 +90,7 @@ func (s *Snowflake) Generate() int64 {
 
 func UUID() int64 { //该函数调用应该在config.SERVER_NODE_UID赋值之后
 	if config.SERVER_NODE_UID <= 0 {
-		fmt.Errorf("wrong server uid: %d", config.SERVER_NODE_UID)
+		fmt.Errorf("UUID: wrong server uid: %d", config.SERVER_NODE_UID)
 		return 0
 	}
 	if SnowFlakeInst == nil {

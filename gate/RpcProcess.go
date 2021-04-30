@@ -1,14 +1,11 @@
 package gate
 
 import (
+	"encoding/json"
 	"fmt"
 
-	"github.com/snowyyj001/loumiao/base"
-
-	"github.com/snowyyj001/loumiao/nodemgr"
-
 	"github.com/snowyyj001/loumiao"
-
+	"github.com/snowyyj001/loumiao/base"
 	"github.com/snowyyj001/loumiao/config"
 	"github.com/snowyyj001/loumiao/define"
 	"github.com/snowyyj001/loumiao/gorpc"
@@ -16,6 +13,7 @@ import (
 	"github.com/snowyyj001/loumiao/message"
 	"github.com/snowyyj001/loumiao/msg"
 	"github.com/snowyyj001/loumiao/network"
+	"github.com/snowyyj001/loumiao/nodemgr"
 	"github.com/snowyyj001/loumiao/util"
 )
 
@@ -52,7 +50,7 @@ func innerDisConnect(igo gorpc.IGoRoutine, socketId int, data interface{}) {
 				}
 			}
 		}
-	} else {
+	} else { //gate lost connect with server
 		token, ok := This.tokens[socketId]
 		if ok {
 			userid := token.UserId
@@ -93,7 +91,7 @@ func onClientConnected(uid int, tid int) {
 		}
 		handler, ok := handler_Map["ON_CONNECT"]
 		if ok {
-			m := gorpc.M{Id: tid, Name: "ON_CONNECT", Data: uid}
+			m := &gorpc.M{Id: tid, Name: "ON_CONNECT", Data: uid}
 			gorpc.MGR.Send(handler, "ServiceHandler", m)
 		}
 	} else {
@@ -111,18 +109,18 @@ func onClientConnected(uid int, tid int) {
 
 }
 
-//client disconnected to gate
+//client/gate disconnected to gate/server
 func onClientDisConnected(uid int, tid int) {
 	llog.Debugf("GateServer onClientDisConnected: uid=%d,tid=%d", uid, tid)
-	if config.NET_NODE_TYPE == config.ServerType_Gate {
+	if config.NET_NODE_TYPE == config.ServerType_Gate { //gate
 		req := &msg.LouMiaoClientConnect{ClientId: int64(uid), GateId: int64(This.Id), State: define.CLIENT_DISCONNECT}
 		buff, _ := message.Encode(0, "LouMiaoClientConnect", req)
 		This.SendServer(tid, buff)
 		This.OnlineNum--
-	} else {
+	} else { //server
 		handler, ok := handler_Map["ON_DISCONNECT"]
 		if ok {
-			m := gorpc.M{Id: tid, Name: "ON_DISCONNECT", Data: uid}
+			m := &gorpc.M{Id: tid, Name: "ON_DISCONNECT", Data: uid}
 			gorpc.MGR.Send(handler, "ServiceHandler", m)
 		}
 	}
@@ -130,22 +128,26 @@ func onClientDisConnected(uid int, tid int) {
 
 //gate租约回调
 func leaseCallBack(success bool) {
+	if nodemgr.SocketActive == false {
+		return
+	}
 	//同时检测一下gate网络连接状态
-	if This.opened {
-		if This.ServerType == network.CLIENT_CONNECT { //对外(login,gate)
-			if This.pService.GetState() == int(network.SSF_SHUT_DOWN) { //网络关闭，撤销租约
-				llog.Error("leaseCallBack: socket pService shutdown")
-				This.clientEtcd.RevokeLease()
-				return
-			}
-		} else {
-			if This.pInnerService.GetState() == int(network.SSF_SHUT_DOWN) { //网络关闭，撤销租约
-				llog.Error("leaseCallBack: socket pInnerService shutdown")
-				This.clientEtcd.RevokeLease()
-				return
-			}
+	if This.ServerType == network.CLIENT_CONNECT { //对外(login,gate)
+		if This.pService.GetState() == int(network.SSF_SHUT_DOWN) { //网络关闭，撤销租约
+			llog.Error("leaseCallBack: socket pService shutdown")
+			This.clientEtcd.RevokeLease()
+			nodemgr.SocketActive = false
+			return
+		}
+	} else {
+		if This.pInnerService.GetState() == int(network.SSF_SHUT_DOWN) { //网络关闭，撤销租约
+			llog.Error("leaseCallBack: socket pInnerService shutdown")
+			This.clientEtcd.RevokeLease()
+			nodemgr.SocketActive = false
+			return
 		}
 	}
+
 	if success { //成功续租
 		//str := fmt.Sprintf("%s%s/%s", define.ETCD_NODESTATUS, config.SERVER_GROUP, config.NET_GATE_SADDR)
 		str := fmt.Sprintf("%s/%s", define.ETCD_NODESTATUS, config.NET_GATE_SADDR)
@@ -158,11 +160,11 @@ func leaseCallBack(success bool) {
 			llog.Debugf("尝试重新续租失败")
 		} else {
 			llog.Debugf("尝试重新续租成功")
-			if This.ServerType != network.CLIENT_CONNECT {
-				err := This.clientEtcd.PutService(This.m_etcdKey, config.NET_GATE_SADDR)
-				if err != nil {
-					llog.Fatalf("leaseCallBack PutService error: %v", err)
-				}
+			obj, _ := json.Marshal(&config.Cfg.NetCfg)
+			err = This.clientEtcd.PutService(This.m_etcdKey, string(obj))
+			if err != nil {
+				llog.Errorf("leaseCallBack PutService error: %v", err)
+				This.clientEtcd.RevokeLease()
 			}
 		}
 	}
@@ -175,7 +177,7 @@ func innerLouMiaoLoginGate(igo gorpc.IGoRoutine, socketId int, data interface{})
 	llog.Debugf("innerLouMiaoLoginGate: %v, socketId=%d", m, socketId)
 
 	if This.OnlineNum > config.NET_MAX_NUMBER {
-		llog.Warningf("0.innerLouMiaoLoginGate too many connections: max=%d, now=%d", config.NET_MAX_NUMBER, This.OnlineNum)
+		llog.Errorf("0.innerLouMiaoLoginGate too many connections: max=%d, now=%d", config.NET_MAX_NUMBER, This.OnlineNum)
 		This.closeClient(socketId)
 		return
 	}
@@ -275,9 +277,9 @@ func innerLouMiaoRpcMsg(igo gorpc.IGoRoutine, socketId int, data interface{}) {
 		handler, ok := handler_Map[req.FuncName]
 		if ok {
 			if req.ByteBuffer > 0 { //not pb but bytes
-				m := gorpc.M{Id: int(req.SourceId), Name: req.FuncName, Data: req.Buffer}
+				m := &gorpc.M{Id: int(req.SourceId), Name: req.FuncName, Data: req.Buffer}
 				if handler == "GateServer" {
-					igo.CallNetFunc(&m)
+					igo.CallNetFunc(m)
 				} else {
 					gorpc.MGR.Send(handler, "ServiceHandler", m)
 				}
@@ -287,18 +289,18 @@ func innerLouMiaoRpcMsg(igo gorpc.IGoRoutine, socketId int, data interface{}) {
 				//spm := reflect.Indirect(reflect.ValueOf(pm))
 				//llog.Debugf("innerLouMiaoRpcMsg : spm = %v, typename=%v", spm, reflect.TypeOf(spm.Interface()).Name
 				if err != nil {
-					llog.Warningf("2.innerLouMiaoRpcMsg decode msg error : func=%s, error=%s ", req.FuncName, err.Error())
+					llog.Errorf("2.innerLouMiaoRpcMsg decode msg error : func=%s, error=%s ", req.FuncName, err.Error())
 					return
 				}
-				m := gorpc.M{Id: int(req.SourceId), Name: req.FuncName, Data: pm}
+				m := &gorpc.M{Id: int(req.SourceId), Name: req.FuncName, Data: pm}
 				if handler == "GateServer" {
-					igo.CallNetFunc(&m)
+					igo.CallNetFunc(m)
 				} else {
 					gorpc.MGR.Send(handler, "ServiceHandler", m)
 				}
 			}
 		} else {
-			llog.Warningf("3.InnerLouMiaoRpcMsg no rpc hanlder %s, %d", req.FuncName, socketId)
+			llog.Errorf("3.InnerLouMiaoRpcMsg no rpc hanlder %s, %d", req.FuncName, socketId)
 		}
 	}
 }
@@ -321,9 +323,9 @@ func innerLouMiaoBroadCastMsg(igo gorpc.IGoRoutine, socketId int, data interface
 		handler, ok := handler_Map[req.FuncName]
 		if ok {
 			if req.ByteBuffer > 0 { //not pb but bytes
-				m := gorpc.M{Id: int(req.Type), Name: req.FuncName, Data: req.Buffer}
+				m := &gorpc.M{Id: int(req.Type), Name: req.FuncName, Data: req.Buffer}
 				if handler == "GateServer" {
-					igo.CallNetFunc(&m)
+					igo.CallNetFunc(m)
 				} else {
 					gorpc.MGR.Send(handler, "ServiceHandler", m)
 				}
@@ -336,9 +338,9 @@ func innerLouMiaoBroadCastMsg(igo gorpc.IGoRoutine, socketId int, data interface
 					llog.Warningf("2.innerLouMiaoBroadCastMsg decode msg error : func=%s, error=%s ", req.FuncName, err.Error())
 					return
 				}
-				m := gorpc.M{Id: int(req.Type), Name: req.FuncName, Data: pm}
+				m := &gorpc.M{Id: int(req.Type), Name: req.FuncName, Data: pm}
 				if handler == "GateServer" {
-					igo.CallNetFunc(&m)
+					igo.CallNetFunc(m)
 				} else {
 					gorpc.MGR.Send(handler, "ServiceHandler", m)
 				}
@@ -359,8 +361,31 @@ func innerLouMiaoNetMsg(igo gorpc.IGoRoutine, socketId int, data interface{}) {
 		socketId, _ := This.tokens_u[clientid]       // get client's socketid by userid
 		This.pService.SendById(socketId, req.Buffer) //send to client
 	} else { //gate -> server
-		m := gorpc.MI{Id: clientid, Name: len(req.Buffer), Data: req.Buffer}
-		recvPackMsg(igo, m)
+		token, ok := This.tokens[socketId]
+		if ok {
+			This.users_u[clientid] = token.UserId //build client's userid --> gate's uid
+		}
+		err, target, name, pm := message.Decode(This.Id, req.Buffer, len(req.Buffer))
+		if err != nil {
+			llog.Errorf("innerLouMiaoNetMsg Decode error: %s", err.Error())
+		} else {
+			handler, ok := handler_Map[name]
+			if ok {
+				if name == This.Name {
+					cb, ok := This.NetHandler[name]
+					if ok {
+						cb(This, clientid, pm)
+					} else {
+						llog.Errorf("innerLouMiaoNetMsg[%s] handler is nil: %s", name, This.Name)
+					}
+				} else {
+					nm := &gorpc.M{Id: clientid, Name: name, Data: pm}
+					gorpc.MGR.Send(handler, "ServiceHandler", nm)
+				}
+			} else {
+				llog.Errorf("innerLouMiaoNetMsg handler is nil, drop it[%s][%d]", name, target)
+			}
+		}
 	}
 }
 
@@ -386,14 +411,14 @@ func innerLouMiaoClientConnect(igo gorpc.IGoRoutine, socketId int, data interfac
 		This.users_u[clientid] = gateId
 		handler, ok := handler_Map["ON_CONNECT"]
 		if ok {
-			m := gorpc.M{Id: gateId, Name: "ON_CONNECT", Data: clientid}
+			m := &gorpc.M{Id: gateId, Name: "ON_CONNECT", Data: clientid}
 			gorpc.MGR.Send(handler, "ServiceHandler", m)
 		}
 	} else {
 		delete(This.users_u, clientid)
 		handler, ok := handler_Map["ON_DISCONNECT"]
 		if ok {
-			m := gorpc.M{Id: gateId, Name: "ON_DISCONNECT", Data: clientid}
+			m := &gorpc.M{Id: gateId, Name: "ON_DISCONNECT", Data: clientid}
 			gorpc.MGR.Send(handler, "ServiceHandler", m)
 		}
 	}
@@ -407,7 +432,7 @@ func innerLouMiaoLouMiaoBindGate(igo gorpc.IGoRoutine, socketId int, data interf
 }
 
 func registerNet(igo gorpc.IGoRoutine, data interface{}) interface{} {
-	m := data.(gorpc.M)
+	m := data.(*gorpc.M)
 	sname, ok := handler_Map[m.Name]
 	if ok {
 		llog.Errorf("registerNet %s has already been registered: %s", m.Name, sname)
@@ -425,7 +450,7 @@ func unRegisterNet(igo gorpc.IGoRoutine, data interface{}) interface{} {
 }
 
 func sendClient(igo gorpc.IGoRoutine, data interface{}) interface{} {
-	m := data.(gorpc.M)
+	m := data.(*gorpc.M)
 	if config.NET_NODE_TYPE == config.ServerType_Gate {
 		llog.Error("0.sendClient gate can not send client")
 		return nil
@@ -456,15 +481,16 @@ func sendClient(igo gorpc.IGoRoutine, data interface{}) interface{} {
 }
 
 func sendMulClient(igo gorpc.IGoRoutine, data interface{}) interface{} {
-	m := data.(gorpc.MS)
+	m := data.(*gorpc.M)
 	if config.NET_NODE_TYPE == config.ServerType_Gate {
 		llog.Error("0.sendMulClient gate can not send client")
 		return nil
 	}
-	if len(m.Ids) == 0 {
+	if len(m.Name) == 0 {
 		broadCastClients(m.Data.([]byte))
 	} else {
-		for _, v := range m.Ids {
+		ids := util.String2Array(m.Name)
+		for _, v := range ids {
 			uid, _ := This.users_u[v] // get gate's socketid by client's userid
 			socketId, ok := This.tokens_u[uid]
 			if ok {
@@ -483,14 +509,14 @@ func sendMulClient(igo gorpc.IGoRoutine, data interface{}) interface{} {
 
 //new rpc added
 func newRpc(igo gorpc.IGoRoutine, data interface{}) interface{} {
-	m := data.(gorpc.M)
+	m := data.(*gorpc.M)
 	llog.Debugf("GateServer newRpc: %d", m.Id)
 	uid := m.Id
 
 	rpcclient, _ := This.clients[uid]
 	client := m.Data.(*network.ClientSocket)
 	if rpcclient != nil {
-		llog.Warningf("GateServer newRpc: server[%d] has already connected", uid)
+		llog.Errorf("GateServer newRpc: server[%d] has already connected", uid)
 		client.SetClientId(0)
 		client.Stop()
 		return nil
@@ -510,10 +536,10 @@ func sendRpc(igo gorpc.IGoRoutine, data interface{}) interface{} {
 
 	base.Assert(This.ServerType == network.SERVER_CONNECT, "gate or account can not call this func")
 
-	m := data.(gorpc.MM)
+	m := data.(*gorpc.M)
 	clientid := This.getCluserGateClientId()
 	if clientid <= 0 {
-		llog.Warningf("0.sendRpc no gate server finded %s", m.Name)
+		llog.Errorf("0.sendRpc no gate server finded %s", m.Name)
 		return nil
 	}
 	//llog.Debugf("sendRpc: %d", clientid)
@@ -530,10 +556,10 @@ func broadCastRpc(igo gorpc.IGoRoutine, data interface{}) interface{} {
 
 	base.Assert(This.ServerType == network.SERVER_CONNECT, "gate or account can not call this func")
 
-	m := data.(gorpc.MM)
+	m := data.(*gorpc.M)
 	clientid := This.getCluserGateClientId()
 	if clientid <= 0 {
-		llog.Warningf("0.broadCastRpc no gate server finded %s", m.Name)
+		llog.Errorf("0.broadCastRpc no gate server finded %s", m.Name)
 		return nil
 	}
 	//llog.Debugf("broadCastRpc: %d", clientid)
@@ -545,13 +571,13 @@ func broadCastRpc(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	return nil
 }
 
-//send msg to gate
+//server send msg to gate,like rpc call, but not use LouMiaoRpcMsg
 func sendGate(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	if This.ServerType == network.CLIENT_CONNECT {
 		llog.Error("0.sendGate gate or account can not call this function")
 		return nil
 	}
-	m := data.(gorpc.M)
+	m := data.(*gorpc.M)
 	uid := m.Id
 	var clientid int = 0
 
@@ -571,54 +597,28 @@ func sendGate(igo gorpc.IGoRoutine, data interface{}) interface{} {
 }
 
 func recvPackMsg(igo gorpc.IGoRoutine, data interface{}) interface{} {
-	m := data.(gorpc.MI)
+	m := data.(*gorpc.M)
 	socketid := m.Id
+	target := m.Param
 
-	err, target, name, pm := message.Decode(This.Id, m.Data.([]byte), m.Name)
-
-	if err != nil {
-		llog.Errorf("recvPackMsg Decode error: %s", err.Error())
-		This.closeClient(socketid)
+	rpcClient := This.GetRpcClient(target)
+	if rpcClient == nil {
+		llog.Warningf("0.recvPackMsg msg, but server has lost[%d] ", target)
+		node := nodemgr.GetNode(target)
+		if node == nil || node.Type == config.ServerType_World { //if the world lost,we should let the client relogin
+			This.closeClient(socketid)
+		}
 		return nil
 	}
-	if target == This.Id || target <= 0 { //send to me
-		handler, ok := handler_Map[name]
-		if ok {
-			if handler == This.Name {
-				cb, ok := This.NetHandler[name]
-				if ok {
-					cb(This, socketid, pm)
-				} else {
-					llog.Warningf("recvPackMsg[%s] handler is nil: %s", name, This.Name)
-				}
-			} else {
-				nm := gorpc.M{Id: socketid, Name: name, Data: pm}
-				gorpc.MGR.Send(handler, "ServiceHandler", nm)
-			}
 
-		} else {
-			llog.Warningf("recvPackMsg self handler is nil, drop it[%s]", name)
-		}
-	} else { //send to target server
-		rpcClient := This.GetRpcClient(target)
-		if rpcClient == nil {
-			llog.Warningf("1.recvPackMsg msg, but server has lost[%d][%d] ", target, m.Name)
-			node := nodemgr.GetNode(target)
-			if node == nil || node.Type == config.ServerType_World { //if the world lost,we should let the client relogin
-				This.closeClient(socketid)
-			}
-			return nil
-		}
-
-		token, ok := This.tokens[socketid]
-		if ok == false {
-			llog.Warningf("0.recvPackMsg recv client msg, but client has lost[%d][%d][%s][%d] ", target, socketid, name, m.Name)
-			return nil
-		}
-		msg := &msg.LouMiaoNetMsg{ClientId: int64(token.UserId), Buffer: m.Data.([]byte)}
-		buff, newlen := message.Encode(target, "LouMiaoNetMsg", msg)
-		rpcClient.Send(buff[0:newlen])
+	token, ok := This.tokens[socketid]
+	if ok == false {
+		llog.Warningf("1.recvPackMsg msg, but client has lost[%d] ", target)
+		return nil
 	}
+	msg := &msg.LouMiaoNetMsg{ClientId: int64(token.UserId), Buffer: m.Data.([]byte)}
+	buff, newlen := message.Encode(target, "LouMiaoNetMsg", msg)
+	rpcClient.Send(buff[0:newlen])
 
 	return nil
 }
@@ -633,9 +633,7 @@ func closeServer(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	llog.Debugf("closeServer: %d", uid)
 
 	if uid == This.Id {
-		//if This.ServerType == network.SERVER_CONNECT { //removed from server discover
-		//	This.clientEtcd.DelService(This.m_etcdKey)
-		//}
+		nodemgr.SocketActive = false
 		return nil
 	}
 
@@ -651,6 +649,12 @@ func closeServer(igo gorpc.IGoRoutine, data interface{}) interface{} {
 			This.rpcGates = util.RemoveSlice(This.rpcGates, socketId)
 		}
 	}
+	return nil
+}
+
+func bindGate(igo gorpc.IGoRoutine, data interface{}) interface{} {
+	req := data.(*msg.LouMiaoBindGate)
+	This.users_u[int(req.UserId)] = int(req.Uid)
 	return nil
 }
 

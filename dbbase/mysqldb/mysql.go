@@ -3,7 +3,9 @@ package mysqldb
 
 import (
 	"fmt"
-	"sync/atomic"
+	"sync"
+
+	"github.com/snowyyj001/loumiao/util"
 
 	"github.com/snowyyj001/loumiao/config"
 	"github.com/snowyyj001/loumiao/llog"
@@ -14,8 +16,8 @@ import (
 )
 
 const (
-	POOL_IDLE = 20
-	POOL_MAX  = 100
+	POOL_IDLE = 8
+	POOL_MAX  = 16
 )
 
 var (
@@ -23,6 +25,7 @@ var (
 	Slaves   []*gorm.DB
 	SLen     int32
 	SIndex   int32
+	mLock    sync.Mutex
 	logLevel logger.LogLevel = logger.Info
 )
 
@@ -48,8 +51,14 @@ func DBS() *gorm.DB {
 	if SLen == 0 {
 		return Master
 	}
-	atomic.AddInt32(&SIndex, 1)
-	atomic.CompareAndSwapInt32(&SIndex, SLen, 0)
+	//mLock.Lock()
+	//defer mLock.Unlock()
+	SIndex++
+	if SIndex >= SLen {
+		SIndex = 0
+	}
+	//atomic.AddInt32(&SIndex, 1)
+	//atomic.CompareAndSwapInt32(&SIndex, SLen, 0) //相等并不能保证SIndex<SLen
 	return Slaves[SIndex]
 
 }
@@ -58,7 +67,7 @@ func STble(tname string) *gorm.DB {
 	return DBS().Table(tname)
 }
 
-//连接数据库,使用config-mysql参数
+//连接数据库,使用config-mysql参数,同时创建修改表
 func Dial(tbs []interface{}) error {
 	for _, cfg := range config.DBCfg.SqlCfg {
 		uri := fmt.Sprintf("%s:%s@tcp(%s)/%s?charset=utf8&parseTime=True&loc=Local", cfg.DBAccount, cfg.DBPass, cfg.SqlUri, cfg.DBName)
@@ -74,26 +83,33 @@ func Dial(tbs []interface{}) error {
 			return err
 		}
 		sqlDB, _ := engine.DB()
-		sqlDB.SetMaxIdleConns(POOL_IDLE)
-		sqlDB.SetMaxOpenConns(POOL_MAX)
 		if cfg.Master == 1 { //主数据库
+			sqlDB.SetMaxIdleConns(POOL_IDLE)
+			sqlDB.SetMaxOpenConns(POOL_MAX)
 			if Master != nil {
 				return fmt.Errorf("数据库配置错误：%v", cfg)
 			}
 			Master = engine
-		} else {
+		} else { //从库最大连接数根据从库数量调整
+			sqlDB.SetMaxIdleConns(util.Max(POOL_IDLE/(len(config.DBCfg.SqlCfg)-1), 1))
+			sqlDB.SetMaxOpenConns(util.Max(POOL_MAX/(len(config.DBCfg.SqlCfg)-1), 1))
 			Slaves = append(Slaves, engine)
 			SLen++
 		}
 	}
 
 	if tbs != nil {
-		create(tbs)
+		create(Master, tbs)
 	}
 
 	llog.Infof("mysql dail success: %v", config.DBCfg.SqlCfg)
 
 	return nil
+}
+
+//连接数据库,使用config-mysql参数,不创建修改表
+func DialDefault() error {
+	return Dial(nil)
 }
 
 func DialDB(uri string, idle int, maxconn int) *gorm.DB {
@@ -115,29 +131,41 @@ func DialDB(uri string, idle int, maxconn int) *gorm.DB {
 	return engine
 }
 
-func DialOrm(uri string, idle int, maxconn int) *ORMDB {
+func DialOrm(uri string, idle int, maxconn int, tbs []interface{}) *ORMDB {
 	var orm *ORMDB = new(ORMDB)
 	orm.m_Db = DialDB(uri, idle, maxconn)
+	if tbs != nil {
+		create(orm.m_Db, tbs)
+	}
 	return orm
 }
 
 //创建数据表
-func create(tbs []interface{}) {
+func create(db *gorm.DB, tbs []interface{}) {
 	for _, tb := range tbs {
-		Master.Table(tb.(schema.Tabler).TableName()).Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(tb)
+		db.Table(tb.(schema.Tabler).TableName()).Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(tb)
 	}
 }
 
 //使用主库添加st结构
-func MInsert(st schema.Tabler) *gorm.DB {
-	return Master.Table(st.TableName()).Create(st)
+func MInsert(st schema.Tabler) bool {
+	err := Master.Table(st.TableName()).Create(st).Error
+	if err != nil {
+		llog.Warningf("MInsert: %s", err.Error())
+		return false
+	}
+	return true
 }
 
 //使用主库更新st结构的attrs字段
-func MUpdate(st schema.Tabler, attrs ...interface{}) {
+func MUpdate(st schema.Tabler, attrs ...interface{}) bool {
 	sz := len(attrs)
 	if sz == 0 {
-		Master.Table(st.TableName()).Select("*").Updates(st)
+		err := Master.Table(st.TableName()).Select("*").UpdateColumns(st).Error
+		if err != nil {
+			llog.Warningf("MUpdate: %s", err.Error())
+			return false
+		}
 	} else { //这里拆分attrs为两部分，以符合Select函数的参数要求，这很奇葩
 		first := attrs[0]
 		var second []interface{}
@@ -146,11 +174,21 @@ func MUpdate(st schema.Tabler, attrs ...interface{}) {
 				second = append(second, arg)
 			}
 		}
-		Master.Table(st.TableName()).Select(first, second...).Updates(st)
+		err := Master.Table(st.TableName()).Select(first, second...).Updates(st).Error
+		if err != nil {
+			llog.Warningf("MUpdate: %s", err.Error())
+			return false
+		}
 	}
+	return true
 }
 
 //使用主库删除st结构
-func MDelete(st schema.Tabler) {
-	Master.Table(st.TableName()).Delete(st)
+func MDelete(st schema.Tabler) bool {
+	err := Master.Table(st.TableName()).Delete(st).Error
+	if err != nil {
+		llog.Errorf("MDelete: %s", err.Error())
+		return false
+	}
+	return true
 }

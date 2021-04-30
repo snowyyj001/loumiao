@@ -33,10 +33,10 @@ func (self *MTRand) Random() int {
 		self.generate()
 	}
 	y := self.mt[self.index]
-	y = y ^ (y >> 11)                //y右移11个bit
-	y = y ^ ((y << 7) & 2636928640)  //y左移7个bit与2636928640相与，再与y进行异或
-	y = y ^ ((y << 15) & 4022730752) //y左移15个bit与4022730752相与，再与y进行异或
-	y = y ^ (y >> 18)                //y右移18个bit再与y进行异或
+	y = y ^ (y >> 11)                //右移11个bit
+	y = y ^ ((y << 7) & 2636928640)  //左移7个bit与2636928640相与，再与y进行异或
+	y = y ^ ((y << 15) & 4022730752) //左移15个bit与4022730752相与，再与y进行异或
+	y = y ^ (y >> 18)                //右移18个bit再与y进行异或
 	self.index = (self.index + 1) % 624
 
 	return int(y)

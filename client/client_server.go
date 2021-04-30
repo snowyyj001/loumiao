@@ -2,8 +2,6 @@
 package client
 
 import (
-	"runtime"
-
 	"github.com/snowyyj001/loumiao/config"
 	"github.com/snowyyj001/loumiao/gorpc"
 	"github.com/snowyyj001/loumiao/llog"
@@ -19,7 +17,7 @@ var (
 type ClientServer struct {
 	gorpc.GoRoutineLogic
 
-	pService network.ISocket
+	pService *network.ClientSocket
 }
 
 func (self *ClientServer) DoInit() bool {
@@ -28,7 +26,7 @@ func (self *ClientServer) DoInit() bool {
 
 	self.pService = new(network.ClientSocket)
 	//self.client.SetClientId(self.m_ClientId)
-	self.pService.Init(config.NET_CLIENT_IP, config.NET_CLIENT_PORT)
+	self.pService.Init(config.NET_GATE_SADDR)
 	self.pService.SetConnectType(network.SERVER_CONNECT)
 	self.pService.BindPacketFunc(PacketFunc)
 
@@ -39,7 +37,7 @@ func (self *ClientServer) DoInit() bool {
 
 func (self *ClientServer) DoRegsiter() {
 	llog.Info("ClientServer DoRegsiter")
-	self.Register("ServerHanlder", ServerHanlder)
+	self.Register("ServerHanlder", gorpc.ServiceHandler)
 }
 
 func (self *ClientServer) DoStart() {
@@ -52,27 +50,29 @@ func (self *ClientServer) DoDestory() {
 }
 
 func PacketFunc(socketid int, buff []byte, nlen int) bool {
-	defer func() {
-		if r := recover(); r != nil {
-			buf := make([]byte, 2048)
-			l := runtime.Stack(buf, false)
-			llog.Errorf("ClientServer.PacketFunc %v: %s", r, buf[:l])
-		}
-	}()
-	err, name, pm := message.Decode(buff, nlen)
+	err, _, name, pm := message.Decode(0, buff, nlen)
+
 	if err != nil {
+		llog.Errorf("KcpGateServer recvPackMsg Decode error: %s", err.Error())
+		This.pService.Close()
 		return false
 	}
 
 	handler, ok := handler_Map[name]
 	if ok {
-		m := gorpc.M{id: socketid, name: name, data: pm}
-		This.Send(handler, "ServiceHandler", m)
-	} else {
-		if name != "CONNECT" && name != "DISCONNECT" {
-			llog.Noticef("MsgProcess PacketFunc handler is nil, drop it[%s]", name)
+		if handler == This.Name {
+			cb, ok := This.NetHandler[name]
+			if ok {
+				cb(This, socketid, pm)
+			} else {
+				llog.Errorf("ClientServer packetFunc[%s] handler is nil: %s", name, This.Name)
+			}
+		} else {
+			nm := &gorpc.M{Id: socketid, Name: name, Data: pm}
+			gorpc.MGR.Send(handler, "ServiceHandler", nm)
 		}
+	} else {
+		llog.Errorf("ClientServer recvPackMsg self handler is nil, drop it[%s]", name)
 	}
-
 	return true
 }

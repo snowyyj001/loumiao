@@ -9,36 +9,41 @@ type HanlderNetFunc func(igo IGoRoutine, clientid int, data interface{})
 
 // 声明一个数据类型
 type M struct {
-	Id   int
-	Name string
-	Data interface{}
+	Id    int
+	Name  string
+	Param int
+	Data  interface{}
+	Flag  bool //true, 标记M类型的有效数据是Data，否则是自己本身
+}
+
+// 声明一个数据类型
+type MA struct {
+	Id    int
+	Param int
+	Data  interface{}
 }
 
 // 声明一个数据类型
 type MS struct {
 	Ids  []int
-	Name string
 	Data interface{}
 }
 
 // 声明一个数据类型
 type MI struct {
 	Id   int
-	Name int
 	Data interface{}
 }
 
 // 声明一个数据类型
 type MM struct {
-	Id    int
-	Name  string
-	Param int
-	Data  interface{}
+	Id   string
+	Data interface{}
 }
 
 type ChannelContext struct {
 	Handler  string              //处理函数名字
-	Data     interface{}         //传送携带数据
+	Data     M                   //传送携带数据(如果使用Data interface{}，Data会escapes to heap)
 	ReadChan chan ChannelContext //读取chan
 	Cb       HanlderFunc         //回调
 }

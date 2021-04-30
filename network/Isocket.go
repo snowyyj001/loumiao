@@ -6,6 +6,7 @@ import (
 	"runtime"
 
 	"github.com/snowyyj001/loumiao/base"
+	"github.com/xtaci/kcp-go"
 
 	"github.com/snowyyj001/loumiao/config"
 	"github.com/snowyyj001/loumiao/llog"
@@ -20,9 +21,9 @@ const (
 )
 
 const (
-	CLIENT_CONNECT = iota //对外
-	SERVER_CONNECT        //对内
-	CHILD_CONNECT         //client
+	CLIENT_CONNECT = iota + 1 //对外
+	SERVER_CONNECT            //对内
+	CHILD_CONNECT             //client
 )
 
 const (
@@ -41,6 +42,7 @@ type (
 	Socket     struct {
 		m_Conn                 net.Conn
 		m_WsConn               *websocket.Conn
+		m_KcpConn              *kcp.UDPSession
 		m_sAddr                string
 		m_nState               int
 		m_nConnectType         int
@@ -65,7 +67,6 @@ type (
 	ISocket interface {
 		Init(string) bool
 		Start() bool
-		Stop() bool
 		Restart() bool
 		Connect() bool
 		Disconnect(bool) bool
@@ -78,9 +79,9 @@ type (
 		BroadCast(buff []byte)
 
 		GetState() int
-		SetMaxSendBufferSize(int)
+		//SetMaxSendBufferSize(int)
 		GetMaxSendBufferSize() int
-		SetMaxReceiveBufferSize(int)
+		//SetMaxReceiveBufferSize(int)
 		GetMaxReceiveBufferSize() int
 		BindPacketFunc(HandleFunc)
 		SetConnectType(int)
@@ -93,15 +94,11 @@ type (
 // virtual
 func (self *Socket) Init(saddr string) bool {
 	self.m_sAddr = saddr
-	self.m_nState = SSF_SHUT_DOWN
+	self.Clear()
 	return true
 }
 
 func (self *Socket) Start() bool {
-	return true
-}
-func (self *Socket) Stop() bool {
-	self.m_bShuttingDown = true
 	return true
 }
 func (self *Socket) Restart() bool {
@@ -117,7 +114,7 @@ func (self *Socket) OnNetConn(int) {
 }
 
 func (self *Socket) OnNetFail(int) {
-	self.Stop()
+	self.Close()
 }
 
 func (self *Socket) GetState() int {
@@ -150,11 +147,13 @@ func (self *Socket) Clear() {
 	self.m_nState = SSF_SHUT_DOWN
 	self.m_Conn = nil
 	self.m_WsConn = nil
-	self.m_bShuttingDown = false
+	self.m_KcpConn = nil
+	self.m_bShuttingDown = true
+	self.m_nConnectType = -1
 }
 
 func (self *Socket) Close() {
-	if !self.m_bShuttingDown {
+	if self.m_nState == SSF_SHUT_DOWN {
 		return
 	}
 	if self.m_Conn != nil {
@@ -163,34 +162,31 @@ func (self *Socket) Close() {
 	if self.m_WsConn != nil {
 		self.m_WsConn.Close()
 	}
-	self.m_bShuttingDown = true
+	if self.m_KcpConn != nil {
+		self.m_KcpConn.Close()
+	}
+	self.Clear()
+
 }
 
 func (self *Socket) GetMaxReceiveBufferSize() int {
 	return self.m_MaxReceiveBufferSize
 }
 
-func (self *Socket) SetMaxReceiveBufferSize(maxReceiveSize int) {
-	self.m_MaxReceiveBufferSize = maxReceiveSize
-}
-
 func (self *Socket) GetMaxSendBufferSize() int {
 	return self.m_MaxSendBufferSize
 }
 
-func (self *Socket) SetMaxSendBufferSize(maxSendSize int) {
-	self.m_MaxSendBufferSize = maxSendSize
-}
-
 func (self *Socket) SetConnectType(nType int) {
 	self.m_nConnectType = nType
-	if self.m_nConnectType == SERVER_CONNECT {
-		self.m_MaxSendBufferSize = config.NET_BUFFER_SIZE
-		self.m_MaxReceiveBufferSize = config.NET_BUFFER_SIZE
-	} else {
+	if self.m_nConnectType == SERVER_CONNECT { //user for inner
 		self.m_MaxSendBufferSize = config.NET_CLUSTER_BUFFER_SIZE
 		self.m_MaxReceiveBufferSize = config.NET_CLUSTER_BUFFER_SIZE
+	} else {
+		self.m_MaxSendBufferSize = config.NET_BUFFER_SIZE
+		self.m_MaxReceiveBufferSize = config.NET_BUFFER_SIZE
 	}
+	self.m_pInBuffer = make([]byte, self.m_MaxReceiveBufferSize) //预先申请一份内存来换取临时申请，减少gc但每个socket会申请2倍的m_MaxReceiveBufferSize内存大小
 }
 
 func (self *Socket) SetTcpConn(conn net.Conn) {
@@ -203,6 +199,10 @@ func (self *Socket) SetWsConn(conn *websocket.Conn) {
 	self.m_WsConn = conn
 	//self.m_Reader = bufio.NewReader(conn)
 	//self.m_Writer = bufio.NewWriter(conn)
+}
+
+func (self *Socket) SetKcpConn(conn *kcp.UDPSession) {
+	self.m_KcpConn = conn
 }
 
 func (self *Socket) BindPacketFunc(callfunc HandleFunc) {
@@ -225,36 +225,31 @@ func (self *Socket) ReceivePacket(Id int, dat []byte) bool {
 		}
 	}()
 	//llog.Debugf("收到消息包 %v %d", dat, len(dat))
+	copy(self.m_pInBuffer[self.m_pInBufferLen:], dat)
 	self.m_pInBufferLen += len(dat)
-	self.m_pInBuffer = append(self.m_pInBuffer, dat...)
 	for {
 		if self.m_pInBufferLen < 8 {
 			break
 		}
 		mbuff1 := self.m_pInBuffer[0:4]
-		nLen1 := int(base.BytesToUInt32(mbuff1, binary.BigEndian)) //消息总长度
+		nLen := int(base.BytesToUInt32(mbuff1, binary.BigEndian)) //消息总长度
 		//llog.Debugf("当前消息包长度 %d", nLen1)
-
-		if nLen1 > self.m_pInBufferLen {
+		if nLen > self.m_pInBufferLen {
 			break
 		}
-		if nLen1 > self.m_MaxReceiveBufferSize {
-			llog.Errorf("ReceivePacket: 包长度越界[%d][%d]", nLen1, self.m_MaxReceiveBufferSize) // 接受包错误
+		if nLen > self.m_MaxReceiveBufferSize {
+			llog.Errorf("ReceivePacket: 包长度越界[%d][%d]", nLen, self.m_MaxReceiveBufferSize) // 接受包错误
 			self.Close()
 			return false
 		}
 
-		ok := self.HandlePacket(Id, self.m_pInBuffer, int(nLen1))
+		ok := self.HandlePacket(Id, self.m_pInBuffer, nLen)
 		if ok == false {
 			llog.Error("ReceivePacket HandlePacket error")
 			return false
 		}
-		self.m_pInBufferLen -= int(nLen1)
-		if self.m_pInBufferLen > 0 {
-			self.m_pInBuffer = self.m_pInBuffer[int(nLen1):]
-		} else {
-			self.m_pInBuffer = []byte{}
-		}
+		copy(self.m_pInBuffer, self.m_pInBuffer[nLen:self.m_pInBufferLen])
+		self.m_pInBufferLen -= nLen
 	}
 	return true
 }

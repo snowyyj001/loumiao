@@ -7,6 +7,7 @@ import (
 	rand2 "math/rand"
 	"runtime"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/snowyyj001/loumiao/llog"
@@ -72,7 +73,6 @@ func Assert(data interface{}) {
 
 func CheckErr(err error) bool {
 	if err != nil {
-		llog.Error("CheckErr: " + err.Error())
 		return true
 	}
 	return false
@@ -86,6 +86,26 @@ func FloorInt(v int) int {
 func FloorInt64(v int64) int64 {
 	nv := math.Floor(float64(v))
 	return int64(nv)
+}
+
+func Max(a, b int) int {
+	m := int(math.Max(float64(a), float64(b)))
+	return m
+}
+
+func Max64(a, b int64) int64 {
+	m := int64(math.Max(float64(a), float64(b)))
+	return m
+}
+
+func Min(a, b int) int {
+	m := int(math.Min(float64(a), float64(b)))
+	return m
+}
+
+func Min64(a, b int64) int64 {
+	m := int64(math.Min(float64(a), float64(b)))
+	return m
 }
 
 func CopyArray(dst []int, src []int, size int) {
@@ -133,4 +153,29 @@ func Itoa(num int) string {
 
 func Itoa64(num int64) string {
 	return strconv.Itoa(int(num))
+}
+
+func Array2String(arr []int) string {
+	if len(arr) == 0 {
+		return ""
+	}
+	var sb strings.Builder
+	sz := len(arr)
+	for i := 0; i < sz; i++ {
+		sb.WriteString(strconv.Itoa(arr[i]))
+		if i < sz-1 {
+			sb.WriteString(",")
+		}
+	}
+	return sb.String()
+}
+
+func String2Array(str string) []int {
+	arrstr := strings.Split(str, ",")
+	sz := len(arrstr)
+	arr := make([]int, sz)
+	for i := 0; i < sz; i++ {
+		arr[i], _ = strconv.Atoi(arrstr[i])
+	}
+	return arr
 }

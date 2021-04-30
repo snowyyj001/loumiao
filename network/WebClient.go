@@ -27,6 +27,10 @@ func (self *WebClient) Init(saddr string) bool {
 	return true
 }
 func (self *WebClient) Start() bool {
+	if self.m_nConnectType == 0 {
+		llog.Error("WebClient.Start error : unkonwen socket type")
+		return false
+	}
 	self.m_bShuttingDown = false
 
 	if self.m_sAddr == "" {
@@ -38,15 +42,6 @@ func (self *WebClient) Start() bool {
 	}
 	//延迟，监听关闭
 	//defer ln.Close()
-	return true
-}
-
-func (self *WebClient) Stop() bool {
-	if self.m_bShuttingDown {
-		return true
-	}
-	self.m_bShuttingDown = true
-	self.Close()
 	return true
 }
 
@@ -89,9 +84,9 @@ func (self *WebClient) OnNetConn() {
 }
 
 func (self *WebClient) OnNetFail(int) {
-	self.Stop()
 	buff, nLen := message.Encode(0, "C_DISCONNECT", nil)
 	self.HandlePacket(self.m_ClientId, buff, nLen)
+	self.Close()
 }
 
 func wsclientRoutine(pClient *WebClient) bool {
@@ -131,6 +126,6 @@ func wsclientRoutine(pClient *WebClient) bool {
 
 	}
 
-	pClient.Stop()
+	pClient.Close()
 	return true
 }

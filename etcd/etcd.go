@@ -141,7 +141,7 @@ func (self *EtcdBase) RevokeLease() error {
 	return err
 }
 
-//获取一个分布式锁,expire秒后会超时返回nil
+//获取一个分布式锁,expire毫秒后会超时返回nil
 //@prefix: 锁key
 //@expire: 超时时间,毫秒
 func AquireLock(prefix string, expire int) *concurrency.Mutex {
@@ -174,6 +174,30 @@ func UnLock(key string, lockval *concurrency.Mutex) {
 	if lockval != nil {
 		lockval.Unlock(context.TODO())
 	}
+}
+
+//选举leader，所有参与选举的人使用相同的value和prefix，leader负责设置value
+//@prefix: 选举区分标识
+//@value: 本次选举的值，每次发起选举，value应该和上次选举时的value不同
+func AquireLeader(prefix string, value string) (isleader bool) {
+	isleader = false
+	mt := AquireLock(prefix, 100)
+	gresp, err := This.Get(context.TODO(), prefix)
+	if err != nil {
+		return
+	}
+	if len(gresp.Kvs) == 0 { //没有值
+		This.Put(context.TODO(), prefix, value) //set value，就是标记我是本次选举leader
+		isleader = true
+	} else {
+		nowvalue := string(gresp.Kvs[0].Value)
+		if value != nowvalue { //还未被设置该值
+			This.Put(context.TODO(), prefix, value) //set value，就是标记我是本次选举leader
+			isleader = true
+		}
+	}
+	UnLock(prefix, mt)
+	return
 }
 
 //创建etcd服务
@@ -223,7 +247,7 @@ func (self *ClientDis) watchFuc(prefix, key, value string, put bool) {
 		if ok {
 			cb.(HanlderFunc)(key, value, put)
 		} else {
-			llog.Warningf("etcd WatchFuc prefix no handler: %s", prefix)
+			llog.Errorf("etcd WatchFuc prefix no handler: %s", prefix)
 		}
 	}
 }

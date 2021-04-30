@@ -17,9 +17,9 @@ import (
 
 //消息pack,unpack格式
 //消息buffer以大端传输
-//2+4+2+name+msg
-//1，2字节代表消息报总长度
-//3，4，5，6字节代表目标服务器id
+//4+2+2+name+msg
+//1，2，3，4字节代表消息报总长度
+//5，6字节代表目标服务器id
 //7，8字节代表消息名长度
 
 //target: 目标服务器id
@@ -45,7 +45,7 @@ func EncodeProBuff(target int, name string, packet interface{}) ([]byte, int) {
 		pd = packet.(proto.Message)
 		buff, err = proto.Marshal(pd) //buff不为nil，是[]byte{},如果pd没有数据的话
 	}
-	if util.CheckErr(err) {
+	if err != nil {
 		return nil, 0
 	}
 
@@ -82,7 +82,11 @@ func DecodeProBuff(uid int, buff []byte, length int) (error, int, string, interf
 		if filterWarning[msgName] {
 			return nil, target, msgName, nil
 		} else {
-			return nil, target, msgName, GetPakcet(msgName)
+			packet := GetPakcet(msgName)
+			if packet == nil {
+				return fmt.Errorf("DecodeProBuff: packet[%s] may not registered, uid=%d,target=%d", msgName, uid, target), 0, "", nil
+			}
+			return nil, target, msgName, packet
 		}
 
 	}

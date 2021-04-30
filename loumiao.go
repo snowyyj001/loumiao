@@ -7,15 +7,14 @@ import (
 	"runtime"
 	"syscall"
 
-	"github.com/snowyyj001/loumiao/msg"
+	"github.com/snowyyj001/loumiao/util"
 
 	"github.com/snowyyj001/loumiao/config"
-
-	"github.com/snowyyj001/loumiao/util/timer"
-
 	"github.com/snowyyj001/loumiao/gorpc"
 	"github.com/snowyyj001/loumiao/llog"
 	"github.com/snowyyj001/loumiao/message"
+	"github.com/snowyyj001/loumiao/msg"
+	"github.com/snowyyj001/loumiao/util/timer"
 )
 
 var c chan os.Signal
@@ -73,15 +72,28 @@ func Stop() {
 	c <- os.Kill
 }
 
-//注册网络消息
+//注册网络消息,对于内部server节点来说HanlderNetFunc的第二个参数clientid就是userid
 func RegisterNetHandler(igo gorpc.IGoRoutine, name string, call gorpc.HanlderNetFunc) {
-	gorpc.MGR.Send("GateServer", "RegisterNet", gorpc.M{Id: 0, Name: name, Data: igo.GetName()})
+	gorpc.MGR.Send("GateServer", "RegisterNet", &gorpc.M{Id: 0, Name: name, Data: igo.GetName()})
 	igo.RegisterGate(name, call)
 }
 
+//暂时没发现需要撤销注册的情况
 func UnRegisterNetHandler(igo gorpc.IGoRoutine, name string) {
-	gorpc.MGR.Send("GateServer", "UnRegisterNet", gorpc.M{Id: 0, Name: name})
-	igo.UnRegisterGate(name)
+	//	gorpc.MGR.Send("GateServer", "UnRegisterNet", &gorpc.M{Id: 0, Name: name})
+	//	igo.UnRegisterGate(name)
+}
+
+//注册网络消息kcp server,对于内部server节点来说HanlderNetFunc的第二个参数clientid就是真实的socketid
+func RegisterKcpNetHandler(igo gorpc.IGoRoutine, name string, call gorpc.HanlderNetFunc) {
+	gorpc.MGR.Send("KcpGateServer", "RegisterNet", &gorpc.M{Id: 0, Name: name, Data: igo.GetName()})
+	igo.RegisterGate(name, call)
+}
+
+//暂时没发现需要撤销注册的情况
+func UnRegisterKcpNetHandler(igo gorpc.IGoRoutine, name string) {
+	//gorpc.MGR.Send("GateServer", "UnRegisterNet", &gorpc.M{Id: 0, Name: name})
+	//igo.UnRegisterGate(name)
 }
 
 //发送给客户端消息
@@ -89,7 +101,7 @@ func UnRegisterNetHandler(igo gorpc.IGoRoutine, name string) {
 //@data: 消息结构体指针
 func SendClient(clientid int, data interface{}) {
 	buff, _ := message.Encode(0, "", data)
-	m := gorpc.M{Id: clientid, Data: buff}
+	m := &gorpc.M{Id: clientid, Data: buff}
 	gorpc.MGR.Send("GateServer", "SendClient", m)
 }
 
@@ -98,7 +110,8 @@ func SendClient(clientid int, data interface{}) {
 //@data: 消息结构体指针
 func SendMulClient(clientids []int, data interface{}) {
 	buff, _ := message.Encode(0, "", data)
-	m := gorpc.MS{Ids: clientids, Data: buff}
+	ids := util.Array2String(clientids)
+	m := &gorpc.M{Name: ids, Data: buff}
 	gorpc.MGR.Send("GateServer", "SendMulClient", m)
 }
 
@@ -119,13 +132,13 @@ func RpcFuncName(call gorpc.HanlderNetFunc) string {
 func RegisterRpcHandler(igo gorpc.IGoRoutine, call gorpc.HanlderNetFunc) {
 	funcName := RpcFuncName(call)
 	//base64str := base64.StdEncoding.EncodeToString([]byte(funcName))
-	gorpc.MGR.Send("GateServer", "RegisterNet", gorpc.M{Id: -1, Name: funcName, Data: igo.GetName()})
+	gorpc.MGR.Send("GateServer", "RegisterNet", &gorpc.M{Id: -1, Name: funcName, Data: igo.GetName()})
 	igo.RegisterGate(funcName, call)
 }
 
 func UnRegisterRpcHandler(igo gorpc.IGoRoutine, call gorpc.HanlderNetFunc) {
 	funcName := RpcFuncName(call)
-	gorpc.MGR.Send("GateServer", "UnRegisterNet", gorpc.M{Id: -1, Name: funcName})
+	gorpc.MGR.Send("GateServer", "UnRegisterNet", &gorpc.M{Id: -1, Name: funcName})
 	igo.UnRegisterGate(funcName)
 }
 
@@ -134,7 +147,7 @@ func UnRegisterRpcHandler(igo gorpc.IGoRoutine, call gorpc.HanlderNetFunc) {
 //@data: 函数参数,如果data是[]byte类型，则代表使用bitstream或自定义二进制内容，否则data应该是一个messgae注册的pb或json结构体
 //@target: 目标server的uid，如果target==0，则随机指定目标地址, 否则gate会把消息转发给指定的target服务
 func SendRpc(funcName string, data interface{}, target int) {
-	m := gorpc.MM{Id: target, Name: funcName}
+	m := &gorpc.M{Id: target, Name: funcName}
 	if reflect.TypeOf(data).Kind() == reflect.Slice { //bitstream
 		m.Data = data
 		m.Param = 1
@@ -152,7 +165,7 @@ func SendRpc(funcName string, data interface{}, target int) {
 //@data: 函数参数,如果data是[]byte类型，则代表使用bitstream或自定义二进制内容，否则data应该是一个messgae注册的pb或json结构体
 //@target: 目标server的type
 func BroadCastRpc(funcName string, data interface{}, target int) {
-	m := gorpc.MM{Id: target, Name: funcName}
+	m := &gorpc.M{Id: target, Name: funcName}
 	if reflect.TypeOf(data).Kind() == reflect.Slice { //bitstream
 		m.Data = data
 		m.Param = 1
@@ -165,12 +178,12 @@ func BroadCastRpc(funcName string, data interface{}, target int) {
 	gorpc.MGR.Send("GateServer", "BroadCastRpc", m)
 }
 
-//发送给gate的网络消息
+//发送给gate的消息
 //@clientid: 目标gate的uid，如果clientid=0，则会随机选择一个gate发送
 //@data: 发送消息
 func SendGate(clientid int, data interface{}) {
 	buff, _ := message.Encode(clientid, "", data)
-	m := gorpc.M{Id: clientid, Data: buff}
+	m := &gorpc.M{Id: clientid, Data: buff}
 	gorpc.MGR.Send("GateServer", "SendGate", m)
 }
 
@@ -179,14 +192,24 @@ func SendGate(clientid int, data interface{}) {
 //@actorHandler: 目标actor的处理函数
 //@data: 函数参数
 func SendAcotr(actorName string, actorHandler string, data interface{}) {
-	gorpc.MGR.Send(actorName, actorHandler, data)
+	m := &gorpc.M{Data: data, Flag: true}
+	gorpc.MGR.Send(actorName, actorHandler, m)
 }
 
+//主动绑定关于client的gate信息，目前server在收到client的消息包后会自动绑定，并不需要手动绑定，
+//除非需要在收到client消息之前就要发消息给client，这种情况目前没有。
 //world通知其他server关于client的gate信息,其他server只有知道了client属于哪个gate才能发送消息给client
 //@userid: client的userid
-//@targetuid: 目标服务器uid
 //@gateuid: client所属的gate uid
-func BindGate(userid int64, targetuid int, gateuid int) {
-	req := &msg.LouMiaoBindGate{Uid: int32(gateuid), UserId: userid}
-	SendRpc("LouMiaoBindGate", req, targetuid)
+//@targetuid: 目标服务器uid，如果=0，则是自己绑定自己
+func BindGate(userid int64, gateuid int, targetuid int) {
+	if targetuid > 0 {
+		req := &msg.LouMiaoBindGate{Uid: int32(gateuid), UserId: userid}
+		SendRpc("LouMiaoBindGate", req, targetuid)
+	} else {
+		req := &msg.LouMiaoBindGate{Uid: int32(gateuid), UserId: userid}
+		m := &gorpc.M{Data: req, Flag: true}
+		gorpc.MGR.Send("GateServer", "BindGate", m)
+	}
+
 }

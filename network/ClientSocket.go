@@ -30,6 +30,10 @@ func (self *ClientSocket) Init(saddr string) bool {
 	return true
 }
 func (self *ClientSocket) Start() bool {
+	if self.m_nConnectType == 0 {
+		llog.Error("ClientSocket.Start error : unkonwen socket type")
+		return false
+	}
 	self.m_bShuttingDown = false
 	if self.m_sAddr == "" {
 		return false
@@ -77,7 +81,7 @@ func (self *ClientSocket) Connect() bool {
 
 	tcpAddr, err := net.ResolveTCPAddr("tcp4", self.m_sAddr)
 	if err != nil {
-		llog.Warningf("ClientSocket address error: %s", self.m_sAddr)
+		llog.Errorf("ClientSocket address error: %s", self.m_sAddr)
 		return false
 	}
 	//ln, err1 := net.DialTimeout("tcp4", self.m_sAddr, 5*time.Second)

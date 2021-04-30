@@ -2,14 +2,13 @@ package lnats
 
 import (
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
 	nats "github.com/nats-io/nats.go"
 	"github.com/snowyyj001/loumiao/base"
 	"github.com/snowyyj001/loumiao/config"
-	"github.com/snowyyj001/loumiao/llog"
-	"github.com/snowyyj001/loumiao/util"
 )
 
 var (
@@ -130,22 +129,22 @@ func Init(addr []string) {
 
 	nc, err := nats.Connect(target, name,
 		nats.DisconnectHandler(func(nc *nats.Conn) {
-			llog.Warningf("NATS client connection got disconnected: %s", nc.LastError())
+			log.Printf("NATS client connection got disconnected: %s", nc.LastError())
 		}),
 		nats.ReconnectHandler(func(nc *nats.Conn) {
-			llog.Warningf("NATS client reconnected after a previous disconnection, connected to %s", nc.ConnectedUrl())
+			log.Printf("NATS client reconnected after a previous disconnection, connected to %s", nc.ConnectedUrl())
 		}),
 		nats.ClosedHandler(func(nc *nats.Conn) {
-			llog.Warningf("NATS client connection closed: %s", nc.LastError())
+			log.Printf("NATS client connection closed: %s", nc.LastError())
 		}),
 		nats.ErrorHandler(func(nc *nats.Conn, sub *nats.Subscription, err error) {
-			llog.Errorf("NATS client on %s encountered an error: %s", nc.ConnectedUrl(), err.Error())
+			log.Printf("NATS client on %s encountered an error: %s", nc.ConnectedUrl(), err.Error())
 		}))
 
-	if util.CheckErr(err) {
-		llog.Fatalf("nats connect failed: %s", target)
+	if err != nil {
+		log.Fatalf("nats connect failed: %s", target)
 	} else {
-		llog.Infof("nats connect success: nickname=%s,target=%s", config.NET_GATE_SADDR, target)
+		log.Printf("nats connect success: nickname=%s,target=%s", config.NET_GATE_SADDR, target)
 	}
 	lnc = nc
 }

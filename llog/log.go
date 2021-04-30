@@ -1,9 +1,14 @@
 package llog
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
+
+	"github.com/snowyyj001/loumiao/define"
+
+	"github.com/snowyyj001/loumiao/lnats"
 
 	go_logger "github.com/phachon/go-logger"
 	"github.com/snowyyj001/loumiao/config"
@@ -48,41 +53,61 @@ func init() {
 //llog emergency level
 func Emergency(msg string) {
 	logger.Emergency(msg)
+	msg = "Emergencyf: " + msg
+	go reportMail(msg)
 }
 
 //llog emergency format
 func Emergencyf(format string, a ...interface{}) {
 	logger.Emergencyf(format, a...)
+	msg := fmt.Sprintf(format, a...)
+	msg = "Emergencyf: " + msg
+	go reportMail(msg)
 }
 
 //llog alert level
 func Alert(msg string) {
 	logger.Alert(msg)
+	msg = "Alert: " + msg
+	go reportMail(msg)
 }
 
 //llog alert format
 func Alertf(format string, a ...interface{}) {
 	logger.Alertf(format, a...)
+	msg := fmt.Sprintf(format, a...)
+	msg = "Alertf: " + msg
+	go reportMail(msg)
 }
 
 //llog critical level
 func Critical(msg string) {
 	logger.Critical(msg)
+	msg = "Critical: " + msg
+	go reportMail(msg)
 }
 
 //llog critical format
 func Criticalf(format string, a ...interface{}) {
 	logger.Criticalf(format, a...)
+	msg := fmt.Sprintf(format, a...)
+	msg = "Criticalf: " + msg
+	go reportMail(msg)
 }
 
 //llog error level
 func Error(msg string) {
 	logger.Error(msg)
+	msg = "Error: " + msg
+	go reportMail(msg)
 }
 
 //llog error format
 func Errorf(format string, a ...interface{}) {
 	logger.Errorf(format, a...)
+	msg := fmt.Sprintf(format, a...)
+	msg = "Error: " + msg
+	go reportMail(msg)
 }
 
 //llog warning level
@@ -135,4 +160,19 @@ func Fatal(msg string) {
 func Fatalf(msg string, a ...interface{}) {
 	Errorf(msg, a)
 	log.Fatalf(msg, a)
+}
+
+func reportMail(errstr string) {
+	reqParam := &struct {
+		Tag     int    `json:"tag"`     //邮件类型
+		Id      int    `json:"id"`      //区服id
+		Content string `json:"content"` //邮件内容
+	}{}
+	reqParam.Tag = define.MAIL_TYPE_ERR
+	reqParam.Id = config.NET_NODE_ID
+	reqParam.Content = fmt.Sprintf("uid: %d \nname: %s\nhost: %s\r\n%s", config.SERVER_NODE_UID, config.SERVER_NAME, config.NET_GATE_SADDR, errstr)
+	buffer, err := json.Marshal(&reqParam)
+	if err == nil {
+		lnats.Publish(define.TOPIC_SERVER_MAIL, buffer)
+	}
 }

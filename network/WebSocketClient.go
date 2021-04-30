@@ -18,6 +18,10 @@ type WebSocketClient struct {
 }
 
 func (self *WebSocketClient) Start() bool {
+	if self.m_nConnectType == 0 {
+		llog.Error("WebSocketClient.Start error : unkonwen socket type")
+		return false
+	}
 	if self.m_nState != SSF_SHUT_DOWN {
 		return false
 	}
@@ -53,16 +57,7 @@ func (self *WebSocketClient) OnNetFail(error int) {
 	buff, nLen := message.Encode(0, "DISCONNECT", nil)
 	//bufflittle := common.BigEngianToLittle(buff, nLen)
 	self.HandlePacket(self.m_ClientId, buff, nLen)
-	self.Stop()
-}
-
-func (self *WebSocketClient) Stop() bool {
-	if self.m_bShuttingDown {
-		return false
-	}
-	self.m_bShuttingDown = true
 	self.Close()
-	return true
 }
 
 func (self *WebSocketClient) Close() {
@@ -106,6 +101,6 @@ func wserverclientRoutine(pClient *WebSocketClient) bool {
 		}
 	}
 
-	pClient.Stop()
+	pClient.Close()
 	return true
 }

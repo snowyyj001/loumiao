@@ -52,6 +52,10 @@ func (self *WebSocket) Init(saddr string) bool {
 	return true
 }
 func (self *WebSocket) Start() bool {
+	if self.m_nConnectType == 0 {
+		llog.Error("WebSocket.Start error : unkonwen socket type")
+		return false
+	}
 	self.m_bShuttingDown = false
 
 	if self.m_sAddr == "" {
@@ -116,7 +120,7 @@ func (self *WebSocket) AddClinet(wConn *websocket.Conn, addr string, connectType
 		llog.Debugf("客户端：%s已连接[%d]！", wConn.RemoteAddr().String(), pClient.m_ClientId)
 		return pClient
 	} else {
-		llog.Errorf("%s", "无法创建客户端连接对象")
+		llog.Errorf("WebSocket.AddClinet %s", "无法创建客户端连接对象")
 	}
 	return nil
 }
@@ -133,7 +137,7 @@ func (self *WebSocket) DelClinet(pClient *WebSocketClient) bool {
 func (self *WebSocket) StopClient(id int) {
 	pClinet := self.GetClientById(id)
 	if pClinet != nil {
-		pClinet.Stop()
+		pClinet.Close()
 	}
 }
 
@@ -142,15 +146,6 @@ func (self *WebSocket) LoadClient() *WebSocketClient {
 	s.m_MaxReceiveBufferSize = self.m_MaxReceiveBufferSize
 	s.m_MaxSendBufferSize = self.m_MaxSendBufferSize
 	return s
-}
-
-func (self *WebSocket) Stop() bool {
-	if self.m_bShuttingDown {
-		return true
-	}
-	self.m_bShuttingDown = true
-	self.Close()
-	return true
 }
 
 func (self *WebSocket) SendById(id int, buff []byte) int {
@@ -198,7 +193,7 @@ func (self *WebSocket) SetMaxClients(maxnum int) {
 func serveWs(w http.ResponseWriter, r *http.Request) {
 	c, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		llog.Errorf("serveWs upgrade:", err)
+		llog.Errorf("serveWs upgrade: %s", err.Error())
 		return
 	}
 	pClient := This.AddClinet(c, r.RemoteAddr, This.m_nConnectType)

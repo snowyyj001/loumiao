@@ -130,16 +130,16 @@ func (self *GoRoutineMgr) DoSingleStart(name string) {
 //@target: 目标actor
 //@funcName: rpc函数
 //@data: 函数参数
-func (self *GoRoutineMgr) Send(target string, funcName string, data interface{}) {
+func (self *GoRoutineMgr) Send(target string, funcName string, data *M) {
 	igo := self.GetRoutine(target)
 	if igo == nil {
-		llog.Warningf("GoRoutineMgr.Send target[%s] is nil: %s", target, funcName)
+		llog.Errorf("GoRoutineMgr.Send target[%s] is nil: %s", target, funcName)
 		return
 	}
 	if len(igo.GetJobChan()) > igo.GetChanLen()*2 {
-		llog.Warningf("GoRoutineMgr.Send:[%s (chan overlow[%d, %d])] %s", target, igo.GetJobChan(), igo.GetChanLen(), funcName)
+		llog.Errorf("GoRoutineMgr.Send:[%s (chan overlow[%d, %d])] %s", target, igo.GetJobChan(), igo.GetChanLen(), funcName)
 		return
 	}
-	job := ChannelContext{funcName, data, nil, nil}
+	job := ChannelContext{funcName, *data, nil, nil}
 	igo.GetJobChan() <- job
 }

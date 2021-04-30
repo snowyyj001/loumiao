@@ -4,8 +4,11 @@ package gate
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/snowyyj001/loumiao/message"
 	"strings"
 	"sync"
+
+	"github.com/snowyyj001/loumiao/lnats"
 
 	"github.com/snowyyj001/loumiao/config"
 	"github.com/snowyyj001/loumiao/define"
@@ -40,7 +43,7 @@ users_u: key是client的userid,value是world的uid
 当loumiao是server时:
 tokens：key是gate的socketid，Token.UserId是gate的uid， Token.TokenId是自己的uid(0代表该gate将要被关闭)
 tokens_u：key是gate的uid,value是socketid
-users_u: key是client的userid,value是gate的uid {gate通过LouMiaoClientConnect通知world，world通过LouMiaoBindGate通知其他server}
+users_u: key是client的userid,value是gate的uid,在收到LouMiaoNetMsg时绑定（意味着如果没有事先收到cleint的消息包，server是不知道它所归属的gate的，除非主动BindGate）
 */
 
 type GateServer struct {
@@ -59,7 +62,6 @@ type GateServer struct {
 	clientEtcd *etcd.ClientDis
 	rpcMap     map[string][]int
 	rpcGates   []int //space for time
-	opened     bool
 
 	m_etcdKey string
 
@@ -100,8 +102,6 @@ func (self *GateServer) DoInit() bool {
 	self.users_u = make(map[int]int)
 	self.rpcMap = make(map[string][]int) //base64(funcname) -> [uid,uid,...]
 
-	self.opened = false
-
 	handler_Map = make(map[string]string)
 
 	if self.InitFunc != nil {
@@ -125,14 +125,16 @@ func (self *GateServer) DoRegsiter() {
 	self.Register("RecvPackMsg", recvPackMsg)
 	self.Register("ReportOnLineNum", reportOnLineNum)
 	self.Register("CloseServer", closeServer)
+	self.Register("BindGate", bindGate)
 
-	handler_Map["CONNECT"] = "GateServer" //equal to RegisterSelfNet
+	//equal to RegisterSelfNet
+	handler_Map["CONNECT"] = "GateServer" //in gate, client connect with gate, in server, gate(as client) connect with server
 	self.RegisterGate("CONNECT", innerConnect)
 
 	handler_Map["DISCONNECT"] = "GateServer"
 	self.RegisterGate("DISCONNECT", innerDisConnect)
 
-	handler_Map["C_CONNECT"] = "GateServer"
+	handler_Map["C_CONNECT"] = "GateServer" //in gate, gate connect with server, no in server
 	self.RegisterGate("C_CONNECT", outerConnect)
 
 	handler_Map["C_DISCONNECT"] = "GateServer"
@@ -197,7 +199,7 @@ func (self *GateServer) DoStart() {
 		if err != nil {
 			llog.Fatalf("etcd watch NET_GATE_SADDR error ", err)
 		}
-	} else {
+	} else { //for simple, only login and gate need server infos, others should goto gate for query
 		if config.NET_NODE_TYPE == config.ServerType_World { //need know the zone's state
 			_, err = self.clientEtcd.WatchNodeList(define.ETCD_NODEINFO, self.newServerDiscover)
 			if err != nil {
@@ -221,8 +223,21 @@ func (self *GateServer) DoOpen() {
 			util.Assert(nil)
 		}
 	}
-	self.opened = true
+	nodemgr.SocketActive = true
 	llog.Infof("GateServer DoOpen success: name=%s,saddr=%s,uid=%d", self.Name, config.NET_GATE_SADDR, self.Id)
+
+	reqParam := &struct {
+		Tag     int    `json:"tag"`     //邮件类型
+		Id      int    `json:"id"`      //区服id
+		Content string `json:"content"` //邮件内容
+	}{}
+	reqParam.Tag = define.MAIL_TYPE_START
+	reqParam.Id = config.NET_NODE_ID
+	reqParam.Content = fmt.Sprintf("uid: %d \nname: %s\nhost: %s\n服务器完成启动", config.SERVER_NODE_UID, config.SERVER_NAME, config.NET_GATE_SADDR)
+	buffer, err := json.Marshal(&reqParam)
+	if err == nil {
+		lnats.Publish(define.TOPIC_SERVER_MAIL, buffer)
+	}
 }
 
 //simple register self net hanlder, this func can only be called before igo started
@@ -238,6 +253,10 @@ func (self *GateServer) RegisterSelfNet(hanlderName string, hanlderFunc gorpc.Ha
 //goroutine unsafe
 func (self *GateServer) newServerDiscover(key, val string, dis bool) {
 	arrStr := strings.Split(key, "/")
+	if len(arrStr) < 3 {
+		llog.Errorf("newServerDiscover error fromat key : %s", key)
+		return
+	}
 	saddr := arrStr[2]
 	llog.Debugf("newServerDiscover: key=%s,val=%s,dis=%t,debug=%s", key, val, dis, saddr)
 
@@ -262,10 +281,13 @@ func (self *GateServer) newServerDiscover(key, val string, dis bool) {
 				return
 			}
 		}
-		client := self.buildRpc(node.Uid, saddr)
-		if self.enableRpcClient(client) {
-			m := gorpc.M{Id: node.Uid, Data: client}
-			gorpc.MGR.Send("GateServer", "NewRpc", m)
+		rpcClient := self.GetRpcClient(node.Uid) //this conditation can be etcd reconnect
+		if rpcClient == nil {
+			client := self.buildRpc(node.Uid, saddr)
+			if self.enableRpcClient(client) {
+				m := &gorpc.M{Id: node.Uid, Data: client}
+				gorpc.MGR.Send("GateServer", "NewRpc", m)
+			}
 		}
 	} else {
 		nodemgr.RemoveNode(saddr)
@@ -284,19 +306,37 @@ func (self *GateServer) enableRpcClient(client *network.ClientSocket) bool {
 }
 
 func (self *GateServer) DoDestory() {
+	nodemgr.SocketActive = false
 	if self.clientEtcd != nil {
 		self.clientEtcd.RevokeLease()
 	}
-	This.opened = false
 }
 
 //goroutine unsafe
 //net msg handler,this func belong to socket's goroutine
 func packetFunc(socketid int, buff []byte, nlen int) bool {
 	//llog.Debugf("packetFunc: socketid=%d, bufferlen=%d", socketid, nlen)
-	m := gorpc.MI{Id: socketid, Name: nlen, Data: buff}
-	gorpc.MGR.Send("GateServer", "RecvPackMsg", m)
-
+	err, target, name, pm := message.Decode(This.Id, buff, nlen)
+	//llog.Debugf("packetFunc %d %s %v", target, name, pm)
+	if err != nil {
+		llog.Errorf("packetFunc Decode error: %s", err.Error())
+		//This.closeClient(socketid)
+	} else {
+		if target == This.Id || target <= 0 { //msg to me
+			handler, ok := handler_Map[name]
+			if ok {
+				nm := &gorpc.M{Id: socketid, Name: name, Data: pm}
+				gorpc.MGR.Send(handler, "ServiceHandler", nm)
+			} else {
+				llog.Errorf("packetFunc handler is nil, drop it[%s]", name)
+			}
+		} else { //msg to other server
+			newbuff := make([]byte, nlen)
+			copy(newbuff, buff[:nlen])
+			m := &gorpc.M{Id: socketid, Param: target, Data: newbuff}
+			gorpc.MGR.Send("GateServer", "RecvPackMsg", m)
+		}
+	}
 	return true
 }
 
@@ -398,13 +438,13 @@ func (self *GateServer) closeClient(clientid int) {
 	}
 }
 
-// 向内部server直接发送buffer消息
+// 向内部server直接发送buffer消息,专为gate使用，
 // 必须保证线程安全，即需要在gateserver的igo中调用该函数
 func (self *GateServer) SendServer(target int, buff []byte) {
 	rpcClient := self.GetRpcClient(target)
 	if rpcClient != nil {
 		rpcClient.Send(buff)
 	} else {
-		llog.Warningf("GateServer.SendServer target error: target=%d", target)
+		llog.Errorf("GateServer.SendServer target error: target=%d", target)
 	}
 }

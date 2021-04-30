@@ -5,11 +5,10 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"log"
 	"path/filepath"
 	"reflect"
 	"strings"
-
-	"github.com/prometheus/common/log"
 )
 
 //获取常量对应的注释
@@ -20,7 +19,7 @@ func Ast(fileName string) map[int]string {
 	path, _ := filepath.Abs(fileName)
 	f, err := parser.ParseFile(fset, path, nil, parser.ParseComments)
 	if err != nil {
-		log.Debug(err.Error())
+		log.Println(err.Error())
 		return names
 	}
 	nLen := len(f.Decls)
