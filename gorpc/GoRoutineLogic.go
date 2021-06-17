@@ -6,6 +6,8 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/snowyyj001/loumiao/message"
+
 	"github.com/snowyyj001/loumiao/llog"
 	"github.com/snowyyj001/loumiao/util"
 	"github.com/snowyyj001/loumiao/util/timer"
@@ -16,9 +18,10 @@ const (
 )
 
 const (
-	CHAN_BUFFER_LEN = 20000 //channel缓冲数量
-	CHAN_BUFFER_MAX = 50000 //channel缓冲最大数量
-	CALL_TIMEOUT    = 3     //call超时时间,秒
+	CHAN_BUFFER_LEN  = 20000 //channel缓冲数量
+	CHAN_BUFFER_MAX  = 50000 //channel缓冲最大数量
+	CALL_TIMEOUT     = 3     //call超时时间,秒
+	CHAN_LIMIT_TIMES = 3     //异步协程上限倍数
 )
 
 type Cmdtype map[string]HanlderFunc
@@ -56,6 +59,12 @@ type IGoRoutine interface {
 	LeftJobNumber() int
 }
 
+type RoutineTimer struct {
+	timer        *timer.Timer
+	lastCallTime int64
+	timerCall    func(dt int64)
+}
+
 type GoRoutineLogic struct {
 	Name         string                    //队列名字
 	Cmd          Cmdtype                   //处理函数集合
@@ -65,12 +74,17 @@ type GoRoutineLogic struct {
 	chanNum      int                       //协程数量
 	NetHandler   map[string]HanlderNetFunc //net hanlder
 	goFun        bool                      //true:使用go执行Cmd,GoRoutineLogic非协程安全;false:协程安全
-	timer        *time.Timer
+	cRoLimitChan chan struct{}             //异步协程上限控制
+	/*timer        *time.Timer
 	timerCall    func(dt int64)
-	timerDuation time.Duration
-	started      bool //是否已启动
-	inited       bool //是否初始化失败
-	ChanSize     int  //job chan size
+	timerDuation time.Duration*/
+
+	timerChan  chan int //定时器chan
+	timerFuncs map[int]*RoutineTimer
+
+	started  bool //是否已启动
+	inited   bool //是否初始化失败
+	ChanSize int  //job chan size
 }
 
 func (self *GoRoutineLogic) DoInit() bool {
@@ -122,9 +136,19 @@ func (self *GoRoutineLogic) CallNetFunc(m *M) {
 	self.NetHandler[m.Name](self, m.Id, m.Data)
 }
 
-//同步定时任务
-func (self *GoRoutineLogic) RunTimer(delat int64, f func(int64)) {
-	self.timerCall = func(dt int64) {
+//同步定时任务，必须在DoStart中调用，不是协程安全的
+//@delat: 时间间隔，单位毫秒
+//@f: 回调函数，在GoRoutineLogic中调用，协程安全
+//@ticker: 使用ticker方式的timer
+func (self *GoRoutineLogic) RunTimer(delat int, f func(int64), ticker bool) {
+	_, ok := self.timerFuncs[delat]
+	if ok {
+		llog.Errorf("GoRoutineLogic.RunTimer[%s]: timer duation[%d] already has one", self.Name, delat)
+		return
+	}
+	caller := new(RoutineTimer)
+	caller.lastCallTime = util.TimeStamp()
+	caller.timerCall = func(dt int64) { //try catch errors here, do not effect woker
 		defer func() {
 			if r := recover(); r != nil {
 				buf := make([]byte, 2048)
@@ -134,9 +158,19 @@ func (self *GoRoutineLogic) RunTimer(delat int64, f func(int64)) {
 		}()
 		f(dt)
 	}
-	self.timerDuation = time.Duration(delat) * time.Millisecond
-	self.timer.Reset(self.timerDuation)
-	//self.timer = time.NewTimer(self.timerDuation)
+	if ticker {
+		caller.timer = timer.NewTicker(delat, func(dt int64) bool {
+			self.timerChan <- delat
+			return true
+		})
+	} else {
+		caller.timer = timer.NewTimer(delat, func(dt int64) bool {
+			self.timerChan <- delat
+			return true
+		}, true)
+	}
+
+	self.timerFuncs[delat] = caller
 }
 
 //工作队列
@@ -148,8 +182,8 @@ func (self *GoRoutineLogic) woker() {
 			llog.Errorf("GoRoutineLogic.woker[%s] %v: %s", self.Name, r, buf[:l])
 		}
 	}()
-	utm := util.TimeStamp()
-	utmPre := utm
+	//utm := util.TimeStamp()
+	//utmPre := utm
 
 	for {
 		//llog.Debugf("woker run: %s", self.Name)
@@ -164,6 +198,7 @@ func (self *GoRoutineLogic) woker() {
 					llog.Errorf("GoRoutineLogic[%s] handler is nil: %s", self.Name, ct.Handler)
 				} else {
 					if self.goFun {
+						self.cRoLimitChan <- struct{}{}
 						go self.CallGoFunc(hd, &ct)
 					} else {
 						ret := self.CallFunc(hd, &ct.Data)
@@ -181,14 +216,13 @@ func (self *GoRoutineLogic) woker() {
 			if action == ACTION_CLOSE {
 				goto LabelEnd
 			}
-
-		case <-self.timer.C:
-			utmPre = util.TimeStamp()
-			if self.timerCall != nil {
-				self.timerCall(utmPre - utm)
-				self.timer.Reset(self.timerDuation)
+		case index := <-self.timerChan:
+			caller, ok := self.timerFuncs[index]
+			if ok {
+				nt := util.TimeStamp()
+				caller.timerCall(nt - caller.lastCallTime)
+				caller.lastCallTime = nt
 			}
-			utm = utmPre
 		}
 	}
 
@@ -205,9 +239,12 @@ func (self *GoRoutineLogic) Run() {
 //关闭任务
 func (self *GoRoutineLogic) stop() {
 	self.started = false
-	if self.timer != nil {
+	/*if self.timer != nil {
 		self.timer.Stop()
 		self.timer = nil
+	}*/
+	for _, caller := range self.timerFuncs {
+		caller.timer.Stop()
 	}
 	//当一个通道不再被任何协程所使用后，它将逐渐被垃圾回收掉，无论它是否已经被关闭
 	//这里不关闭jobChan和readChan，让gc处理他们
@@ -244,7 +281,7 @@ func (self *GoRoutineLogic) Send(handler_name string, sdata *M) {
 		return
 	}
 	if len(self.GetJobChan()) > self.GetChanLen()*2 {
-		llog.Noticef("GoRoutineLogic[%s].Send too many job chan: %s", self.Name, handler_name)
+		llog.Infof("GoRoutineLogic[%s].Send too many job chan: %s", self.Name, handler_name)
 		return
 	}
 	job := ChannelContext{Handler: handler_name}
@@ -261,7 +298,7 @@ func (self *GoRoutineLogic) SendActor(handler_name string, sdata interface{}) {
 		return
 	}
 	if len(self.GetJobChan()) > self.GetChanLen()*2 {
-		llog.Noticef("GoRoutineLogic[%s].SendActor too many job chan: %s", self.Name, handler_name)
+		llog.Infof("GoRoutineLogic[%s].SendActor too many job chan: %s", self.Name, handler_name)
 		return
 	}
 	m := M{Data: sdata, Flag: true}
@@ -276,11 +313,11 @@ func (self *GoRoutineLogic) SendBack(server IGoRoutine, handler_name string, sda
 		return
 	}
 	if server == nil {
-		llog.Noticef("GoRoutineLogic[%s].SendBack target[%s] is nil: %s", self.Name, server.GetName(), handler_name)
+		llog.Infof("GoRoutineLogic[%s].SendBack target[%s] is nil: %s", self.Name, server.GetName(), handler_name)
 		return
 	}
 	if len(server.GetJobChan()) > server.GetChanLen()*2 {
-		llog.Noticef("GoRoutineLogic[%s].SendBack[%s] too many job chan: %s", self.Name, server.GetName(), handler_name)
+		llog.Infof("GoRoutineLogic[%s].SendBack[%s] too many job chan: %s", self.Name, server.GetName(), handler_name)
 		return
 	}
 	job := ChannelContext{handler_name, *sdata, self.jobChan, Cb}
@@ -294,11 +331,11 @@ func (self *GoRoutineLogic) Call(server IGoRoutine, handler_name string, sdata *
 		return nil
 	}
 	if server == nil {
-		llog.Noticef("GoRoutineLogic[%s].Call target[%s] is nil: %s", self.Name, server.GetName(), handler_name)
+		llog.Infof("GoRoutineLogic[%s].Call target[%s] is nil: %s", self.Name, server.GetName(), handler_name)
 		return nil
 	}
 	if len(server.GetJobChan()) > server.GetChanLen()*2 {
-		llog.Noticef("GoRoutineLogic[%s].Call target[%s] too many jon chan: %s", self.Name, server.GetName(), handler_name)
+		llog.Infof("GoRoutineLogic[%s].Call target[%s] too many jon chan: %s", self.Name, server.GetName(), handler_name)
 		return nil
 	}
 	job := ChannelContext{Handler: handler_name, ReadChan: self.readChan}
@@ -310,7 +347,7 @@ func (self *GoRoutineLogic) Call(server IGoRoutine, handler_name string, sdata *
 		rdata := <-self.readChan
 		return rdata.Data.Data
 	case <-time.After(CALL_TIMEOUT * time.Second):
-		llog.Noticef("GoRoutineLogic[%s] Call timeout: %s", self.Name, handler_name)
+		llog.Infof("GoRoutineLogic[%s] Call timeout: %s", self.Name, handler_name)
 		return nil
 	}
 }
@@ -338,6 +375,7 @@ func (self *GoRoutineLogic) CallGoFunc(hd HanlderFunc, ct *ChannelContext) {
 		retctx.Data.Data = ret
 		ct.ReadChan <- retctx
 	}
+	<-self.cRoLimitChan
 }
 
 func (self *GoRoutineLogic) WriteSync(ct *ChannelContext) {
@@ -381,16 +419,21 @@ func (self *GoRoutineLogic) init(name string) {
 	self.jobChan = make(chan ChannelContext, n)
 	self.readChan = make(chan ChannelContext)
 	self.actionChan = make(chan int, 1)
+	self.cRoLimitChan = make(chan struct{}, n*CHAN_LIMIT_TIMES)
 	self.Cmd = make(Cmdtype)
 	self.NetHandler = make(map[string]HanlderNetFunc)
-	self.timer = time.NewTimer(1<<63 - 1) //默认没有定时器
-	self.timerCall = nil
+	//self.timer = time.NewTimer(1<<63 - 1) //默认没有定时器
+	//self.timerCall = nil
+
+	self.timerChan = make(chan int)
+	self.timerFuncs = make(map[int]*RoutineTimer)
 }
 
 func ServiceHandler(igo IGoRoutine, data interface{}) interface{} {
 	//llog.Debugf("ServiceHandler[%s]: %v", igo.GetName(), data)
 	m := data.(*M)
 	igo.CallNetFunc(m)
+	message.PutPakcet(m.Name, m.Data)
 	return nil
 }
 

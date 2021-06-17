@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"log"
 	"math"
+	"math/rand"
 	"strconv"
 )
 
@@ -12,6 +13,24 @@ func Assert(x bool, y string) {
 	if bool(x) == false {
 		log.Fatalf("Assert: %s", y)
 	}
+}
+
+func RandI(i int, n int) int {
+	if i > n {
+		Assert(false, "Rand::RandI: inverted range")
+		return i
+	}
+
+	return int(i + rand.Int()%(n-i+1))
+}
+
+func RandF(i float32, n float32) float32 {
+	if i > n {
+		Assert(false, "Rand::RandF: inverted range")
+		return i
+	}
+
+	return (i + (n-i)*rand.Float32())
 }
 
 //-----------string strconv type-------------//

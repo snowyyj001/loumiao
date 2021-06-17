@@ -2,6 +2,7 @@ package network
 
 import (
 	"runtime"
+	"time"
 
 	"github.com/snowyyj001/loumiao/llog"
 
@@ -10,7 +11,10 @@ import (
 
 type KCPSocketClient struct {
 	Socket
-	m_pServer *KcpSocket
+	m_pServer   *KcpSocket
+	mHeartTimer *time.Timer
+	mMsgRecved  bool
+	mHeartDone  chan bool
 }
 
 func (self *KCPSocketClient) Start() bool {
@@ -49,6 +53,29 @@ func (self *KCPSocketClient) Send(buff []byte) int {
 func (self *KCPSocketClient) OnNetConn() {
 	buff, nLen := message.Encode(0, "CONNECT", nil)
 	self.HandlePacket(self.m_ClientId, buff, nLen)
+
+	delat := time.Duration(KCPTIMEOUT) * time.Second
+	self.mHeartTimer = time.NewTimer(delat)
+	self.mHeartDone = make(chan bool)
+
+	go func() {
+		for {
+			select {
+			case <-self.mHeartTimer.C:
+				if self.mMsgRecved {
+					self.mHeartTimer.Reset(delat)
+					self.mMsgRecved = false
+				} else {
+					if self.m_KcpConn != nil {
+						self.m_KcpConn.Close()
+					}
+					return
+				}
+			case <-self.mHeartDone:
+				return
+			}
+		}
+	}()
 }
 
 func (self *KCPSocketClient) OnNetFail(errcode int) {
@@ -63,6 +90,7 @@ func (self *KCPSocketClient) Close() {
 		self.m_pServer = nil
 	}
 	self.Socket.Close()
+	self.mHeartDone <- true
 }
 
 func kcpclientRoutine(pClient *KCPSocketClient) bool {
@@ -79,17 +107,18 @@ func kcpclientRoutine(pClient *KCPSocketClient) bool {
 	var buff = make([]byte, pClient.m_MaxReceiveBufferSize)
 	for {
 		if pClient.m_bShuttingDown {
-			llog.Noticef("KCPSocketClient远程链接：%s已经被关闭！", pClient.GetSAddr())
+			llog.Infof("KCPSocketClient远程链接：%s已经被关闭！", pClient.GetSAddr())
 			pClient.OnNetFail(0)
 			break
 		}
 
 		n, err := pClient.m_KcpConn.Read(buff)
 		if err != nil {
-			llog.Noticef("KCPSocketClient远程read错误: %s！ %s", pClient.GetSAddr(), err.Error())
+			llog.Infof("KCPSocketClient远程read错误: %s！ %s", pClient.GetSAddr(), err.Error())
 			pClient.OnNetFail(2)
 			break
 		}
+		//fmt.Println("kcpclientRoutine ", n)
 		if n > 0 {
 			ok := pClient.ReceivePacket(pClient.m_ClientId, buff[:n])
 			if !ok {
@@ -98,6 +127,7 @@ func kcpclientRoutine(pClient *KCPSocketClient) bool {
 				break
 			}
 		}
+		pClient.mMsgRecved = true
 	}
 
 	pClient.Close()

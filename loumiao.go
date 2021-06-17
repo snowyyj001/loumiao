@@ -7,8 +7,6 @@ import (
 	"runtime"
 	"syscall"
 
-	"github.com/snowyyj001/loumiao/util"
-
 	"github.com/snowyyj001/loumiao/config"
 	"github.com/snowyyj001/loumiao/gorpc"
 	"github.com/snowyyj001/loumiao/llog"
@@ -30,7 +28,7 @@ func init() {
 
 //创建一个服务，稍后开启
 //@name: actor名，唯一
-//@sync: 是否异步协程
+//@sync: 是否异步协程，无状态服务可以是异步协程，有状态服务应该使用同步协程，可以保证协程安全
 func Prepare(igo gorpc.IGoRoutine, name string, sync bool) {
 	igo.SetSync(sync)
 	gorpc.MGR.Start(igo, name)
@@ -38,6 +36,8 @@ func Prepare(igo gorpc.IGoRoutine, name string, sync bool) {
 }
 
 //创建一个服务,立即开启
+//@name: actor名，唯一
+//@sync: 是否异步协程，无状态服务可以是异步协程，有状态服务应该使用同步协程，可以保证协程安全
 func Start(igo gorpc.IGoRoutine, name string, sync bool) {
 	Prepare(igo, name, sync)
 	gorpc.MGR.DoSingleStart(name)
@@ -52,7 +52,7 @@ func Run() {
 		igo := gorpc.MGR.GetRoutine("GateServer")
 		if igo != nil {
 			igo.DoOpen()
-			llog.Noticef("loumiao start success: %s", config.SERVER_NAME)
+			llog.Infof("loumiao start success: %s", config.SERVER_NAME)
 		}
 	}, true)
 
@@ -100,7 +100,10 @@ func UnRegisterKcpNetHandler(igo gorpc.IGoRoutine, name string) {
 //@clientid: 客户端userid
 //@data: 消息结构体指针
 func SendClient(clientid int, data interface{}) {
-	buff, _ := message.Encode(0, "", data)
+	buff, n := message.Encode(0, "", data)
+	if n == 0 {
+		return
+	}
 	m := &gorpc.M{Id: clientid, Data: buff}
 	gorpc.MGR.Send("GateServer", "SendClient", m)
 }
@@ -109,9 +112,12 @@ func SendClient(clientid int, data interface{}) {
 //@clientids: 客户端userid, 空代表全服发送
 //@data: 消息结构体指针
 func SendMulClient(clientids []int, data interface{}) {
-	buff, _ := message.Encode(0, "", data)
-	ids := util.Array2String(clientids)
-	m := &gorpc.M{Name: ids, Data: buff}
+	buff, n := message.Encode(0, "", data)
+	if n == 0 {
+		return
+	}
+	ms := &gorpc.MS{Ids: clientids, Data: buff}
+	m := &gorpc.M{Data: ms}
 	gorpc.MGR.Send("GateServer", "SendMulClient", m)
 }
 

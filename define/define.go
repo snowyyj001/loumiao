@@ -28,4 +28,5 @@ const ( //发送真实邮件类型
 	MAIL_TYPE_ERR   = 0 //服务器发生error
 	MAIL_TYPE_START = 1 //服务器启动
 	MAIL_TYPE_STOP  = 2 //服务器关闭
+	MAIL_SYS_WARN   = 3 //系统资源告警
 )

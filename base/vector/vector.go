@@ -79,7 +79,7 @@ func (self *Vector) resize(newCount int) bool {
 
 		self.mElementCount = newCount
 		self.mArraySize = blocks * VectorBlockSize
-		self.mArray = append(self.mArray, make([]interface{}, VectorBlockSize+1)...)
+		self.mArray = append(self.mArray, make([]interface{}, VectorBlockSize)...)
 	}
 	return true
 }
@@ -140,6 +140,25 @@ func (self *Vector) Size() int {
 
 func (self *Vector) Clear() {
 	self.mElementCount = 0
+}
+
+func (self *Vector) Release(rsz int) {
+	if self.mElementCount < rsz {
+		return
+	}
+	self.mElementCount = self.mElementCount - rsz
+	blocks := self.mElementCount / VectorBlockSize
+	if self.mElementCount%VectorBlockSize != 0 {
+		blocks++
+	}
+	sz := (blocks + 1) * VectorBlockSize
+	if self.mArraySize <= sz {
+		return
+	}
+	for i := self.mArraySize - 1; i >= sz; i-- {
+		self.mArray[i] = nil
+	}
+	self.mArraySize = sz
 }
 
 func (self *Vector) Len() int {

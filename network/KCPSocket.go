@@ -33,7 +33,7 @@ const (
 	KCPWriteDelay   = false
 	KCPDSCP         = 0
 	KCPAckNodelay   = true
-	KCPTIMEOUT      = 30
+	KCPTIMEOUT      = 3
 )
 
 type KcpSocket struct {
@@ -221,7 +221,7 @@ func kcpRoutine(server *KcpSocket) {
 		kcpConn.SetMtu(KCPMTU)
 		kcpConn.SetWriteDelay(KCPWriteDelay)
 		kcpConn.SetACKNoDelay(KCPAckNodelay)
-		//kcpConn.SetReadDeadline(time.Now().Add(time.Second * KCPTIMEOUT))
+		//kcpConn.SetReadDeadline(time.Now().Add(time.Second * KCPTIMEOUT))	//此函数不可靠，bug，不要使用
 		handleKcpConn(server, kcpConn, kcpConn.RemoteAddr().String())
 	}
 	server.Stop()

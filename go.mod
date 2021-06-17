@@ -3,10 +3,14 @@ module github.com/snowyyj001/loumiao
 go 1.16
 
 require (
+	github.com/golang/groupcache v0.0.0-20200121045136-8c9f03a8e57e // indirect
 	github.com/golang/protobuf v1.4.3
 	github.com/gomodule/redigo v1.8.4
+	github.com/google/go-cmp v0.5.5 // indirect
 	github.com/gorilla/websocket v0.0.0-20170926233335-4201258b820c
 	github.com/klauspost/reedsolomon v1.9.12 // indirect
+	github.com/mailru/easyjson v0.7.7 // indirect
+	github.com/natefinch/lumberjack v2.0.0+incompatible
 	github.com/nats-io/nats.go v1.10.0
 	github.com/phachon/go-logger v0.0.0-20191215032019-86e4227f71ea
 	github.com/prometheus/common v0.17.0 // indirect
@@ -16,8 +20,13 @@ require (
 	github.com/xtaci/kcp-go v5.4.20+incompatible
 	github.com/xtaci/lossyconn v0.0.0-20200209145036-adba10fffc37 // indirect
 	go.etcd.io/etcd v0.0.0-20191023171146-3cf2f69b5738
+	go.uber.org/multierr v1.7.0 // indirect
+	go.uber.org/zap v1.16.0
+	golang.org/x/net v0.0.0-20201110031124-69a78807bb2b // indirect
+	google.golang.org/grpc v1.33.2 // indirect
 	google.golang.org/protobuf v1.23.0
 	gopkg.in/mgo.v2 v2.0.0-20190816093944-a6b53ec6cb22
+	gopkg.in/natefinch/lumberjack.v2 v2.0.0 // indirect
 	gorm.io/driver/mysql v1.0.4
 	gorm.io/gorm v1.20.12
 

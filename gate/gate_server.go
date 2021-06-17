@@ -180,30 +180,23 @@ func (self *GateServer) DoStart() {
 	self.clientEtcd.SetLeasefunc(leaseCallBack)
 	self.clientEtcd.SetLease(int64(config.GAME_LEASE_TIME), true)
 
-	//register my addr
-	obj, _ := json.Marshal(&config.Cfg.NetCfg)
-	err = self.clientEtcd.PutService(self.m_etcdKey, string(obj))
-	if err != nil {
-		llog.Fatalf("etcd PutService error %v", err)
-	}
-
 	//server discover
 	if self.ServerType == network.CLIENT_CONNECT { //account/gate watch server
 		//watch status, for balance
 		err = self.clientEtcd.WatchStatusList(define.ETCD_NODESTATUS, nodemgr.NodeStatusUpdate)
 		if err != nil {
-			llog.Fatalf("etcd watch ETCD_NODESTATUS error ", err)
+			llog.Fatalf("etcd watch ETCD_NODESTATUS error : %s", err.Error())
 		}
 		//watch all node, just for account, to gate balance
 		_, err = self.clientEtcd.WatchNodeList(define.ETCD_NODEINFO, self.newServerDiscover)
 		if err != nil {
-			llog.Fatalf("etcd watch NET_GATE_SADDR error ", err)
+			llog.Fatalf("etcd watch NET_GATE_SADDR error : %s", err.Error())
 		}
 	} else { //for simple, only login and gate need server infos, others should goto gate for query
 		if config.NET_NODE_TYPE == config.ServerType_World { //need know the zone's state
 			_, err = self.clientEtcd.WatchNodeList(define.ETCD_NODEINFO, self.newServerDiscover)
 			if err != nil {
-				llog.Fatalf("etcd watch NET_GATE_SADDR error ", err)
+				llog.Fatalf("etcd watch NET_GATE_SADDR error : %s", err.Error())
 			}
 		}
 	}
@@ -223,7 +216,14 @@ func (self *GateServer) DoOpen() {
 			util.Assert(nil)
 		}
 	}
+	//register to etcd when the socket is ok
+	obj, _ := json.Marshal(&config.Cfg.NetCfg)
+	if err := self.clientEtcd.PutService(self.m_etcdKey, string(obj)); err != nil {
+		llog.Fatalf("etcd PutService error %v", err)
+	}
+
 	nodemgr.SocketActive = true
+
 	llog.Infof("GateServer DoOpen success: name=%s,saddr=%s,uid=%d", self.Name, config.NET_GATE_SADDR, self.Id)
 
 	reqParam := &struct {
@@ -262,25 +262,26 @@ func (self *GateServer) newServerDiscover(key, val string, dis bool) {
 
 	if dis == true {
 		node := nodemgr.GetNodeByAddr(saddr)
-		if node != nil {
+		if node != nil { //maybe, etcd still have older data, etcd has a huge delay
 			llog.Warningf("newServerDiscover: saddr=%s,old server=%v,new server=%s", saddr, node, val)
-			return
+			nodemgr.RemoveNode(saddr)
 		}
 		node = &nodemgr.NodeInfo{}
 		json.Unmarshal([]byte(val), node)
 		node.SocketActive = true
 		nodemgr.AddNode(node)
-		if config.NET_NODE_TYPE == config.ServerType_World {
+
+		if config.NET_NODE_TYPE != config.ServerType_Gate {
 			return
 		}
 		if node.Type == config.ServerType_Gate || node.Type == config.ServerType_Account { //filter gate and account
 			return
 		}
-		if config.NET_NODE_TYPE == config.ServerType_Account {
-			if node.Type != config.ServerType_World { //Account only connect to world
+		/*if config.NET_NODE_TYPE == config.ServerType_Account {
+			if node.Type != config.ServerType_World { //Account only connect to world,just for using the socket state, knowing the world is closed in time
 				return
 			}
-		}
+		}*/
 		rpcClient := self.GetRpcClient(node.Uid) //this conditation can be etcd reconnect
 		if rpcClient == nil {
 			client := self.buildRpc(node.Uid, saddr)
@@ -318,7 +319,7 @@ func packetFunc(socketid int, buff []byte, nlen int) bool {
 	//llog.Debugf("packetFunc: socketid=%d, bufferlen=%d", socketid, nlen)
 	err, target, name, pm := message.Decode(This.Id, buff, nlen)
 	//llog.Debugf("packetFunc %d %s %v", target, name, pm)
-	if err != nil {
+	if nil != err {
 		llog.Errorf("packetFunc Decode error: %s", err.Error())
 		//This.closeClient(socketid)
 	} else {
@@ -331,7 +332,9 @@ func packetFunc(socketid int, buff []byte, nlen int) bool {
 				llog.Errorf("packetFunc handler is nil, drop it[%s]", name)
 			}
 		} else { //msg to other server
-			newbuff := make([]byte, nlen)
+			//newbuff := make([]byte, nlen)
+			//copy(newbuff, buff[:nlen])
+			newbuff := message.GetBuffer(nlen)
 			copy(newbuff, buff[:nlen])
 			m := &gorpc.M{Id: socketid, Param: target, Data: newbuff}
 			gorpc.MGR.Send("GateServer", "RecvPackMsg", m)

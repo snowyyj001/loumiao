@@ -3,163 +3,221 @@ package llog
 import (
 	"encoding/json"
 	"fmt"
-	"log"
-	"os"
+	"net"
+	"strconv"
+	"strings"
+	"sync/atomic"
 
-	"github.com/snowyyj001/loumiao/define"
-
-	"github.com/snowyyj001/loumiao/lnats"
-
+	"github.com/natefinch/lumberjack"
 	go_logger "github.com/phachon/go-logger"
+	"github.com/snowyyj001/loumiao/base"
 	"github.com/snowyyj001/loumiao/config"
+	"github.com/snowyyj001/loumiao/define"
+	"github.com/snowyyj001/loumiao/lnats"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+)
+
+const ( //日志树输出级别
+	DebugLevel = iota
+	InfoLevel
+	WarnLevel
+	ErrorLevel
 )
 
 var (
-	logger *go_logger.Logger
+	clogger     *go_logger.Logger //zap的控制台颜色输出效果不好，这里用go_logger
+	logger      *zap.Logger
+	sugarLogger *zap.SugaredLogger
+	logLevel    int
+	remoteLog   *LogRemoteWrite
 )
 
-func init() {
-	logger = go_logger.NewLogger()
-	logger.Detach("console")
-	os.Mkdir("logs", os.ModePerm)
-	os.Mkdir(fmt.Sprintf("logs/%s", config.SERVER_NAME), os.ModePerm)
-	if config.GAME_LOG_CONLOSE {
-		// 命令行输出配置
-		consoleConfig := &go_logger.ConsoleConfig{
-			Color:      true,                 // 命令行输出字符串是否显示颜色
-			JsonFormat: config.GAME_LOG_JSON, // 命令行输出字符串是否格式化
-			Format:     "",                   // 如果输出的不是 json 字符串，JsonFormat: false, 自定义输出的格式
-		}
-		// 添加 console 为 logger 的一个输出
-		logger.Attach("console", config.GAME_LOG_LEVEL, consoleConfig)
+type LogRemoteWrite struct {
+	clientLog  net.Conn
+	lineNum    int64
+	remoteAddr string
+}
+
+func (l *LogRemoteWrite) connectUdp() error {
+	if l.clientLog != nil {
+		l.clientLog.Close()
+		l.clientLog = nil
+	}
+	l.remoteAddr = config.NET_LOG_SADDR()
+	if len(l.remoteAddr) == 0 {
+		return fmt.Errorf("no log udp server")
+	}
+	if conn, err := net.Dial("udp", l.remoteAddr); err == nil {
+		l.clientLog = conn
 	} else {
-		filename := fmt.Sprintf("./logs/%s/%s.log", config.SERVER_NAME, config.SERVER_NAME)
-		//filename := fmt.Sprintf("./logs/%s.%s.llog", config.SERVER_NAME, time.Now().Format("2006-01-02.15.04.05"))
-		dealLogs(filename)
-		// 文件输出配置
-		fileConfig := &go_logger.FileConfig{
-			Filename:   filename,             // 日志输出文件名，不自动存在
-			MaxSize:    50 * 1024,            // 文件最大值（KB），默认值0不限
-			MaxLine:    0,                    // 文件最大行数，默认 0 不限制
-			DateSlice:  "d",                  // 文件根据日期切分， 支持 "Y" (年), "m" (月), "d" (日), "H" (时), 默认 "no"， 不切分
-			JsonFormat: config.GAME_LOG_JSON, // 写入文件的数据是否 json 格式化
-			Format:     "",                   // 如果写入文件的数据不 json 格式化，自定义日志格式
+		return err
+	}
+	return nil
+}
+
+func (l *LogRemoteWrite) Write(p []byte) (n int, err error) {
+	if l.clientLog == nil {
+		err = l.connectUdp()
+		if err != nil {
+			err = fmt.Errorf(string(p[:]))
+			return
 		}
-		// 添加 file 为 logger 的一个输出
-		logger.Attach("file", config.GAME_LOG_LEVEL, fileConfig)
+	}
+	bstream := base.NewBitStream_1(len(p) + len(config.SERVER_NAME) + 64)
+	var sb strings.Builder
+	atomic.AddInt64(&l.lineNum, 1)
+	sb.WriteString(strconv.Itoa(int(l.lineNum)))
+	sb.WriteString(" ")
+	sb.Write(p)
+	bstream.WriteString(config.SERVER_NAME)
+	bstream.WriteString(sb.String())
+	n, err = l.clientLog.Write(bstream.GetBuffer())
+	if err != nil {
+		if l.connectUdp() == nil {
+			l.clientLog.Write(bstream.GetBuffer())
+		}
+	}
+	return
+}
+
+func getLogWriter(fileName string) zapcore.WriteSyncer {
+	lumberJackLogger := &lumberjack.Logger{
+		Filename:   fileName, //日志文件的位置
+		MaxSize:    250,      //日志文件的最大大小（以MB为单位）
+		MaxBackups: 100,      //保留旧文件的最大个数
+		MaxAge:     7,        //保留旧文件的最大天数
+		Compress:   false,    //是否压缩/归档旧文件
+	}
+	if config.GAME_LOG_CONLOSE {
+		//return zapcore.NewMultiWriteSyncer(zapcore.AddSync(lumberJackLogger), zapcore.AddSync(os.Stdout))
+		return zapcore.AddSync(lumberJackLogger)
+	} else {
+		remoteLog = new(LogRemoteWrite)
+		remoteLog.connectUdp()
+		return zapcore.NewMultiWriteSyncer(zapcore.AddSync(lumberJackLogger), zapcore.AddSync(remoteLog))
+		//return zapcore.AddSync(lumberJackLogger)
 	}
 }
 
-//llog emergency level
-func Emergency(msg string) {
-	logger.Emergency(msg)
-	msg = "Emergencyf: " + msg
-	go reportMail(msg)
+func getEncoder() zapcore.Encoder {
+	encoderConfig := zap.NewProductionEncoderConfig()
+	encoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
+	encoderConfig.EncodeLevel = zapcore.CapitalLevelEncoder
+	return zapcore.NewConsoleEncoder(encoderConfig)
 }
 
-//llog emergency format
-func Emergencyf(format string, a ...interface{}) {
-	logger.Emergencyf(format, a...)
+func init() {
+	//os.Mkdir("logs", os.ModePerm)
+	//os.Mkdir(fmt.Sprintf("logs/%s", config.SERVER_NAME), os.ModePerm)
+	SetLevel(config.GAME_LOG_LEVEL)
+	filename := fmt.Sprintf("./logs/%s/%s.log", config.SERVER_NAME, config.SERVER_NAME)
+	core := zapcore.NewCore(getEncoder(), getLogWriter(filename), zapcore.DebugLevel)
+	if config.GAME_LOG_CONLOSE {
+		logger = zap.New(core)
+		clogger = go_logger.NewLogger()
+		// 命令行输出配置
+		consoleConfig := &go_logger.ConsoleConfig{
+			Color:      true,  // 命令行输出字符串是否显示颜色
+			JsonFormat: false, // 命令行输出字符串是否格式化
+			Format:     "",    // 如果输出的不是 json 字符串，JsonFormat: false, 自定义输出的格式
+		}
+		clogger.Detach("console")
+		clogger.Attach("console", 7, consoleConfig)
+	} else {
+		logger = zap.New(core)
+	}
+	sugarLogger = logger.Sugar()
+}
+
+//llog Panic level
+func Panic(msg string) {
+	reportMail(msg)
+	logger.Panic(msg)
+}
+
+//llog Panic format
+func Panicf(format string, a ...interface{}) {
 	msg := fmt.Sprintf(format, a...)
-	msg = "Emergencyf: " + msg
-	go reportMail(msg)
-}
-
-//llog alert level
-func Alert(msg string) {
-	logger.Alert(msg)
-	msg = "Alert: " + msg
-	go reportMail(msg)
-}
-
-//llog alert format
-func Alertf(format string, a ...interface{}) {
-	logger.Alertf(format, a...)
-	msg := fmt.Sprintf(format, a...)
-	msg = "Alertf: " + msg
-	go reportMail(msg)
-}
-
-//llog critical level
-func Critical(msg string) {
-	logger.Critical(msg)
-	msg = "Critical: " + msg
-	go reportMail(msg)
-}
-
-//llog critical format
-func Criticalf(format string, a ...interface{}) {
-	logger.Criticalf(format, a...)
-	msg := fmt.Sprintf(format, a...)
-	msg = "Criticalf: " + msg
-	go reportMail(msg)
+	Panic(msg)
 }
 
 //llog error level
 func Error(msg string) {
-	logger.Error(msg)
-	msg = "Error: " + msg
 	go reportMail(msg)
+	logger.Error(msg)
+	if clogger != nil {
+		clogger.Error(msg)
+	}
 }
 
 //llog error format
 func Errorf(format string, a ...interface{}) {
-	logger.Errorf(format, a...)
 	msg := fmt.Sprintf(format, a...)
-	msg = "Error: " + msg
-	go reportMail(msg)
+	Error(msg)
 }
 
 //llog warning level
 func Warning(msg string) {
-	logger.Warning(msg)
+	if logLevel >= ErrorLevel {
+		return
+	}
+	logger.Warn(msg)
+	if clogger != nil {
+		clogger.Warning(msg)
+	}
 }
 
 //llog warning format
 func Warningf(format string, a ...interface{}) {
-	logger.Warningf(format, a...)
-}
-
-//llog notice level
-func Notice(msg string) {
-	logger.Notice(msg)
-}
-
-//llog notice format
-func Noticef(format string, a ...interface{}) {
-	logger.Noticef(format, a...)
+	msg := fmt.Sprintf(format, a...)
+	Warning(msg)
 }
 
 //llog info level
 func Info(msg string) {
+	if logLevel >= WarnLevel {
+		return
+	}
 	logger.Info(msg)
+	if clogger != nil {
+		clogger.Info(msg)
+	}
 }
 
 //llog info format
 func Infof(format string, a ...interface{}) {
-	logger.Infof(format, a...)
+	msg := fmt.Sprintf(format, a...)
+	Info(msg)
 }
 
 //llog debug level
 func Debug(msg string) {
+	if logLevel >= InfoLevel {
+		return
+	}
 	logger.Debug(msg)
+	if clogger != nil {
+		clogger.Debug(msg)
+	}
 }
 
 //llog debug format
 func Debugf(format string, a ...interface{}) {
-	logger.Debugf(format, a...)
+	msg := fmt.Sprintf(format, a...)
+	Debug(msg)
 }
 
 //llog Fatal
 func Fatal(msg string) {
-	Error(msg)
-	log.Fatal(msg)
+	reportMail(msg)
+	logger.Fatal(msg)
 }
 
 //llog Fatal
-func Fatalf(msg string, a ...interface{}) {
-	Errorf(msg, a)
-	log.Fatalf(msg, a)
+func Fatalf(format string, a ...interface{}) {
+	msg := fmt.Sprintf(format, a...)
+	Fatal(msg)
 }
 
 func reportMail(errstr string) {
@@ -175,4 +233,8 @@ func reportMail(errstr string) {
 	if err == nil {
 		lnats.Publish(define.TOPIC_SERVER_MAIL, buffer)
 	}
+}
+
+func SetLevel(_level int) {
+	logLevel = _level
 }

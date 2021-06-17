@@ -60,6 +60,10 @@ func EncodeProBuff(target int, name string, packet interface{}) ([]byte, int) {
 	if buff != nil {
 		binary.Write(bytesBuffer, binary.BigEndian, buff)
 	}
+	if nLen > MaxPacketSize {
+		llog.Errorf("EncodeProBuff: too big packet size: %d", nLen)
+		return nil, 0
+	}
 
 	return bytesBuffer.Bytes(), nLen
 }

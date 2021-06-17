@@ -6,10 +6,15 @@ import (
 	"github.com/xtaci/kcp-go"
 	"io"
 	"runtime"
+	"time"
 )
 
 type KcpClient struct {
 	Socket
+
+	mHeartTimer *time.Timer
+	mMsgRecved  bool
+	mHeartDone  chan bool
 }
 
 func (self *KcpClient) Init(saddr string) bool {
@@ -66,7 +71,7 @@ func (self *KcpClient) Connect() bool {
 	// solve dead link problem:
 	// physical disconnection without any communcation between client and server
 	// will cause the read to block FOREVER, so a timeout is a rescue.
-	//kcpConn.SetReadDeadline(time.Now().Add(time.Second * KCPTIMEOUT))
+	//kcpConn.SetReadDeadline(time.Now().Add(time.Second * KCPTIMEOUT))		//此函数不可靠，bug，不要使用
 	// set kcp parameters
 	kcpConn.SetWindowSize(KCPWinSedSize, KCPWinRevSize)
 	kcpConn.SetNoDelay(KCPNoDelay, KCPInterval, KCPResend, KCPNoCongestion) //fast2
@@ -100,12 +105,33 @@ func (self *KcpClient) OnDisconnect() {
 func (self *KcpClient) OnNetConn() {
 	buff, nLen := message.Encode(0, "C_CONNECT", nil)
 	self.HandlePacket(self.m_ClientId, buff, nLen)
+
+	delat := time.Duration(KCPTIMEOUT) * time.Second
+	go func() {
+		for {
+			select {
+			case <-self.mHeartTimer.C:
+				if self.mMsgRecved {
+					self.mHeartTimer.Reset(delat)
+					self.mMsgRecved = false
+				} else {
+					if self.m_KcpConn != nil {
+						self.m_KcpConn.Close()
+					}
+					return
+				}
+			case <-self.mHeartDone:
+				return
+			}
+		}
+	}()
 }
 
 func (self *KcpClient) OnNetFail(int) {
 	buff, nLen := message.Encode(0, "C_DISCONNECT", nil)
 	self.HandlePacket(self.m_ClientId, buff, nLen)
 	self.Close()
+	self.mHeartDone <- true
 }
 
 func clientKcpRoutine(pClient *KcpClient) bool {
@@ -143,6 +169,7 @@ func clientKcpRoutine(pClient *KcpClient) bool {
 				break
 			}
 		}
+		pClient.mMsgRecved = true
 	}
 
 	pClient.Close()

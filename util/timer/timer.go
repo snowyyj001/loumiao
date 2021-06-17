@@ -23,7 +23,7 @@ type Timer struct {
 //创建一个定时器
 //@dt: 时间间隔，毫秒
 //@cb：触发回调
-//@repeat：是否循环出发
+//@repeat：是否循环触发
 func NewTimer(dt int, cb func(dt int64) bool, repeat bool) *Timer {
 	delat := time.Duration(dt) * time.Millisecond
 

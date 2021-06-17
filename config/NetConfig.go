@@ -5,12 +5,13 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	rand2 "math/rand"
 	"os"
 	"strings"
 )
 
 const (
-	ServerType_ETCD      = iota //0 etcd
+	ServerType_None      = iota //0 无类型
 	ServerType_Gate             //1 网关
 	ServerType_Account          //2 账号
 	ServerType_World            //3 世界
@@ -31,7 +32,7 @@ var (
 	NET_WEBSOCKET           = false           //使用websocket or socket
 	NET_MAX_CONNS           = 65535           //最大连接数
 	NET_MAX_RPC_CONNS       = 1024            //rpc最大连接数
-	NET_BUFFER_SIZE         = 1024 * 64       //最大消息包长度64k(对外)
+	NET_BUFFER_SIZE         = 1024 * 256      //最大消息包长度256k(对外)
 	NET_CLUSTER_BUFFER_SIZE = 2 * 1024 * 1024 //最大消息包长度2M(对内)
 	NET_MAX_NUMBER          = 30000           //pcu
 
@@ -59,9 +60,10 @@ type NetNode struct {
 }
 
 type ServerCfg struct {
-	NetCfg   NetNode  `json:"net"`
-	EtcdAddr []string `json:"etcd"`
-	NatsAddr []string `json:"nats"`
+	NetCfg      NetNode  `json:"net"`
+	EtcdAddr    []string `json:"etcd"`
+	NatsAddr    []string `json:"nats"`
+	BackLogAddr []string `json:"backlog"`
 }
 
 var Cfg ServerCfg
@@ -90,8 +92,9 @@ func init() {
 	NET_LISTEN_SADDR = NET_GATE_SADDR
 	SERVER_PARAM = Cfg.NetCfg.Param
 	GAME_LOG_CONLOSE = Cfg.NetCfg.LogFile == -1
+
 	if GAME_LOG_CONLOSE {
-		GAME_LOG_LEVEL = 7
+		GAME_LOG_LEVEL = 0
 	} else {
 		GAME_LOG_LEVEL = Cfg.NetCfg.LogFile
 	}
@@ -112,5 +115,16 @@ func init() {
 		Cfg.NetCfg.SAddr = NET_GATE_SADDR
 		Cfg.NetCfg.Param = SERVER_PARAM
 		SERVER_NODE_UID = Cfg.NetCfg.Uid
+	} else {
+		SERVER_NAME = fmt.Sprintf("%s-%d-%d", SERVER_NAME, NET_NODE_TYPE, SERVER_NODE_UID)
 	}
+}
+
+//随机拿到一个backlog的监听地址
+func NET_LOG_SADDR() string {
+	sz := len(Cfg.BackLogAddr)
+	if sz == 0 {
+		return ""
+	}
+	return Cfg.BackLogAddr[int(rand2.Int31n(int32(sz)))]
 }

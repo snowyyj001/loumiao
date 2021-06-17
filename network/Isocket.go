@@ -189,6 +189,12 @@ func (self *Socket) SetConnectType(nType int) {
 	self.m_pInBuffer = make([]byte, self.m_MaxReceiveBufferSize) //预先申请一份内存来换取临时申请，减少gc但每个socket会申请2倍的m_MaxReceiveBufferSize内存大小
 }
 
+func (self *Socket) SetUdpConn(conn net.Conn) {
+	self.m_Conn = conn
+	//self.m_Reader = bufio.NewReader(conn)
+	//self.m_Writer = bufio.NewWriter(conn)
+}
+
 func (self *Socket) SetTcpConn(conn net.Conn) {
 	self.m_Conn = conn
 	//self.m_Reader = bufio.NewReader(conn)

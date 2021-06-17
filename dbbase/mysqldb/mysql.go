@@ -17,7 +17,7 @@ import (
 
 const (
 	POOL_IDLE = 8
-	POOL_MAX  = 16
+	POOL_MAX  = 16 //应该小于max_connections/服务节点数（lobby+login）
 )
 
 var (
@@ -122,6 +122,7 @@ func DialDB(uri string, idle int, maxconn int) *gorm.DB {
 		DisableForeignKeyConstraintWhenMigrating: true, //不自动创建外键约束
 	})
 	if err != nil {
+
 		return nil
 	}
 	sqlDB, _ := engine.DB()

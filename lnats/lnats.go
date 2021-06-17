@@ -2,7 +2,7 @@ package lnats
 
 import (
 	"fmt"
-	"log"
+	"github.com/prometheus/common/log"
 	"strings"
 	"time"
 
@@ -128,23 +128,23 @@ func Init(addr []string) {
 	name := nats.Name(config.NET_GATE_SADDR)
 
 	nc, err := nats.Connect(target, name,
-		nats.DisconnectHandler(func(nc *nats.Conn) {
-			log.Printf("NATS client connection got disconnected: %s", nc.LastError())
+		nats.DisconnectErrHandler(func(nc *nats.Conn, err error) {
+			log.Errorf("NATS client connection got disconnected: %s %s", nc.LastError(), err.Error())
 		}),
 		nats.ReconnectHandler(func(nc *nats.Conn) {
-			log.Printf("NATS client reconnected after a previous disconnection, connected to %s", nc.ConnectedUrl())
+			log.Errorf("NATS client reconnected after a previous disconnection, connected to %s", nc.ConnectedUrl())
 		}),
 		nats.ClosedHandler(func(nc *nats.Conn) {
-			log.Printf("NATS client connection closed: %s", nc.LastError())
+			log.Errorf("NATS client connection closed: %s", nc.LastError())
 		}),
 		nats.ErrorHandler(func(nc *nats.Conn, sub *nats.Subscription, err error) {
-			log.Printf("NATS client on %s encountered an error: %s", nc.ConnectedUrl(), err.Error())
+			log.Errorf("NATS client on %s encountered an error: %s", nc.ConnectedUrl(), err.Error())
 		}))
 
 	if err != nil {
 		log.Fatalf("nats connect failed: %s", target)
 	} else {
-		log.Printf("nats connect success: nickname=%s,target=%s", config.NET_GATE_SADDR, target)
+		log.Infof("nats connect success: nickname=%s,target=%s", config.NET_GATE_SADDR, target)
 	}
 	lnc = nc
 }

@@ -2,11 +2,15 @@ package message
 
 import (
 	_ "fmt"
+	"github.com/snowyyj001/loumiao/config"
 	"reflect"
 	"sync"
 )
 
 const (
+	HEAD_SIZE    = 8  //包头大小
+	MSGNAME_SIZE = 36 //消息名最大长度
+
 	Flag_RPC int = 1 << 0
 )
 
@@ -19,6 +23,7 @@ type MsgPool struct {
 var (
 	Packet_CreateFactorStringMap map[string]*MsgPool
 	filterWarning                map[string]bool
+	MaxPacketSize                int //一个消息包的最大大小,如果一个消息超过该阀值，那么就需要分包
 )
 
 func init() {
@@ -29,6 +34,7 @@ func init() {
 	filterWarning["DISCONNECT"] = true
 	filterWarning["C_CONNECT"] = true
 	filterWarning["C_DISCONNECT"] = true
+	MaxPacketSize = config.NET_BUFFER_SIZE - MSGNAME_SIZE - MSGNAME_SIZE
 }
 
 //注册网络消息
@@ -70,4 +76,11 @@ func GetPakcet(name string) interface{} {
 		return packetFunc.cache.Get()
 	}
 	return nil
+}
+
+func PutPakcet(name string, data interface{}) {
+	packetFunc, exist := Packet_CreateFactorStringMap[name]
+	if exist {
+		packetFunc.cache.Put(data)
+	}
 }

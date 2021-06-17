@@ -397,7 +397,7 @@ func innerLouMiaoKickOut(igo gorpc.IGoRoutine, socketId int, data interface{}) {
 		llog.Error("0.innerLouMiaoKickOut wrong msg")
 		return
 	}
-	llog.Noticef("innerLouMiaoKickOut: another gate server has already listened the saddr : %s, now close self[%d]", config.NET_GATE_SADDR, This.Id)
+	llog.Infof("innerLouMiaoKickOut: another gate server has already listened the saddr : %s, now close self[%d]", config.NET_GATE_SADDR, This.Id)
 	loumiao.Stop()
 }
 
@@ -462,12 +462,12 @@ func sendClient(igo gorpc.IGoRoutine, data interface{}) interface{} {
 
 	uid, _ := This.users_u[m.Id] // get gate's uid by client's userid
 	if uid == 0 {
-		llog.Noticef("1.sendClient cannot find which gate the client belong: %d", m.Id)
+		llog.Infof("1.sendClient cannot find which gate the client belong: %d", m.Id)
 		return nil
 	}
 	socketId, _ := This.tokens_u[uid]
 	if socketId == 0 {
-		llog.Noticef("2.sendClient gate has been shut down, uid = %d", m.Id)
+		llog.Infof("2.sendClient gate has been shut down, uid = %d", m.Id)
 		return nil
 	}
 
@@ -486,15 +486,15 @@ func sendMulClient(igo gorpc.IGoRoutine, data interface{}) interface{} {
 		llog.Error("0.sendMulClient gate can not send client")
 		return nil
 	}
-	if len(m.Name) == 0 {
+	ms := m.Data.(*gorpc.MS)
+	if len(ms.Ids) == 0 {
 		broadCastClients(m.Data.([]byte))
 	} else {
-		ids := util.String2Array(m.Name)
-		for _, v := range ids {
+		for _, v := range ms.Ids {
 			uid, _ := This.users_u[v] // get gate's socketid by client's userid
 			socketId, ok := This.tokens_u[uid]
 			if ok {
-				llog.Noticef("1.sendMulClient gate has been shut down, uid = %d", v)
+				llog.Infof("1.sendMulClient gate has been shut down, uid = %d", v)
 				return nil
 			}
 			msg := &msg.LouMiaoNetMsg{ClientId: int64(v), Buffer: m.Data.([]byte)} //m.Id should be client`s userid
@@ -601,6 +601,8 @@ func recvPackMsg(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	socketid := m.Id
 	target := m.Param
 
+	rebuff := m.Data.([]byte)
+
 	rpcClient := This.GetRpcClient(target)
 	if rpcClient == nil {
 		llog.Warningf("0.recvPackMsg msg, but server has lost[%d] ", target)
@@ -608,17 +610,21 @@ func recvPackMsg(igo gorpc.IGoRoutine, data interface{}) interface{} {
 		if node == nil || node.Type == config.ServerType_World { //if the world lost,we should let the client relogin
 			This.closeClient(socketid)
 		}
+		message.BackBuffer(rebuff)
 		return nil
 	}
 
 	token, ok := This.tokens[socketid]
 	if ok == false {
 		llog.Warningf("1.recvPackMsg msg, but client has lost[%d] ", target)
+		message.BackBuffer(rebuff)
 		return nil
 	}
-	msg := &msg.LouMiaoNetMsg{ClientId: int64(token.UserId), Buffer: m.Data.([]byte)}
+
+	msg := &msg.LouMiaoNetMsg{ClientId: int64(token.UserId), Buffer: rebuff}
 	buff, newlen := message.Encode(target, "LouMiaoNetMsg", msg)
 	rpcClient.Send(buff[0:newlen])
+	message.BackBuffer(rebuff)
 
 	return nil
 }
