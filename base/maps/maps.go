@@ -6,6 +6,7 @@ import (
 	"github.com/snowyyj001/loumiao/base/containers"
 )
 
+//红黑树实现的map，go自带map为hash，冲突解决是链地址
 // Map interface that all Maps implement
 type IMap interface {
 	containers.Container

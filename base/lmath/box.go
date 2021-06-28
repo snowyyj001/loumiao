@@ -112,12 +112,12 @@ func (this *Box3F) Len_z() float32{
 	return  this.Max.Z - this.Min.Z
 }
 
-func (this *Box3F) Intersect(b Box3F) {
-	this.Min.SetMin(b.Min)
-	this.Max.SetMax(b.Max)
+func (this *Box3F) Intersect(b *Box3F) {
+	this.Min.SetMin(&b.Min)
+	this.Max.SetMax(&b.Max)
 }
 
-func (this *Box3F) Intersectp(b Point3F) {
+func (this *Box3F) Intersectp(b *Point3F) {
 	this.Min.SetMin(b)
 	this.Max.SetMax(b)
 }
@@ -298,11 +298,11 @@ func (this *Box3F) CollideLine(start *Point3F, end *Point3F) bool{
 func (this *Box3F) CollideOrientedBox(bRadii *Point3F, toA *MatrixF) bool{
 	var p Point3F;
 	toA.GetColumn(3,&p)
-	aCenter := this.Min.Add(this.Max)
-	aCenter.MulF(0.5)
-	p = *p.Sub(*aCenter)
-	aRadii := this.Max.Sub(this.Min)
-	aRadii.MulF(0.5)
+	aCenter := this.Min.Add(&this.Max)
+	aCenter.MulF1(0.5)
+	p.Sub1(&aCenter)
+	aRadii := this.Max.Sub(&this.Min)
+	aRadii.MulF1(0.5)
 
 	var absXX,absXY,absXZ float32
 	var absYX,absYY,absYZ float32

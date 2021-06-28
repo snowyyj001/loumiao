@@ -1,6 +1,7 @@
 package detour
 
 import (
+	"fmt"
 	"github.com/snowyyj001/loumiao/base"
 	"github.com/snowyyj001/loumiao/base/lmath"
 	"github.com/snowyyj001/loumiao/base/vector"
@@ -399,6 +400,7 @@ func (this *Detour) loadStaticMesh(path string, errCode *int) *DtNavMesh {
 		*errCode = 103
 		return nil
 	}*/
+	fmt.Println(header)
 	if header.version != NAVMESHSET_VERSION {
 		*errCode = 104
 		return nil
@@ -444,7 +446,7 @@ func (this *Detour) loadStaticMesh(path string, errCode *int) *DtNavMesh {
 	}
 
 	this.mTileWidth = float32(math.Max(float64(header.params.TileWidth), float64(header.params.TileHeight)))
-	this.mBounds.Min.SetMax(lmath.Point3F{0xFFFFFFF, 0xFFFFFFF, 0xFFFFFFF})
+	this.mBounds.Min.SetMax(&lmath.Point3F{0xFFFFFFF, 0xFFFFFFF, 0xFFFFFFF})
 	this.mOrig.SetF(header.params.Orig[:])
 	// 获取地图大小
 	for _, v := range mesh.m_tiles {

@@ -300,9 +300,9 @@ func (this *MatrixF) IsAffine() bool{
 	this.GetColumn(0, &one)
 	this.GetColumn(1, &two)
 	this.GetColumn(2, &three)
-	if (DotPP(one, two)   > 0.0001 ||
-		DotPP(one, three) > 0.0001 ||
-		DotPP(two, three) > 0.0001){
+	if (DotPP(&one, &two)   > 0.0001 ||
+		DotPP(&one, &three) > 0.0001 ||
+		DotPP(&two, &three) > 0.0001){
 		return false
 	}
 
@@ -315,9 +315,9 @@ func (this *MatrixF) IsAffine() bool{
 	this.GetRow(0, &one)
 	this.GetRow(1, &two)
 	this.GetRow(2, &three)
-	if (DotPP(one, two)   > 0.0001 ||
-		DotPP(one, three) > 0.0001 ||
-		DotPP(two, three) > 0.0001){
+	if (DotPP(&one, &two)   > 0.0001 ||
+		DotPP(&one, &three) > 0.0001 ||
+		DotPP(&two, &three) > 0.0001){
 		return false
 	}
 
