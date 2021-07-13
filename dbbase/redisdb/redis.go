@@ -72,12 +72,11 @@ func Close() {
 	pool = nil
 }
 
-///Do a func can do no defer close
-func Do(database int, pFunc func(c redis.Conn) (reply interface{}, err error)) (reply interface{}, err error) {
+///Do a command
+func Do(command string ,args ...interface{}) (interface{},  error) {
 	db := pool.Get()
 	defer db.Close()
-
-	return pFunc(db)
+	return db.Do(command, args...)
 }
 
 func Set(args ...interface{}) {
@@ -117,7 +116,7 @@ func AquireLock(key string, expiretime int) int {
 	if ret != nil {
 		return val
 	}
-	return 0 //没有拿到锁
+	return 0 			//没有拿到锁
 }
 
 func UnLock(key string, val int) {
@@ -367,4 +366,22 @@ func ZAdd(key string, args ...interface{}) (int, error) {
 	db := pool.Get()
 	defer db.Close()
 	return redis.Int(db.Do("ZADD", redis.Args{}.Add(key).AddFlat(args)...))
+}
+
+//选举leader，所有参与选举的人使用相同的value和prefix，leader负责设置value
+//@prefix: 选举区分标识
+//@value: 本次选举的值，每次发起选举，value应该和上次选举时的value不同
+func AquireLeader(prefix string, value int) (isleader bool) {
+	isleader = false
+	val := AquireLock(prefix, 200)
+	if val > 0 { 			//拿到锁了
+		key := prefix + "leader"
+		val, _ = GetInt(key)
+		if val != value {		//还未被设置
+			Set(key, value)
+			isleader = true
+		}
+		UnLock(prefix, val)
+	}
+	return
 }

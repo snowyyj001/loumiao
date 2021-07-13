@@ -636,7 +636,7 @@ func reportOnLineNum(igo gorpc.IGoRoutine, data interface{}) interface{} {
 
 func closeServer(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	uid := data.(int)
-	llog.Debugf("closeServer: %d", uid)
+	llog.Infof("closeServer: %d", uid)
 
 	if uid == This.Id {
 		nodemgr.SocketActive = false
@@ -649,7 +649,10 @@ func closeServer(igo gorpc.IGoRoutine, data interface{}) interface{} {
 			This.removeRpcHanlder(uid)
 		}
 	} else {
-		socketId, _ := This.tokens_u[uid]
+		socketId, ok := This.tokens_u[uid]
+		if !ok {
+			return nil
+		}
 		token, _ := This.tokens[socketId]
 		if token != nil {
 			This.rpcGates = util.RemoveSlice(This.rpcGates, socketId)

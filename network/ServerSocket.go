@@ -4,6 +4,7 @@ import (
 	"net"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/snowyyj001/loumiao/llog"
 )
@@ -55,6 +56,7 @@ func (self *ServerSocket) Start() bool {
 	if err != nil {
 		llog.Errorf("%v", err)
 	}
+	//setDefaultListenerSockopts SO_REUSEADDR 默认启用
 	ln, err := net.ListenTCP("tcp4", tcpAddr)
 	if err != nil {
 		llog.Errorf("%v", err)
@@ -183,19 +185,30 @@ func (self *ServerSocket) SetMaxClients(maxnum int) {
 }
 
 func serverRoutine(server *ServerSocket) {
+	var tempDelay time.Duration
 	for {
 		tcpConn, err := server.m_Listen.AcceptTCP()
 		if err != nil {
-			llog.Errorf("ServerScoket serverRoutine listen err: %s", err.Error())
-			break
+			if ne, ok := err.(net.Error); ok && ne.Temporary() {
+				if tempDelay == 0 {
+					tempDelay = 1 * time.Millisecond
+				} else {
+					tempDelay++
+				}
+				if max := 3 * time.Second; tempDelay > max {
+					break
+				}
+				llog.Errorf("serverRoutine accept error: %v", err)
+				time.Sleep(tempDelay)
+				continue
+			}
 		}
-
+		tempDelay = 0
 		if server.m_nClientCount >= server.m_nMaxClients {
 			tcpConn.Close()
 			llog.Warning("serverRoutine: too many conns")
 			continue
 		}
-
 		handleConn(server, tcpConn, tcpConn.RemoteAddr().String())
 	}
 	server.Close()

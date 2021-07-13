@@ -24,6 +24,7 @@ const (
 )
 
 var (
+	NET_NODE_AREAID = "-1"
 	NET_NODE_ID    = -1               //节点id(服标识)
 	NET_NODE_TYPE  = -1               //节点类型ServerType_*
 	NET_GATE_SADDR = "127.0.0.1:6789" //网关监听地址
@@ -81,7 +82,7 @@ func init() {
 		return
 	}
 
-	NET_NODE_ID = Cfg.NetCfg.Id
+	NET_NODE_ID = Cfg.NetCfg.Id		//0代表可跨服
 	SERVER_NODE_UID = Cfg.NetCfg.Uid
 	NET_NODE_TYPE = Cfg.NetCfg.Type
 	NET_PROTOCOL = Cfg.NetCfg.Protocol
@@ -103,6 +104,7 @@ func init() {
 	fmt.Println("启动参数个数argv: ", argv)
 	fmt.Println("启动参数值argc：", os.Args)
 	if argv > 6 {
+		flag.IntVar(&NET_NODE_ID, "r", 0, "area id")
 		flag.StringVar(&SERVER_NAME, "n", "server", "server name")
 		flag.StringVar(&NET_GATE_SADDR, "s", "127.0.0.1:6789", "server listen address") //	"127.0.0.1:6789"
 		flag.IntVar(&Cfg.NetCfg.Uid, "u", 0, "server uid")
@@ -118,6 +120,8 @@ func init() {
 	} else {
 		SERVER_NAME = fmt.Sprintf("%s-%d-%d", SERVER_NAME, NET_NODE_TYPE, SERVER_NODE_UID)
 	}
+
+	NET_NODE_AREAID = fmt.Sprintf("%d", SERVER_NODE_UID)		//just for simple when need string type
 }
 
 //随机拿到一个backlog的监听地址

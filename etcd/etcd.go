@@ -181,7 +181,7 @@ func UnLock(key string, lockval *concurrency.Mutex) {
 //@value: 本次选举的值，每次发起选举，value应该和上次选举时的value不同
 func AquireLeader(prefix string, value string) (isleader bool) {
 	isleader = false
-	mt := AquireLock(prefix, 100)
+	mt := AquireLock(prefix, 200)
 	gresp, err := This.Get(context.TODO(), prefix)
 	if err != nil {
 		return
