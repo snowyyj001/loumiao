@@ -202,20 +202,12 @@ func SendAcotr(actorName string, actorHandler string, data interface{}) {
 	gorpc.MGR.Send(actorName, actorHandler, m)
 }
 
-//主动绑定关于client的gate信息，目前server在收到client的消息包后会自动绑定，并不需要手动绑定，
-//除非需要在收到client消息之前就要发消息给client，这种情况目前没有。
+//主动绑定关于client的gate信息，例如，world通知zone绑定client和gate的信息
 //world通知其他server关于client的gate信息,其他server只有知道了client属于哪个gate才能发送消息给client
 //@userid: client的userid
 //@gateuid: client所属的gate uid
-//@targetuid: 目标服务器uid，如果=0，则是自己绑定自己
+//@targetuid: 目标服务器uid
 func BindGate(userid int64, gateuid int, targetuid int) {
-	if targetuid > 0 {
-		req := &msg.LouMiaoBindGate{Uid: int32(gateuid), UserId: userid}
-		SendRpc("LouMiaoBindGate", req, targetuid)
-	} else {
-		req := &msg.LouMiaoBindGate{Uid: int32(gateuid), UserId: userid}
-		m := &gorpc.M{Data: req, Flag: true}
-		gorpc.MGR.Send("GateServer", "BindGate", m)
-	}
-
+	req := &msg.LouMiaoBindGate{Uid: int32(gateuid), UserId: userid}
+	SendRpc("LouMiaoBindGate", req, targetuid)
 }

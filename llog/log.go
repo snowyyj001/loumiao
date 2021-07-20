@@ -3,14 +3,8 @@ package llog
 import (
 	"encoding/json"
 	"fmt"
-	"net"
-	"strconv"
-	"strings"
-	"sync/atomic"
-
 	"github.com/natefinch/lumberjack"
 	go_logger "github.com/phachon/go-logger"
-	"github.com/snowyyj001/loumiao/base"
 	"github.com/snowyyj001/loumiao/config"
 	"github.com/snowyyj001/loumiao/define"
 	"github.com/snowyyj001/loumiao/lnats"
@@ -30,9 +24,9 @@ var (
 	logger      *zap.Logger
 	sugarLogger *zap.SugaredLogger
 	logLevel    int
-	remoteLog   *LogRemoteWrite
+	//remoteLog   *LogRemoteWrite
 )
-
+/*
 type LogRemoteWrite struct {
 	clientLog  net.Conn
 	lineNum    int64
@@ -89,16 +83,18 @@ func (l *LogRemoteWrite) Write(p []byte) (n int, err error) {
 	}
 	return
 }
-
+*/
 func getLogWriter(fileName string) zapcore.WriteSyncer {
 	lumberJackLogger := &lumberjack.Logger{
 		Filename:   fileName, //日志文件的位置
-		MaxSize:    250,      //日志文件的最大大小（以MB为单位）
+		MaxSize:    500,      //日志文件的最大大小（以MB为单位）
 		MaxBackups: 100,      //保留旧文件的最大个数
 		MaxAge:     7,        //保留旧文件的最大天数
 		Compress:   false,    //是否压缩/归档旧文件
 	}
-	if config.GAME_LOG_CONLOSE {
+
+	return zapcore.AddSync(lumberJackLogger)
+	/*if config.GAME_LOG_CONLOSE {
 		//return zapcore.NewMultiWriteSyncer(zapcore.AddSync(lumberJackLogger), zapcore.AddSync(os.Stdout))
 		return zapcore.AddSync(lumberJackLogger)
 	} else {
@@ -106,7 +102,7 @@ func getLogWriter(fileName string) zapcore.WriteSyncer {
 		remoteLog.connectUdp()
 		return zapcore.NewMultiWriteSyncer(zapcore.AddSync(lumberJackLogger), zapcore.AddSync(remoteLog))
 		//return zapcore.AddSync(lumberJackLogger)
-	}
+	}*/
 }
 
 func getEncoder() zapcore.Encoder {
@@ -124,6 +120,7 @@ func init() {
 	core := zapcore.NewCore(getEncoder(), getLogWriter(filename), zapcore.DebugLevel)
 	if config.GAME_LOG_CONLOSE {
 		logger = zap.New(core)
+
 		clogger = go_logger.NewLogger()
 		// 命令行输出配置
 		consoleConfig := &go_logger.ConsoleConfig{

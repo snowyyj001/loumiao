@@ -107,7 +107,6 @@ func (self *ClientSocket) OnNetConn() {
 }
 
 func (self *ClientSocket) OnNetFail(int) {
-	self.Stop()
 	buff, nLen := message.Encode(0, "C_DISCONNECT", nil)
 	self.HandlePacket(self.m_ClientId, buff, nLen)
 }
@@ -126,6 +125,7 @@ func clientRoutine(pClient *ClientSocket) bool {
 	var buff = make([]byte, pClient.m_MaxReceiveBufferSize)
 	for {
 		if pClient.m_bShuttingDown {
+			pClient.OnNetFail(3)
 			break
 		}
 		n, err := pClient.m_Conn.Read(buff)

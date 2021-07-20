@@ -26,8 +26,10 @@ var (
 )
 
 type Token struct {
-	UserId  int //这里应该是int64，所以，程序只能在64位机上运行，否则会有异常
-	TokenId int
+	UserId  int 	//userid
+	WouldId int		//world uid
+	ZoneUid int		//zone uid
+	TokenId int		//合法性校验tokenid
 }
 
 /*tokens, tokens_u, users_u说明
@@ -36,20 +38,19 @@ tokens: 没有用
 tokens_u: 没有用
 ================================================================================
 当loumiao是gate时:
-tokens：key是client的socketid，Token.UserId是client的userid， Token.TokenId是client的tokenid
-tokens_u：key是client的userid,value是socketid
-users_u: key是client的userid,value是world的uid
+tokens：key是client的socketid，Token.UserId是client的userid，Token.TokenId是client的tokenid，Token.WouldId是client所属的world uid，Token.ZoneUid是client所属的zone uid
+tokens_u：key是client的userid,value是client的socketid
+users_u: 没有用
 ================================================================================
 当loumiao是server时:
-tokens：key是gate的socketid，Token.UserId是gate的uid， Token.TokenId是自己的uid(0代表该gate将要被关闭)
+tokens：key是gate的socketid，Token.UserId是gate的uid，Token.TokenId是自己的uid(0代表该gate将要被关闭)
 tokens_u：key是gate的uid,value是socketid
-users_u: key是client的userid,value是gate的uid,在收到LouMiaoNetMsg时绑定（意味着如果没有事先收到cleint的消息包，server是不知道它所归属的gate的，除非主动BindGate）
+users_u: key是client的userid,value是gate的uid
 */
 
 type GateServer struct {
 	gorpc.GoRoutineLogic
 
-	Id            int
 	pService      network.ISocket
 	clients       map[int]*network.ClientSocket
 	pInnerService network.ISocket
@@ -83,7 +84,7 @@ func (self *GateServer) DoInit() bool {
 			self.pService.(*network.ServerSocket).SetMaxClients(config.NET_MAX_CONNS)
 		}
 		self.pService.Init(config.NET_LISTEN_SADDR)
-		self.pService.BindPacketFunc(packetFunc)
+		self.pService.BindPacketFunc(packetFunc_client)
 		self.pService.SetConnectType(network.CLIENT_CONNECT)
 	}
 
@@ -93,7 +94,7 @@ func (self *GateServer) DoInit() bool {
 		self.pInnerService = new(network.ServerSocket)
 		self.pInnerService.(*network.ServerSocket).SetMaxClients(config.NET_MAX_RPC_CONNS)
 		self.pInnerService.Init(config.NET_LISTEN_SADDR)
-		self.pInnerService.BindPacketFunc(packetFunc)
+		self.pInnerService.BindPacketFunc(packetFunc_server)
 		self.pInnerService.SetConnectType(network.SERVER_CONNECT)
 	}
 
@@ -122,7 +123,8 @@ func (self *GateServer) DoRegsiter() {
 	self.Register("SendRpc", sendRpc)
 	self.Register("BroadCastRpc", broadCastRpc)
 	self.Register("SendGate", sendGate)
-	self.Register("RecvPackMsg", recvPackMsg)
+	self.Register("RecvPackMsgServer", recvPackMsgServer)
+	self.Register("RecvPackMsgClient", recvPackMsgClient)
 	self.Register("ReportOnLineNum", reportOnLineNum)
 	self.Register("CloseServer", closeServer)
 	self.Register("BindGate", bindGate)
@@ -174,7 +176,6 @@ func (self *GateServer) DoStart() {
 	if util.CheckErr(err) {
 		llog.Fatalf("etcd connect failed: %v", config.Cfg.EtcdAddr)
 	}
-	self.Id = config.Cfg.NetCfg.Uid
 	self.m_etcdKey = fmt.Sprintf("%s%s", define.ETCD_NODEINFO, config.NET_GATE_SADDR)
 	self.clientEtcd = client
 	self.clientEtcd.SetLeasefunc(leaseCallBack)
@@ -201,7 +202,7 @@ func (self *GateServer) DoStart() {
 		}
 	}
 
-	llog.Infof("GateServer DoStart success: name=%s,saddr=%s,uid=%d", self.Name, config.NET_GATE_SADDR, self.Id)
+	llog.Infof("GateServer DoStart success: name=%s,saddr=%s,uid=%d", self.Name, config.NET_GATE_SADDR, config.SERVER_NODE_UID)
 }
 
 //begin start socket servie
@@ -224,7 +225,7 @@ func (self *GateServer) DoOpen() {
 
 	nodemgr.SocketActive = true
 
-	llog.Infof("GateServer DoOpen success: name=%s,saddr=%s,uid=%d", self.Name, config.NET_GATE_SADDR, self.Id)
+	llog.Infof("GateServer DoOpen success: name=%s,saddr=%s,uid=%d", self.Name, config.NET_GATE_SADDR, config.SERVER_NODE_UID)
 
 	reqParam := &struct {
 		Tag     int    `json:"tag"`     //邮件类型
@@ -274,7 +275,9 @@ func (self *GateServer) newServerDiscover(key, val string, dis bool) {
 		if config.NET_NODE_TYPE != config.ServerType_Gate {
 			return
 		}
-		if node.Type == config.ServerType_Gate || node.Type == config.ServerType_Account { //filter gate and account
+
+		//filter gate account
+		if node.Type == config.ServerType_Gate || node.Type == config.ServerType_Account {
 			return
 		}
 		/*if config.NET_NODE_TYPE == config.ServerType_Account {
@@ -282,8 +285,8 @@ func (self *GateServer) newServerDiscover(key, val string, dis bool) {
 				return
 			}
 		}*/
-		rpcClient := self.GetRpcClient(node.Uid) //this conditation can be etcd reconnect
-		if rpcClient == nil {
+		rpcClient := self.GetRpcClient(node.Uid)
+		if rpcClient == nil {	//this conditation can be etcd reconnect
 			client := self.buildRpc(node.Uid, saddr)
 			if self.enableRpcClient(client) {
 				m := &gorpc.M{Id: node.Uid, Data: client}
@@ -315,15 +318,15 @@ func (self *GateServer) DoDestory() {
 
 //goroutine unsafe
 //net msg handler,this func belong to socket's goroutine
-func packetFunc(socketid int, buff []byte, nlen int) bool {
+func packetFunc_client(socketid int, buff []byte, nlen int) bool {
 	//llog.Debugf("packetFunc: socketid=%d, bufferlen=%d", socketid, nlen)
-	err, target, name, pm := message.Decode(This.Id, buff, nlen)
+	err, target, name, pm := message.Decode(config.NET_NODE_TYPE, buff, nlen)
 	//llog.Debugf("packetFunc %d %s %v", target, name, pm)
 	if nil != err {
-		llog.Errorf("packetFunc Decode error: %s", err.Error())
+		llog.Errorf("packetFunc_client Decode error: %s", err.Error())
 		//This.closeClient(socketid)
 	} else {
-		if target == This.Id || target <= 0 { //msg to me
+		if target == config.NET_NODE_TYPE || target <= 0 { 			//msg to me
 			handler, ok := handler_Map[name]
 			if ok {
 				nm := &gorpc.M{Id: socketid, Name: name, Data: pm}
@@ -331,13 +334,47 @@ func packetFunc(socketid int, buff []byte, nlen int) bool {
 			} else {
 				llog.Errorf("packetFunc handler is nil, drop it[%s]", name)
 			}
-		} else { //msg to other server
-			//newbuff := make([]byte, nlen)
-			//copy(newbuff, buff[:nlen])
+		} else { 	//msg to other server
+			if config.NET_NODE_TYPE != config.ServerType_Gate { 	//only gate can forward msg
+				llog.Errorf("packetFunc_client target may be error: target=%d, mytype=%d, name=%s", target, config.NET_NODE_TYPE, name)
+				return true
+			}
 			newbuff := message.GetBuffer(nlen)
 			copy(newbuff, buff[:nlen])
 			m := &gorpc.M{Id: socketid, Param: target, Data: newbuff}
-			gorpc.MGR.Send("GateServer", "RecvPackMsg", m)
+			gorpc.MGR.Send("GateServer", "RecvPackMsgClient", m)
+		}
+	}
+	return true
+}
+
+//goroutine unsafe
+//net msg handler,this func belong to socket's goroutine
+func packetFunc_server(socketid int, buff []byte, nlen int) bool {
+	//llog.Debugf("packetFunc: socketid=%d, bufferlen=%d", socketid, nlen)
+	err, target, name, pm := message.Decode(config.SERVER_NODE_UID, buff, nlen)
+	//llog.Debugf("packetFunc %d %s %v", target, name, pm)
+	if nil != err {
+		llog.Errorf("packetFunc Decode error: %s", err.Error())
+		//This.closeClient(socketid)
+	} else {
+		if target == config.SERVER_NODE_UID || target <= 0 { //msg to me
+			handler, ok := handler_Map[name]
+			if ok {
+				nm := &gorpc.M{Id: socketid, Name: name, Data: pm}
+				gorpc.MGR.Send(handler, "ServiceHandler", nm)
+			} else {
+				llog.Errorf("packetFunc_server handler is nil, drop it[%s]", name)
+			}
+		} else { 		//msg to other server
+			if config.NET_NODE_TYPE != config.ServerType_Gate { 	//only gate can forward msg
+				llog.Errorf("packetFunc target may be error: targetuid=%d, myuid=%d, name=%s", target, config.SERVER_NODE_UID, name)
+				return true
+			}
+			newbuff := message.GetBuffer(nlen)
+			copy(newbuff, buff[:nlen])
+			m := &gorpc.M{Id: target,  Data: newbuff}
+			gorpc.MGR.Send("GateServer", "RecvPackMsgServer", m)
 		}
 	}
 	return true
@@ -348,7 +385,7 @@ func (self *GateServer) buildRpc(uid int, addr string) *network.ClientSocket {
 	client.SetClientId(uid)
 	client.Init(addr)
 	client.SetConnectType(network.CHILD_CONNECT)
-	client.BindPacketFunc(packetFunc)
+	client.BindPacketFunc(packetFunc_server)
 	client.Uid = uid
 
 	return client
@@ -422,9 +459,39 @@ func (self *GateServer) getCluserServer(funcName string) *network.ClientSocket {
 	return client
 }
 
-func (self *GateServer) StopClient(userId int) {
+func (self *GateServer) GetClientToken(socketId int) *Token {
+	if token, ok := self.tokens[socketId]; ok {
+		return token
+	}
+	return nil
+}
+
+func (self *GateServer) GetClientId(userid int) int {
+	socketId, _ := self.tokens_u[userid]
+	return socketId
+}
+
+func (self *GateServer) GetGateUid(userid int) int {
+	uid, _ := self.users_u[userid]
+	return uid
+}
+
+// get gate's socketid by client's userid, for server
+func (self *GateServer) GetGateClientId(userid int) int {
+	uid, _ := self.users_u[userid]
+	socketId, _ := self.tokens_u[uid]
+	return socketId
+}
+
+//关闭客户端
+//@sync 是否等立即清除连接记录
+//@userId 客户端uid
+func (self *GateServer) StopClient(sync bool, userId int) {
 	sid := This.tokens_u[userId]
 	if sid > 0 {
+		if sync { //时序异步问题，直接关闭，不等socket的DISCONNECT消息
+			innerDisConnect(self, sid, nil)
+		}
 		self.closeClient(sid)
 	}
 }
@@ -440,6 +507,69 @@ func (self *GateServer) closeClient(clientid int) {
 		self.pInnerService.(*network.ServerSocket).StopClient(clientid)
 	}
 }
+
+// gate向client发送消息
+func (self *GateServer) SendClient(clientid int, buff []byte) {
+	llog.Debugf("GateServer.SendClient: clientid=%d, bufflen=%d, buff=%v", clientid, len(buff), buff)
+	self.pService.SendById(clientid, buff)
+}
+
+// 客户端绑定gate，gate使用
+func (self *GateServer) BindClient(socketId, userid, tokenid, worlduid int) {
+	self.tokens[socketId] = &Token{TokenId: tokenid, UserId: userid, WouldId: worlduid}
+	self.tokens_u[userid] = socketId
+	onClientConnected(userid, worlduid)
+}
+
+// 客户端解绑gate，gate使用
+func (self *GateServer) UnBindClient(socketId int) {
+	token := self.GetClientToken(socketId)
+	if token != nil {
+		delete(self.tokens, socketId)
+		delete(self.tokens_u, token.UserId)
+		onClientDisConnected(token.UserId, token.WouldId)
+	}
+}
+
+// 解除/绑定client所属的gate, server使用
+func (self *GateServer) BindGate(userid, gateuid int) {
+	if gateuid > 0 {
+		self.users_u[userid] = gateuid
+	} else {
+		delete(self.users_u, userid)
+	}
+}
+
+// 解除gate的绑定，server使用
+func (self *GateServer) UnBindGate(socketId int) {
+	This.rpcGates = util.RemoveSlice(self.rpcGates, socketId)		//将这个gate的rpc调用移除
+	token := This.GetClientToken(socketId)
+	if token != nil{
+		gateuid := token.UserId
+		delete(This.tokens, socketId)		//和gate解绑
+		delete(This.tokens_u, gateuid)
+		for userid, mygateuid := range This.users_u {		//在这个gate上的user都应该掉线
+			if mygateuid == gateuid {
+				onClientDisConnected(userid, gateuid)
+				self.BindGate(userid, 0)
+			}
+		}
+	}
+}
+
+// 解除server的绑定，gate使用
+func (self *GateServer) UnBindServer(uid int) {
+	if config.NET_NODE_TYPE != config.ServerType_Gate {
+		return
+	}
+	This.removeRpc(uid)					//将这个server的rpc移除
+	for socketid, token := range self.tokens {
+		if token.WouldId == uid {
+			self.StopClient(false, socketid)
+		}
+	}
+}
+
 
 // 向内部server直接发送buffer消息,专为gate使用，
 // 必须保证线程安全，即需要在gateserver的igo中调用该函数

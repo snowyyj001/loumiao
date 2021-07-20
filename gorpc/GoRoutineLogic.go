@@ -325,6 +325,18 @@ func (self *GoRoutineLogic) SendBack(server IGoRoutine, handler_name string, sda
 }
 
 //阻塞读取数据式投递任务，一直等待（超过三秒属于异常）
+func (self *GoRoutineLogic) CallActor(target string, handler_name string, sdata interface{}) interface{} {
+	igo := MGR.GetRoutine(target)
+	if igo == nil {
+		llog.Errorf("GoRoutineLogic.CallActor target[%s] is nil: %s", target, handler_name)
+		return nil
+	}
+	m := &M{Data: sdata, Flag: true}
+	return self.Call(igo, handler_name, m)
+}
+
+
+//阻塞读取数据式投递任务，一直等待（超过三秒属于异常）
 func (self *GoRoutineLogic) Call(server IGoRoutine, handler_name string, sdata *M) interface{} {
 	if self.started == false {
 		llog.Warningf("GoRoutineLogic.Call has not started: %s, %s, %v", self.Name, handler_name, sdata)

@@ -5,13 +5,12 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
-	rand2 "math/rand"
 	"os"
 	"strings"
 )
 
 const (
-	ServerType_None      = iota //0 无类型
+	ServerType_None      = iota //0 通用无类型
 	ServerType_Gate             //1 网关
 	ServerType_Account          //2 账号
 	ServerType_World            //3 世界
@@ -33,7 +32,7 @@ var (
 	NET_WEBSOCKET           = false           //使用websocket or socket
 	NET_MAX_CONNS           = 65535           //最大连接数
 	NET_MAX_RPC_CONNS       = 1024            //rpc最大连接数
-	NET_BUFFER_SIZE         = 1024 * 256      //最大消息包长度256k(对外)
+	NET_BUFFER_SIZE         = 1024 * 32      //最大消息包长度32k(对外)
 	NET_CLUSTER_BUFFER_SIZE = 2 * 1024 * 1024 //最大消息包长度2M(对内)
 	NET_MAX_NUMBER          = 30000           //pcu
 
@@ -64,7 +63,6 @@ type ServerCfg struct {
 	NetCfg      NetNode  `json:"net"`
 	EtcdAddr    []string `json:"etcd"`
 	NatsAddr    []string `json:"nats"`
-	BackLogAddr []string `json:"backlog"`
 }
 
 var Cfg ServerCfg
@@ -82,8 +80,8 @@ func init() {
 		return
 	}
 
-	NET_NODE_ID = Cfg.NetCfg.Id		//0代表可跨服
-	SERVER_NODE_UID = Cfg.NetCfg.Uid
+	NET_NODE_ID = Cfg.NetCfg.Id		//区服id，0代表可跨服
+	SERVER_NODE_UID = Cfg.NetCfg.Uid		//server uid
 	NET_NODE_TYPE = Cfg.NetCfg.Type
 	NET_PROTOCOL = Cfg.NetCfg.Protocol
 	NET_WEBSOCKET = Cfg.NetCfg.WebSocket == 1
@@ -109,26 +107,16 @@ func init() {
 		flag.StringVar(&NET_GATE_SADDR, "s", "127.0.0.1:6789", "server listen address") //	"127.0.0.1:6789"
 		flag.IntVar(&Cfg.NetCfg.Uid, "u", 0, "server uid")
 		flag.StringVar(&SERVER_PARAM, "a", "", "server startup param")
-
 		flag.Parse() //parse之后参数才会被解析复制
 
-		arrStr := strings.Split(NET_GATE_SADDR, ":")            //服发现使用正常的局域网ip
-		NET_LISTEN_SADDR = fmt.Sprintf("0.0.0.0:%s", arrStr[1]) //socket监听,监听所有网卡绑定的ip，格式(0.0.0.0:port)(web监听格式也可以是(:port))
-		Cfg.NetCfg.SAddr = NET_GATE_SADDR
 		Cfg.NetCfg.Param = SERVER_PARAM
 		SERVER_NODE_UID = Cfg.NetCfg.Uid
 	} else {
 		SERVER_NAME = fmt.Sprintf("%s-%d-%d", SERVER_NAME, NET_NODE_TYPE, SERVER_NODE_UID)
 	}
 
+	arrStr := strings.Split(NET_GATE_SADDR, ":")            //服发现使用正常的局域网ip,例如 192.168.32.15:6789 127.0.0.1:6789
+	NET_LISTEN_SADDR = fmt.Sprintf("0.0.0.0:%s", arrStr[1]) //socket监听,监听所有网卡绑定的ip，格式(0.0.0.0:port)(web监听格式也可以是(:port))
+	Cfg.NetCfg.SAddr = NET_GATE_SADDR
 	NET_NODE_AREAID = fmt.Sprintf("%d", SERVER_NODE_UID)		//just for simple when need string type
-}
-
-//随机拿到一个backlog的监听地址
-func NET_LOG_SADDR() string {
-	sz := len(Cfg.BackLogAddr)
-	if sz == 0 {
-		return ""
-	}
-	return Cfg.BackLogAddr[int(rand2.Int31n(int32(sz)))]
 }
