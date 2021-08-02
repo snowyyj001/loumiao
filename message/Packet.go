@@ -19,10 +19,10 @@ import (
 //消息buffer以大端传输
 //4+2+2+name+msg
 //1，2，3，4字节代表消息报总长度
-//5，6字节代表目标服务器类型
+//5，6字节代表目标服务器类型/目标服务器uid
 //7，8字节代表消息名长度
 
-//target: 目标服务器id
+//target: 目标服务器类型/id
 //name: 消息名
 //msg: 具体的消息包
 var Encode func(target int, name string, packet interface{}) ([]byte, int)

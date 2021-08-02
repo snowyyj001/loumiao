@@ -3,9 +3,9 @@ package gate
 import (
 	"encoding/json"
 	"fmt"
-
 	"github.com/snowyyj001/loumiao"
 	"github.com/snowyyj001/loumiao/base"
+	"github.com/snowyyj001/loumiao/base/maps"
 	"github.com/snowyyj001/loumiao/config"
 	"github.com/snowyyj001/loumiao/define"
 	"github.com/snowyyj001/loumiao/gorpc"
@@ -17,14 +17,21 @@ import (
 	"github.com/snowyyj001/loumiao/util"
 )
 
+/*
+对于onconnect， 不论是client -> gate/account，还是gate -> server
+都是在login成功之后才算onconnect
+对于ondisconnect，在socket断开时就算
+所以bind信息时，在login成功之后，unbind时在socket的断开时
+ */
+
 //client connect
 func innerConnect(igo gorpc.IGoRoutine, socketId int, data interface{}) {
 	llog.Debugf("GateServer innerConnect: %d", socketId)
-	//对于account来说，socket连接数就是在线人数
-	//对于gate来说，只有client发送完LouMiaoLoginGate消息，成功登录网关才算在线数
+	//对于account/gate来说，socket连接数就是在线人数
 	//本质上来说差别不大
 	//对于world来说，内存中玩家数就是在线数，包括暂时离线缓存的那一部分
-	if config.NET_NODE_TYPE == config.ServerType_Account {
+	//对于zone来说，就是参与战斗的玩家数
+	if This.ServerType == network.CLIENT_CONNECT { //对外(login,gate)
 		This.OnlineNum++
 	}
 }
@@ -32,7 +39,7 @@ func innerConnect(igo gorpc.IGoRoutine, socketId int, data interface{}) {
 //client disconnect
 func innerDisConnect(igo gorpc.IGoRoutine, socketId int, data interface{}) {
 	llog.Debugf("GateServer innerDisConnect: %d", socketId)
-	if config.NET_NODE_TYPE == config.ServerType_Account {
+	if This.ServerType == network.CLIENT_CONNECT { //对外(login,gate)
 		This.OnlineNum--
 	}
 	if This.ServerType == network.SERVER_CONNECT { 		//the server lost connect with gate
@@ -60,10 +67,9 @@ func onClientConnected(uid int, tid int) {
 
 	if This.ServerType == network.CLIENT_CONNECT {
 		if config.NET_NODE_TYPE == config.ServerType_Gate { 		//tell world that a client has login to this gate
-			req := &msg.LouMiaoClientConnect{ClientId: int64(uid), GateId: int64(config.SERVER_NODE_UID), State: define.CLIENT_CONNECT}
+			req := &msg.LouMiaoClientConnect{ClientId: int64(uid), GateId: int32(config.SERVER_NODE_UID), State: define.CLIENT_CONNECT}
 			buff, _ := message.Encode(0, "LouMiaoClientConnect", req)
 			This.SendServer(tid, buff)
-			This.OnlineNum++
 		}
 		handler, ok := handler_Map["ON_CONNECT"]
 		if ok {
@@ -82,17 +88,15 @@ func onClientConnected(uid int, tid int) {
 			This.pInnerService.SendById(clientid, buff)
 		}
 	}
-
 }
 
 //client/gate disconnected to gate/server
 func onClientDisConnected(uid int, tid int) {
 	llog.Debugf("GateServer onClientDisConnected: uid=%d,tid=%d", uid, tid)
 	if config.NET_NODE_TYPE == config.ServerType_Gate { //gate
-		req := &msg.LouMiaoClientConnect{ClientId: int64(uid), GateId: int64(config.SERVER_NODE_UID), State: define.CLIENT_DISCONNECT}
+		req := &msg.LouMiaoClientConnect{ClientId: int64(uid), GateId: int32(config.SERVER_NODE_UID), State: define.CLIENT_DISCONNECT}
 		buff, _ := message.Encode(0, "LouMiaoClientConnect", req)
 		This.SendServer(tid, buff)
-		This.OnlineNum--
 	} else { //server
 		handler, ok := handler_Map["ON_DISCONNECT"]
 		if ok {
@@ -156,13 +160,6 @@ func innerLouMiaoLoginGate(igo gorpc.IGoRoutine, socketId int, data interface{})
 		llog.Errorf("0.innerLouMiaoLoginGate only gate can send LouMiaoLoginGate to server for a login， gateuid=%d", userid)
 		return
 	}
-
-	if This.OnlineNum > config.NET_MAX_NUMBER {
-		llog.Errorf("1.innerLouMiaoLoginGate too many connections: max=%d, now=%d", config.NET_MAX_NUMBER, This.OnlineNum)
-		This.closeClient(socketId)
-		return
-	}
-
 	old_socketid, ok := This.tokens_u[userid]
 	if ok { 			//close the old connection
 		req := &msg.LouMiaoKickOut{}
@@ -173,14 +170,7 @@ func innerLouMiaoLoginGate(igo gorpc.IGoRoutine, socketId int, data interface{})
 		This.pInnerService.(*network.ServerSocket).StopClient(old_socketid)
 		This.rpcGates = util.RemoveSlice(This.rpcGates, old_socketid)
 	}
-	tokenid := int(m.TokenId)
-	if tokenid == config.SERVER_NODE_UID {
-
-	}
-	This.tokens[socketId] = &Token{TokenId: tokenid, UserId: userid}
-	This.tokens_u[userid] = socketId
-	This.rpcGates = append(This.rpcGates, socketId)
-	onClientConnected(userid, 0)
+	This.BindRpcGate(socketId, userid, int(m.TokenId))
 }
 
 //rpc register
@@ -207,49 +197,33 @@ func innerLouMiaoRpcRegister(igo gorpc.IGoRoutine, socketId int, data interface{
 func innerLouMiaoRpcMsg(igo gorpc.IGoRoutine, socketId int, data interface{}) {
 	req := data.(*msg.LouMiaoRpcMsg)
 	llog.Debugf("innerLouMiaoRpcMsg=%s, socurce=%d, target=%d, ByteBuffer=%d", req.FuncName, req.SourceId, req.TargetId, req.ByteBuffer)
-	if config.NET_NODE_TYPE == config.ServerType_Gate { //server -> gate
-		target := int(req.TargetId)
-		var rpcClient *network.ClientSocket
-		if target <= 0 {
-			rpcClient = This.getCluserServer(req.FuncName)
+	handler, ok := handler_Map[req.FuncName]
+	if !ok {
+		llog.Errorf("0.InnerLouMiaoRpcMsg no rpc hanlder %s, %d", req.FuncName, socketId)
+		return
+	}
+
+	if req.ByteBuffer > 0 { 		//not pb but bytes
+		m := &gorpc.M{Id: int(req.SourceId), Name: req.FuncName, Data: req.Buffer}
+		if handler == "GateServer" {
+			igo.CallNetFunc(m)
 		} else {
-			rpcClient = This.GetRpcClient(target)
+			gorpc.MGR.Send(handler, "ServiceHandler", m)
 		}
-		if rpcClient == nil {
-			llog.Warningf("1.innerLouMiaoRpcMsg rpc client error %s %d", req.FuncName, target)
+	} else {
+		err, _, _, pm := message.Decode(config.SERVER_NODE_UID, req.Buffer, len(req.Buffer))
+		//llog.Debugf("innerLouMiaoRpcMsg : pm = %v", pm)
+		//spm := reflect.Indirect(reflect.ValueOf(pm))
+		//llog.Debugf("innerLouMiaoRpcMsg : spm = %v, typename=%v", spm, reflect.TypeOf(spm.Interface()).Name
+		if err != nil {
+			llog.Errorf("1.innerLouMiaoRpcMsg decode msg error : func=%s, error=%s ", req.FuncName, err.Error())
 			return
 		}
-		outdata := &msg.LouMiaoRpcMsg{TargetId: req.TargetId, FuncName: req.FuncName, Buffer: req.Buffer, SourceId: req.SourceId, ByteBuffer: req.ByteBuffer}
-		buff, _ := message.Encode(target, "LouMiaoRpcMsg", outdata)
-		rpcClient.Send(buff)
-	} else { //gate -> server or gate self
-		handler, ok := handler_Map[req.FuncName]
-		if ok {
-			if req.ByteBuffer > 0 { //not pb but bytes
-				m := &gorpc.M{Id: int(req.SourceId), Name: req.FuncName, Data: req.Buffer}
-				if handler == "GateServer" {
-					igo.CallNetFunc(m)
-				} else {
-					gorpc.MGR.Send(handler, "ServiceHandler", m)
-				}
-			} else {
-				err, _, _, pm := message.Decode(config.SERVER_NODE_UID, req.Buffer, len(req.Buffer))
-				//llog.Debugf("innerLouMiaoRpcMsg : pm = %v", pm)
-				//spm := reflect.Indirect(reflect.ValueOf(pm))
-				//llog.Debugf("innerLouMiaoRpcMsg : spm = %v, typename=%v", spm, reflect.TypeOf(spm.Interface()).Name
-				if err != nil {
-					llog.Errorf("2.innerLouMiaoRpcMsg decode msg error : func=%s, error=%s ", req.FuncName, err.Error())
-					return
-				}
-				m := &gorpc.M{Id: int(req.SourceId), Name: req.FuncName, Data: pm}
-				if handler == "GateServer" {
-					igo.CallNetFunc(m)
-				} else {
-					gorpc.MGR.Send(handler, "ServiceHandler", m)
-				}
-			}
+		m := &gorpc.M{Id: int(req.SourceId), Name: req.FuncName, Data: pm}
+		if handler == "GateServer" {
+			igo.CallNetFunc(m)
 		} else {
-			llog.Errorf("3.InnerLouMiaoRpcMsg no rpc hanlder %s, %d", req.FuncName, socketId)
+			gorpc.MGR.Send(handler, "ServiceHandler", m)
 		}
 	}
 }
@@ -309,7 +283,7 @@ func innerLouMiaoNetMsg(igo gorpc.IGoRoutine, socketId int, data interface{}) {
 	if config.NET_NODE_TYPE == config.ServerType_Gate { //server -> gate, for msg to client
 		socketId := This.GetClientId(userid)       // get client's socketid by userid
 		This.pService.SendById(socketId, req.Buffer) //send to client
-	} else { 		//client -> gate -> server
+	} else { 		// gate -> server
 		err, target, name, pm := message.Decode(config.NET_NODE_TYPE, req.Buffer, len(req.Buffer))
 		if err != nil {
 			llog.Errorf("innerLouMiaoNetMsg Decode error: err=%s, uid=%d,target=%d", err.Error(),config.SERVER_NODE_UID,target)
@@ -477,7 +451,7 @@ func sendRpc(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	}
 	//llog.Debugf("sendRpc: %d", clientid)
 
-	outdata := &msg.LouMiaoRpcMsg{TargetId: int64(m.Id), FuncName: m.Name, Buffer: m.Data.([]byte), SourceId: int64(config.SERVER_NODE_UID), ByteBuffer: int32(m.Param)}
+	outdata := &msg.LouMiaoRpcMsg{TargetId: int32(m.Id), FuncName: m.Name, Buffer: m.Data.([]byte), SourceId: int32(config.SERVER_NODE_UID), ByteBuffer: int32(m.Param)}
 	buff, _ := message.Encode(0, "LouMiaoRpcMsg", outdata)
 	This.pInnerService.SendById(clientid, buff)
 
@@ -529,22 +503,24 @@ func sendGate(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	return nil
 }
 
-func recvPackMsgServer(igo gorpc.IGoRoutine, data interface{}) interface{} {
+func sendRpcMsgToServer(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	m := data.(*gorpc.M)
 	target := m.Id
-	rebuff := m.Data.([]byte)
+	buff := m.Data.([]byte)
+	funcName := m.Name
 
-	rpcClient := This.GetRpcClient(target)
+	var rpcClient *network.ClientSocket
+	if target <= 0 {
+		rpcClient = This.getCluserServer(funcName)
+	} else {
+		rpcClient = This.GetRpcClient(target)
+	}
 	if rpcClient == nil {
-		llog.Warningf("0.recvPackMsgServer msg, but server has lost[%d] ", target)
-		message.BackBuffer(rebuff)
+		llog.Warningf("0.sendRpcMsgToServer target error funcName=%s,target=%d", funcName, target)
 		return nil
 	}
-
-	msg := &msg.LouMiaoNetMsg{ClientId: int64(config.SERVER_NODE_UID), Buffer: rebuff}
-	buff, newlen := message.Encode(target, "LouMiaoNetMsg", msg)
-	rpcClient.Send(buff[0:newlen])
-	message.BackBuffer(rebuff)
+	rpcClient.Send(buff)
+	message.BackBuffer(buff)
 
 	return nil
 }
@@ -634,4 +610,41 @@ func broadCastClients(buff []byte) {
 	} else {
 		This.pInnerService.BroadCast(buff)
 	}
+}
+
+func publish(igo gorpc.IGoRoutine, data interface{}) interface{} {
+	buffer := data.([]byte)
+	bitstream := base.NewBitStream(buffer, len(buffer))
+	key := bitstream.ReadString()
+	value := bitstream.ReadString()
+	vec, ok := This.msgQueueMap[key]
+	if !ok {
+		return nil
+	}
+	it := vec.Iterator()
+	for it.Next() {
+		loumiao.SendAcotr(it.Key().(string), it.Value().(string), value)
+	}
+	return nil
+}
+
+func subscribe (igo gorpc.IGoRoutine, data interface{}) interface{} {
+	buffer := data.([]byte)
+	bitstream := base.NewBitStream(buffer, len(buffer))
+	name := bitstream.ReadString()
+	key := bitstream.ReadString()
+	hanlder := bitstream.ReadString()
+	if len(hanlder) == 0 {
+		if vec, ok := This.msgQueueMap[key]; ok {
+			vec.Remove(name)
+		}
+	} else {
+		vec, ok := This.msgQueueMap[key]
+		if !ok {
+			vec = maps.NewWithStringComparator()
+			This.msgQueueMap[key] = vec
+		}
+		vec.Put(name, hanlder)
+	}
+	return nil
 }

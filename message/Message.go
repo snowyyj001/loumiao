@@ -1,6 +1,7 @@
 package message
 
 import (
+	"encoding/binary"
 	_ "fmt"
 	"github.com/snowyyj001/loumiao/config"
 	"reflect"
@@ -83,4 +84,10 @@ func PutPakcet(name string, data interface{}) {
 	if exist {
 		packetFunc.cache.Put(data)
 	}
+}
+
+//替换消息包的target字段(5,6字节)
+func ReplacePakcetTarget(target int32, buff []byte) {
+	tmp := uint16(target)
+	binary.BigEndian.PutUint16(buff[4:], tmp)
 }

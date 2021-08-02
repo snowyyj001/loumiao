@@ -193,3 +193,15 @@ func MDelete(st schema.Tabler) bool {
 	}
 	return true
 }
+
+//使用主库执行一个事务
+func MTransaction (call func(db *gorm.DB, params ...interface{}) error, params ...interface{}) bool {
+	err := Master.Transaction(func(tx *gorm.DB) error {
+		return call(tx, params...)
+	})
+	if err != nil {
+		llog.Errorf("MTransaction: %s", err.Error())
+		return false
+	}
+	return true
+}

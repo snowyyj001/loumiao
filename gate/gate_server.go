@@ -4,7 +4,9 @@ package gate
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/snowyyj001/loumiao/base/maps"
 	"github.com/snowyyj001/loumiao/message"
+	"github.com/snowyyj001/loumiao/msg"
 	"strings"
 	"sync"
 
@@ -63,6 +65,7 @@ type GateServer struct {
 	clientEtcd *etcd.ClientDis
 	rpcMap     map[string][]int
 	rpcGates   []int //space for time
+	msgQueueMap     map[string]*maps.Map		//单个actor内的消息pub/sub
 
 	m_etcdKey string
 
@@ -102,6 +105,7 @@ func (self *GateServer) DoInit() bool {
 	self.tokens_u = make(map[int]int)
 	self.users_u = make(map[int]int)
 	self.rpcMap = make(map[string][]int) //base64(funcname) -> [uid,uid,...]
+	self.msgQueueMap = make(map[string]*maps.Map)	//key -> [actorname,actorname,...]
 
 	handler_Map = make(map[string]string)
 
@@ -123,11 +127,13 @@ func (self *GateServer) DoRegsiter() {
 	self.Register("SendRpc", sendRpc)
 	self.Register("BroadCastRpc", broadCastRpc)
 	self.Register("SendGate", sendGate)
-	self.Register("RecvPackMsgServer", recvPackMsgServer)
+	self.Register("SendRpcMsgToServer", sendRpcMsgToServer)
 	self.Register("RecvPackMsgClient", recvPackMsgClient)
 	self.Register("ReportOnLineNum", reportOnLineNum)
 	self.Register("CloseServer", closeServer)
 	self.Register("BindGate", bindGate)
+	self.Register("Publish", publish)
+	self.Register("Subscribe", subscribe)
 
 	//equal to RegisterSelfNet
 	handler_Map["CONNECT"] = "GateServer" //in gate, client connect with gate, in server, gate(as client) connect with server
@@ -321,7 +327,7 @@ func (self *GateServer) DoDestory() {
 func packetFunc_client(socketid int, buff []byte, nlen int) bool {
 	//llog.Debugf("packetFunc: socketid=%d, bufferlen=%d", socketid, nlen)
 	err, target, name, pm := message.Decode(config.NET_NODE_TYPE, buff, nlen)
-	//llog.Debugf("packetFunc %d %s %v", target, name, pm)
+	//llog.Debugf("packetFunc_client %d %s %v", target, name, pm)
 	if nil != err {
 		llog.Errorf("packetFunc_client Decode error: %s", err.Error())
 		//This.closeClient(socketid)
@@ -332,7 +338,7 @@ func packetFunc_client(socketid int, buff []byte, nlen int) bool {
 				nm := &gorpc.M{Id: socketid, Name: name, Data: pm}
 				gorpc.MGR.Send(handler, "ServiceHandler", nm)
 			} else {
-				llog.Errorf("packetFunc handler is nil, drop it[%s]", name)
+				llog.Errorf("packetFunc_client handler is nil, drop it[%s]", name)
 			}
 		} else { 	//msg to other server
 			if config.NET_NODE_TYPE != config.ServerType_Gate { 	//only gate can forward msg
@@ -351,15 +357,27 @@ func packetFunc_client(socketid int, buff []byte, nlen int) bool {
 //goroutine unsafe
 //net msg handler,this func belong to socket's goroutine
 func packetFunc_server(socketid int, buff []byte, nlen int) bool {
-	//llog.Debugf("packetFunc: socketid=%d, bufferlen=%d", socketid, nlen)
+	//llog.Debugf("packetFunc_server: socketid=%d, bufferlen=%d", socketid, nlen)
 	err, target, name, pm := message.Decode(config.SERVER_NODE_UID, buff, nlen)
-	//llog.Debugf("packetFunc %d %s %v", target, name, pm)
+	//llog.Debugf("packetFunc_server %d %s %v", target, name, pm)
 	if nil != err {
-		llog.Errorf("packetFunc Decode error: %s", err.Error())
+		llog.Errorf("packetFunc_rpc Decode error: %s", err.Error())
 		//This.closeClient(socketid)
 	} else {
 		if target == config.SERVER_NODE_UID || target <= 0 { //msg to me
-			handler, ok := handler_Map[name]
+			if config.NET_NODE_TYPE == config.ServerType_Gate { //only gate can forward msg, filter msg to deal here
+				if strings.Compare(name,"LouMiaoRpcMsg") == 0 {		//if rpc msg to other server, just forward,
+					req := pm.(*msg.LouMiaoRpcMsg)
+					message.ReplacePakcetTarget(req.TargetId, buff)		//just change targetid, do not need encode again anymore
+					newbuff := message.GetBuffer(nlen)
+					copy(newbuff, buff[:nlen])
+					m := &gorpc.M{Id: int(req.TargetId), Name: req.FuncName, Data: newbuff}
+					gorpc.MGR.Send("GateServer", "SendRpcMsgToServer", m)
+					message.PutPakcet(name, req)
+					return true
+				}
+			}
+			handler, ok := handler_Map[name]		//handler_Map will not changed, so use here is ok
 			if ok {
 				nm := &gorpc.M{Id: socketid, Name: name, Data: pm}
 				gorpc.MGR.Send(handler, "ServiceHandler", nm)
@@ -367,14 +385,7 @@ func packetFunc_server(socketid int, buff []byte, nlen int) bool {
 				llog.Errorf("packetFunc_server handler is nil, drop it[%s]", name)
 			}
 		} else { 		//msg to other server
-			if config.NET_NODE_TYPE != config.ServerType_Gate { 	//only gate can forward msg
-				llog.Errorf("packetFunc target may be error: targetuid=%d, myuid=%d, name=%s", target, config.SERVER_NODE_UID, name)
-				return true
-			}
-			newbuff := message.GetBuffer(nlen)
-			copy(newbuff, buff[:nlen])
-			m := &gorpc.M{Id: target,  Data: newbuff}
-			gorpc.MGR.Send("GateServer", "RecvPackMsgServer", m)
+			llog.Errorf("packetFunc_server target may be error: targetuid=%d, myuid=%d, name=%s", target, config.SERVER_NODE_UID, name)
 		}
 	}
 	return true
@@ -519,6 +530,14 @@ func (self *GateServer) BindClient(socketId, userid, tokenid, worlduid int) {
 	self.tokens[socketId] = &Token{TokenId: tokenid, UserId: userid, WouldId: worlduid}
 	self.tokens_u[userid] = socketId
 	onClientConnected(userid, worlduid)
+}
+
+// gate绑定server，server使用
+func (self *GateServer) BindRpcGate(socketId, userid, tokenid int) {
+	self.tokens[socketId] = &Token{TokenId: tokenid, UserId: userid}
+	self.tokens_u[userid] = socketId
+	self.rpcGates = append(self.rpcGates, socketId)
+	onClientConnected(userid, 0)
 }
 
 // 客户端解绑gate，gate使用

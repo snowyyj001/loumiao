@@ -116,7 +116,7 @@ func init() {
 	//os.Mkdir("logs", os.ModePerm)
 	//os.Mkdir(fmt.Sprintf("logs/%s", config.SERVER_NAME), os.ModePerm)
 	SetLevel(config.GAME_LOG_LEVEL)
-	filename := fmt.Sprintf("./logs/%s/%s.log", config.SERVER_NAME, config.SERVER_NAME)
+	filename := fmt.Sprintf("./logs/%s/%s.log", config.SERVER_LOG, config.SERVER_NAME)
 	core := zapcore.NewCore(getEncoder(), getLogWriter(filename), zapcore.DebugLevel)
 	if config.GAME_LOG_CONLOSE {
 		logger = zap.New(core)

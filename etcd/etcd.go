@@ -18,6 +18,7 @@ type HanlderFunc func(string, string, bool)
 
 var (
 	This *clientv3.Client
+	EtcdClient *ClientDis
 )
 
 type IEtcdBase interface {
@@ -359,12 +360,14 @@ func NewClientDis(addr []string) (*ClientDis, error) {
 		defer cancel()
 		_, err = client.Status(timeoutCtx, conf.Endpoints[0])
 		if err != nil {
+			This = nil
 			return nil, err
 		}
-		llog.Infof("etcd connect success: %v", addr)
-		return &ClientDis{
+		llog.Infof("NewClientDis, etcd connect success: %v", addr)
+		EtcdClient = &ClientDis{
 			EtcdBase: EtcdBase{client: client},
-		}, nil
+		}
+		return EtcdClient, nil
 	} else {
 		return nil, err
 	}

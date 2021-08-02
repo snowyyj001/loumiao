@@ -34,13 +34,14 @@ var (
 	NET_MAX_RPC_CONNS       = 1024            //rpc最大连接数
 	NET_BUFFER_SIZE         = 1024 * 32      //最大消息包长度32k(对外)
 	NET_CLUSTER_BUFFER_SIZE = 2 * 1024 * 1024 //最大消息包长度2M(对内)
-	NET_MAX_NUMBER          = 30000           //pcu
+	NET_MAX_NUMBER          = 10000           //pcu
 
-	SERVER_GROUP     = "A"            //服务器分组
-	SERVER_NAME      = "server"       //服务器名字
-	SERVER_NODE_UID  = 0              //服务器uid
-	NET_LISTEN_SADDR = "0.0.0.0:6789" //内网tcp监听地址
-	SERVER_PARAM     = ""             //启动参数
+	SERVER_GROUP     	= "A"            //服务器分组
+	SERVER_NAME      	= "server"       //服务器名字
+	SERVER_LOG 			= "server"       //服务器路径
+	SERVER_NODE_UID  	= 0              //服务器uid
+	NET_LISTEN_SADDR 	= "0.0.0.0:6789" //内网tcp监听地址
+	SERVER_PARAM     	= ""             //启动参数
 
 )
 
@@ -111,9 +112,9 @@ func init() {
 
 		Cfg.NetCfg.Param = SERVER_PARAM
 		SERVER_NODE_UID = Cfg.NetCfg.Uid
-	} else {
-		SERVER_NAME = fmt.Sprintf("%s-%d-%d", SERVER_NAME, NET_NODE_TYPE, SERVER_NODE_UID)
 	}
+	SERVER_LOG = SERVER_NAME
+	SERVER_NAME = fmt.Sprintf("%s-%d-%d", SERVER_NAME, NET_NODE_TYPE, SERVER_NODE_UID)
 
 	arrStr := strings.Split(NET_GATE_SADDR, ":")            //服发现使用正常的局域网ip,例如 192.168.32.15:6789 127.0.0.1:6789
 	NET_LISTEN_SADDR = fmt.Sprintf("0.0.0.0:%s", arrStr[1]) //socket监听,监听所有网卡绑定的ip，格式(0.0.0.0:port)(web监听格式也可以是(:port))

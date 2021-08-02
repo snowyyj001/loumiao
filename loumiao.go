@@ -1,13 +1,14 @@
 package loumiao
 
 import (
+	"github.com/snowyyj001/loumiao/base"
+	"github.com/snowyyj001/loumiao/config"
 	"os"
 	"os/signal"
 	"reflect"
 	"runtime"
 	"syscall"
 
-	"github.com/snowyyj001/loumiao/config"
 	"github.com/snowyyj001/loumiao/gorpc"
 	"github.com/snowyyj001/loumiao/llog"
 	"github.com/snowyyj001/loumiao/message"
@@ -52,8 +53,8 @@ func Run() {
 		igo := gorpc.MGR.GetRoutine("GateServer")
 		if igo != nil {
 			igo.DoOpen()
-			llog.Infof("loumiao start success: %s", config.SERVER_NAME)
 		}
+		llog.Infof("loumiao start success: %s", config.SERVER_NAME)
 	}, true)
 
 	c = make(chan os.Signal, 1)
@@ -128,7 +129,7 @@ func BroadCastMsg(data interface{}) {
 }
 
 //获得rpc注册名
-func RpcFuncName(call gorpc.HanlderNetFunc) string {
+func RpcFuncName(call interface{}) string {
 	//base64str := base64.StdEncoding.EncodeToString([]byte(funcName))
 	funcName := runtime.FuncForPC(reflect.ValueOf(call).Pointer()).Name()
 	return funcName
@@ -210,4 +211,39 @@ func SendAcotr(actorName string, actorHandler string, data interface{}) {
 func BindGate(userid int64, gateuid int, targetuid int) {
 	req := &msg.LouMiaoBindGate{Uid: int32(gateuid), UserId: userid}
 	SendRpc("LouMiaoBindGate", req, targetuid)
+}
+
+//sub/pub系统，只在本节点服务内生效
+//发布
+//@key: 发布的key
+//@value: 发布的值
+func Publish(key, value string) {		//发布
+	igo := gorpc.MGR.GetRoutine("GateServer")
+	if igo == nil {
+		llog.Errorf("loumiao.Publish error, no gate actor: key=%s,value=%s", key, value)
+		return
+	}
+	bitstream := base.NewBitStream_1(base.BitStrLen(key)+base.BitStrLen(value) + 1)
+	bitstream.WriteString(key)
+	bitstream.WriteString(value)
+	SendAcotr("GateServer", "Publish", bitstream.GetBuffer())
+}
+//订阅
+//@name: 订阅者的igo name
+//@key: 订阅的key
+//@hanlder: 订阅的actor处理函数,为""即为取消订阅
+func Subscribe(igo gorpc.IGoRoutine, key string, call gorpc.HanlderFunc) {		//订阅
+	gateigo := gorpc.MGR.GetRoutine("GateServer")
+	if gateigo == nil {
+		llog.Errorf("loumiao.Subscribe error, no gate actor: key=%s", key)
+		return
+	}
+	name := igo.GetName()
+	hanlder := RpcFuncName(call)
+	igo.Register(hanlder, call)
+	bitstream := base.NewBitStream_1(base.BitStrLen(name)+base.BitStrLen(key)+base.BitStrLen(hanlder) + 1)
+	bitstream.WriteString(name)
+	bitstream.WriteString(key)
+	bitstream.WriteString(hanlder)
+	SendAcotr("GateServer", "Subscribe", bitstream.GetBuffer())
 }

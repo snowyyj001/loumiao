@@ -357,3 +357,12 @@ func NewBitStream_1(nLen int) *BitStream { //_1, this is the way
 	bitstream.BuildPacketStream(buf, nLen)
 	return &bitstream
 }
+
+//一个字符串占用的字节大小
+func BitStrLen(str string) int {
+	sz := len(str)
+	if sz  == 0 {
+		return 0
+	}
+	return sz + 2
+}
