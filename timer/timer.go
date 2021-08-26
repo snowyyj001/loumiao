@@ -2,14 +2,13 @@ package timer
 
 import (
 	"time"
-
-	"github.com/snowyyj001/loumiao/util"
 )
 
 const (
-	DAY_SECONDS  int64 = 86400     //每日秒数
-	SECOND_MILLI int64 = 1000      //1秒钟,毫秒
-	MINITE_MILLI int64 = 1000 * 60 //1分钟,毫秒
+	DAY_SECONDS  int64  = 86400        //每日秒数
+	SECOND_MILLI int64  = 1000         //1秒钟,毫秒
+	MINITE_MILLI int64  = 1000 * 60    //1分钟,毫秒
+	RFC3339Day   string = "2006-01-02" //RFC3339格式，精确到天
 )
 
 type Timer struct {
@@ -35,7 +34,7 @@ func NewTimer(dt int, cb func(dt int64) bool, repeat bool) *Timer {
 
 	go func(t *Timer) {
 		defer t.t2.Stop()
-		utm := util.TimeStamp()
+		utm := time.Now().UnixNano() / int64(time.Millisecond)
 		utmPre := utm
 		for {
 			select {
@@ -43,7 +42,7 @@ func NewTimer(dt int, cb func(dt int64) bool, repeat bool) *Timer {
 				if !t.over {
 					return
 				}
-				utmPre = util.TimeStamp()
+				utmPre = time.Now().UnixNano() / int64(time.Millisecond)
 				t.over = cb(utmPre - utm)
 				if !t.over {
 					return
@@ -77,7 +76,7 @@ func NewTicker(dt int, cb func(dt int64) bool) *Timer {
 
 	go func(timer *Timer) {
 		defer timer.t1.Stop()
-		utm := util.TimeStamp()
+		utm := time.Now().UnixNano() / int64(time.Millisecond)
 		utmPre := utm
 		for {
 			select {
@@ -85,7 +84,7 @@ func NewTicker(dt int, cb func(dt int64) bool) *Timer {
 				if !t.over {
 					return
 				}
-				utmPre = util.TimeStamp()
+				utmPre = time.Now().UnixNano() / int64(time.Millisecond)
 				t.over = cb(utmPre - utm)
 				if !t.over {
 					return
@@ -126,11 +125,11 @@ func DelayJob(dt int64, cb func(), sync bool) {
 func GetDayTime(st int64) (int64, int64) {
 	var timeStr string
 	if st == 0 {
-		timeStr = time.Now().Format("2021-01-28")
+		timeStr = time.Now().Format(RFC3339Day)
 	} else {
-		timeStr = time.Unix(st, 0).Format("2021-01-28")
+		timeStr = time.Unix(st, 0).Format(RFC3339Day)
 	}
-	t, _ := time.ParseInLocation("2021-01-28", timeStr, time.Local)
+	t, _ := time.ParseInLocation(RFC3339Day, timeStr, time.Local)
 	var beginTimeNum int64 = t.Unix()
 	var endTimeNum int64 = beginTimeNum + DAY_SECONDS
 	return beginTimeNum, endTimeNum

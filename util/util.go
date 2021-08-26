@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math"
 	rand2 "math/rand"
-	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -62,12 +61,9 @@ func TimeStampTarget(y int, m time.Month, d int, h int, mt int, s int) int64 {
 	return time.Date(y, m, d, h, mt, s, 0, time.Local).UnixNano() / int64(time.Millisecond)
 }
 
-func Assert(data interface{}) {
-	if data == nil {
-		var buf [4096]byte
-		n := runtime.Stack(buf[:], false)
-		data := string(buf[:n])
-		llog.Fatalf("FatalNil: %s", data)
+func Assert(x bool, y string) {
+	if x == false {
+		llog.Fatalf("util.Assert: %s", y)
 	}
 }
 
@@ -112,6 +108,16 @@ func CopyArray(dst []int, src []int, size int) {
 	for i := 0; i < size; i++ {
 		dst[i] = src[i]
 	}
+}
+
+func RemoveSliceString(arr []string, val string) []string {
+	for i, v := range arr {
+		if v == val {
+			arr = append(arr[:i], arr[i+1:]...)
+			return arr
+		}
+	}
+	return arr
 }
 
 func RemoveSlice(arr []int, val int) []int {

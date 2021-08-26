@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	ServerType_None      = iota //0 通用无类型
+	ServerType_None      = iota //0 物理机控制节点
 	ServerType_Gate             //1 网关
 	ServerType_Account          //2 账号
 	ServerType_World            //3 世界
@@ -20,28 +20,45 @@ const (
 	ServerType_IM               //7 聊天
 	ServerType_WEB_GM           //8 web gm
 	ServerType_WEB_LOGIN        //9 web login
+	ServerType_RPCGate          //10 rpc gate
+)
+
+var (
+	ServerNames = map[int]string{
+		ServerType_None:      "machine",
+		ServerType_Gate:      "gate",
+		ServerType_Account:   "login",
+		ServerType_World:     "lobby",
+		ServerType_Zone:      "zone",
+		ServerType_DB:        "db",
+		ServerType_Log:       "logserver",
+		ServerType_IM:        "imserver",
+		ServerType_WEB_GM:    "webserver",
+		ServerType_WEB_LOGIN: "weblogin",
+		ServerType_RPCGate:   "rpcserver",
+	}
 )
 
 var (
 	NET_NODE_AREAID = "-1"
-	NET_NODE_ID    = -1               //节点id(服标识)
-	NET_NODE_TYPE  = -1               //节点类型ServerType_*
-	NET_GATE_SADDR = "127.0.0.1:6789" //网关监听地址
+	NET_NODE_ID     = -1               //节点id(服标识)
+	NET_NODE_TYPE   = -1               //节点类型ServerType_*
+	NET_GATE_SADDR  = "127.0.0.1:6789" //网关监听地址
 
 	NET_PROTOCOL            = "PROTOBUF"      //消息协议格式："PROTOBUF" or "JSON"
 	NET_WEBSOCKET           = false           //使用websocket or socket
 	NET_MAX_CONNS           = 65535           //最大连接数
 	NET_MAX_RPC_CONNS       = 1024            //rpc最大连接数
-	NET_BUFFER_SIZE         = 1024 * 32      //最大消息包长度32k(对外)
+	NET_BUFFER_SIZE         = 1024 * 32       //最大消息包长度32k(对外)
 	NET_CLUSTER_BUFFER_SIZE = 2 * 1024 * 1024 //最大消息包长度2M(对内)
 	NET_MAX_NUMBER          = 10000           //pcu
 
-	SERVER_GROUP     	= "A"            //服务器分组
-	SERVER_NAME      	= "server"       //服务器名字
-	SERVER_LOG 			= "server"       //服务器路径
-	SERVER_NODE_UID  	= 0              //服务器uid
-	NET_LISTEN_SADDR 	= "0.0.0.0:6789" //内网tcp监听地址
-	SERVER_PARAM     	= ""             //启动参数
+	SERVER_GROUP     = "A"            //服务器分组
+	SERVER_NAME      = "server"       //服务器名字
+	SERVER_TYPE_NAME = "server"       //服务器类型名字
+	SERVER_NODE_UID  = 0              //服务器uid
+	NET_LISTEN_SADDR = "0.0.0.0:6789" //内网tcp监听地址
+	SERVER_PARAM     = ""             //启动参数
 
 )
 
@@ -61,9 +78,9 @@ type NetNode struct {
 }
 
 type ServerCfg struct {
-	NetCfg      NetNode  `json:"net"`
-	EtcdAddr    []string `json:"etcd"`
-	NatsAddr    []string `json:"nats"`
+	NetCfg   NetNode  `json:"net"`
+	EtcdAddr []string `json:"etcd"`
+	NatsAddr []string `json:"nats"`
 }
 
 var Cfg ServerCfg
@@ -81,8 +98,8 @@ func init() {
 		return
 	}
 
-	NET_NODE_ID = Cfg.NetCfg.Id		//区服id，0代表可跨服
-	SERVER_NODE_UID = Cfg.NetCfg.Uid		//server uid
+	NET_NODE_ID = Cfg.NetCfg.Id      //区服id，0代表可跨服
+	SERVER_NODE_UID = Cfg.NetCfg.Uid //server uid
 	NET_NODE_TYPE = Cfg.NetCfg.Type
 	NET_PROTOCOL = Cfg.NetCfg.Protocol
 	NET_WEBSOCKET = Cfg.NetCfg.WebSocket == 1
@@ -91,33 +108,37 @@ func init() {
 	NET_GATE_SADDR = Cfg.NetCfg.SAddr
 	NET_LISTEN_SADDR = NET_GATE_SADDR
 	SERVER_PARAM = Cfg.NetCfg.Param
-	GAME_LOG_CONLOSE = Cfg.NetCfg.LogFile == -1
 
+	argv := len(os.Args)
+	fmt.Println("启动参数个数argv: ", argv)
+	fmt.Println("启动参数值argc：", os.Args)
+	if argv > 7 {
+		flag.IntVar(&NET_NODE_ID, "r", 0, "area id")
+		flag.StringVar(&NET_GATE_SADDR, "s", "127.0.0.1:6789", "server listen address") //	"127.0.0.1:6789"
+		flag.IntVar(&SERVER_NODE_UID, "u", 0, "server uid")                             //对于machine来说，就是tag
+		flag.StringVar(&SERVER_PARAM, "a", "", "server startup param")
+		var etcdstr string
+		flag.StringVar(&etcdstr, "e", "127.0.0.1:2379&127.0.0.1:2380", "server startup param")
+		flag.IntVar(&Cfg.NetCfg.LogFile, "l", -1, "log level")
+		flag.Parse() //parse之后参数才会被解析复制
+
+		Cfg.EtcdAddr = strings.Split(etcdstr, "&")
+		Cfg.NetCfg.Param = SERVER_PARAM
+		Cfg.NetCfg.Id = NET_NODE_ID
+		Cfg.NetCfg.Uid = SERVER_NODE_UID
+	}
+	GAME_LOG_CONLOSE = Cfg.NetCfg.LogFile == -1 //-1log也输出到控制台，外网不需要输出到控制台
 	if GAME_LOG_CONLOSE {
 		GAME_LOG_LEVEL = 0
 	} else {
 		GAME_LOG_LEVEL = Cfg.NetCfg.LogFile
 	}
 
-	argv := len(os.Args)
-	fmt.Println("启动参数个数argv: ", argv)
-	fmt.Println("启动参数值argc：", os.Args)
-	if argv > 6 {
-		flag.IntVar(&NET_NODE_ID, "r", 0, "area id")
-		flag.StringVar(&SERVER_NAME, "n", "server", "server name")
-		flag.StringVar(&NET_GATE_SADDR, "s", "127.0.0.1:6789", "server listen address") //	"127.0.0.1:6789"
-		flag.IntVar(&Cfg.NetCfg.Uid, "u", 0, "server uid")
-		flag.StringVar(&SERVER_PARAM, "a", "", "server startup param")
-		flag.Parse() //parse之后参数才会被解析复制
+	SERVER_TYPE_NAME, _ = ServerNames[NET_NODE_TYPE]
+	SERVER_NAME = fmt.Sprintf("%s-%d-%d", SERVER_TYPE_NAME, NET_NODE_TYPE, SERVER_NODE_UID)
 
-		Cfg.NetCfg.Param = SERVER_PARAM
-		SERVER_NODE_UID = Cfg.NetCfg.Uid
-	}
-	SERVER_LOG = SERVER_NAME
-	SERVER_NAME = fmt.Sprintf("%s-%d-%d", SERVER_NAME, NET_NODE_TYPE, SERVER_NODE_UID)
-
-	arrStr := strings.Split(NET_GATE_SADDR, ":")            //服发现使用正常的局域网ip,例如 192.168.32.15:6789 127.0.0.1:6789
+	arrStr := strings.Split(NET_GATE_SADDR, ":")            //服发现使用正常的ip,例如 192.168.32.15:6789 127.0.0.1:6789
 	NET_LISTEN_SADDR = fmt.Sprintf("0.0.0.0:%s", arrStr[1]) //socket监听,监听所有网卡绑定的ip，格式(0.0.0.0:port)(web监听格式也可以是(:port))
 	Cfg.NetCfg.SAddr = NET_GATE_SADDR
-	NET_NODE_AREAID = fmt.Sprintf("%d", SERVER_NODE_UID)		//just for simple when need string type
+	NET_NODE_AREAID = fmt.Sprintf("%d", NET_NODE_ID) //just for simple when need string type
 }

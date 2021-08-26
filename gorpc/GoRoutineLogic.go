@@ -10,7 +10,7 @@ import (
 
 	"github.com/snowyyj001/loumiao/llog"
 	"github.com/snowyyj001/loumiao/util"
-	"github.com/snowyyj001/loumiao/util/timer"
+	"github.com/snowyyj001/loumiao/timer"
 )
 
 const (
@@ -18,10 +18,11 @@ const (
 )
 
 const (
-	CHAN_BUFFER_LEN  = 20000 //channel缓冲数量
-	CHAN_BUFFER_MAX  = 50000 //channel缓冲最大数量
-	CALL_TIMEOUT     = 3     //call超时时间,秒
-	CHAN_LIMIT_TIMES = 3     //异步协程上限倍数
+	CHAN_BUFFER_LEN      = 20000     //channel缓冲数量
+	CALL_TIMEOUT         = 3         //call超时时间,秒
+	CHAN_LIMIT_TIMES     = 3         //异步协程上限倍数
+	CHAN_OVERLOW         = 30        //chan可能溢出，告警CD，秒
+	CHAN_Statistics_Time = 60 * 1000 //每60s统计一次actor的未读数量
 )
 
 type Cmdtype map[string]HanlderFunc
@@ -54,9 +55,12 @@ type IGoRoutine interface {
 	SetSync(sync bool)
 	IsRunning() bool
 	GetChanLen() int
+	GetWarnChanLen() int
 	IsInited() bool
 	SetInited(bool)
 	LeftJobNumber() int
+	GetWarningTime() int64
+	SetWarningTime(int64)
 }
 
 type RoutineTimer struct {
@@ -82,9 +86,11 @@ type GoRoutineLogic struct {
 	timerChan  chan int //定时器chan
 	timerFuncs map[int]*RoutineTimer
 
-	started  bool //是否已启动
-	inited   bool //是否初始化失败
-	ChanSize int  //job chan size
+	started         bool //是否已启动
+	inited          bool //是否初始化失败
+	ChanSize        int  //job chan size
+	chanWarningSize int  //
+	lastWarningTime int64
 }
 
 func (self *GoRoutineLogic) DoInit() bool {
@@ -121,6 +127,9 @@ func (self *GoRoutineLogic) IsRunning() bool {
 func (self *GoRoutineLogic) GetChanLen() int {
 	return self.ChanSize
 }
+func (self *GoRoutineLogic) GetWarnChanLen() int {
+	return self.chanWarningSize
+}
 func (self *GoRoutineLogic) IsInited() bool {
 	return self.inited
 }
@@ -132,6 +141,12 @@ func (self *GoRoutineLogic) LeftJobNumber() int {
 	return len(self.jobChan)
 }
 
+func (self *GoRoutineLogic) GetWarningTime() int64 {
+	return self.lastWarningTime
+}
+func (self *GoRoutineLogic) SetWarningTime(cd int64) {
+	self.lastWarningTime = cd
+}
 func (self *GoRoutineLogic) CallNetFunc(m *M) {
 	self.NetHandler[m.Name](self, m.Id, m.Data)
 }
@@ -262,6 +277,10 @@ func (self *GoRoutineLogic) Close() {
 //延迟关闭任务，等待工作队列清空
 func (self *GoRoutineLogic) CloseCleanly() {
 	self.started = false //先标记关闭
+	//把定时器给关了
+	for _, caller := range self.timerFuncs {
+		caller.timer.Stop()
+	}
 	timer.NewTicker(1000, func(dt int64) bool {
 		if self.LeftJobNumber() == 0 {
 			timer.DelayJob(1000, func() {
@@ -280,9 +299,13 @@ func (self *GoRoutineLogic) Send(handler_name string, sdata *M) {
 		llog.Warningf("GoRoutineLogic.Send has not started: %s, %s, %v", self.Name, handler_name, sdata)
 		return
 	}
-	if len(self.GetJobChan()) > self.GetChanLen()*2 {
-		llog.Infof("GoRoutineLogic[%s].Send too many job chan: %s", self.Name, handler_name)
-		return
+	left := self.LeftJobNumber()
+	if left > self.GetWarnChanLen() && self.GetWarningTime() < util.TimeStampSec() {
+		llog.Errorf("GoRoutineLogic.Send:[src=%s,target=%s (chan may overlow[now=%d, max=%d])] func=%s", self.Name, self.GetName(), self.LeftJobNumber(), self.GetChanLen(), handler_name)
+		self.SetWarningTime(util.TimeStampSec() + CHAN_OVERLOW)
+	}
+	if left > self.GetChanLen() {
+		llog.Errorf("GoRoutineLogic.Send:[src=%s,target=%s (chan overlow[now=%d, max=%d])] func=%s", self.Name, self.GetName(), self.LeftJobNumber(), self.GetChanLen(), handler_name)
 	}
 	job := ChannelContext{Handler: handler_name}
 	if sdata != nil {
@@ -297,9 +320,13 @@ func (self *GoRoutineLogic) SendActor(handler_name string, sdata interface{}) {
 		llog.Warningf("GoRoutineLogic.SendActor has not started: %s, %s, %v", self.Name, handler_name, sdata)
 		return
 	}
-	if len(self.GetJobChan()) > self.GetChanLen()*2 {
-		llog.Infof("GoRoutineLogic[%s].SendActor too many job chan: %s", self.Name, handler_name)
-		return
+	left := self.LeftJobNumber()
+	if left > self.GetWarnChanLen() && self.GetWarningTime() < util.TimeStampSec() {
+		llog.Errorf("GoRoutineLogic.SendBack:[src=%s,target=%s (chan may overlow[now=%d, max=%d])] func=%s", self.Name, self.GetName(), self.LeftJobNumber(), self.GetChanLen(), handler_name)
+		self.SetWarningTime(util.TimeStampSec() + CHAN_OVERLOW)
+	}
+	if left > self.GetChanLen() {
+		llog.Errorf("GoRoutineLogic.SendActor:[src=%s,target=%s (chan overlow[now=%d, init=%d, max=%d])] func=%s", self.Name, self.GetName(), self.LeftJobNumber(), self.GetChanLen(), handler_name)
 	}
 	m := M{Data: sdata, Flag: true}
 	job := ChannelContext{handler_name, m, nil, nil}
@@ -309,16 +336,20 @@ func (self *GoRoutineLogic) SendActor(handler_name string, sdata interface{}) {
 //投递任务,拥有回调
 func (self *GoRoutineLogic) SendBack(server IGoRoutine, handler_name string, sdata *M, Cb HanlderFunc) {
 	if self.started == false {
-		llog.Warningf("GoRoutineLogic.SendBack has not started: %s, %s, %v", self.Name, handler_name, sdata)
+		llog.Errorf("GoRoutineLogic.SendBack has not started: %s, %s, %v", self.Name, handler_name, sdata)
 		return
 	}
 	if server == nil {
-		llog.Infof("GoRoutineLogic[%s].SendBack target[%s] is nil: %s", self.Name, server.GetName(), handler_name)
+		llog.Errorf("GoRoutineLogic[%s].SendBack target[%s] is nil: %s", self.Name, server.GetName(), handler_name)
 		return
 	}
-	if len(server.GetJobChan()) > server.GetChanLen()*2 {
-		llog.Infof("GoRoutineLogic[%s].SendBack[%s] too many job chan: %s", self.Name, server.GetName(), handler_name)
-		return
+	left := server.LeftJobNumber()
+	if left > server.GetWarnChanLen() && server.GetWarningTime() < util.TimeStampSec() {
+		llog.Errorf("GoRoutineLogic.SendBack:[src=%s,target=%s (chan may overlow[now=%d, max=%d])] func=%s", self.Name, server.GetName(), server.LeftJobNumber(), server.GetChanLen(), handler_name)
+		server.SetWarningTime(util.TimeStampSec() + CHAN_OVERLOW)
+	}
+	if left > server.GetChanLen() {
+		llog.Errorf("GoRoutineLogic.SendBack:[src=%s,target=%s (chan overlow[now=%d, max=%d])] func=%s", self.Name, server.GetName(), server.LeftJobNumber(), server.GetChanLen(), handler_name)
 	}
 	job := ChannelContext{handler_name, *sdata, self.jobChan, Cb}
 	server.GetJobChan() <- job
@@ -335,21 +366,26 @@ func (self *GoRoutineLogic) CallActor(target string, handler_name string, sdata 
 	return self.Call(igo, handler_name, m)
 }
 
-
 //阻塞读取数据式投递任务，一直等待（超过三秒属于异常）
 func (self *GoRoutineLogic) Call(server IGoRoutine, handler_name string, sdata *M) interface{} {
 	if self.started == false {
-		llog.Warningf("GoRoutineLogic.Call has not started: %s, %s, %v", self.Name, handler_name, sdata)
+		llog.Errorf("GoRoutineLogic.Call has not started: %s, %s, %v", self.Name, handler_name, sdata)
 		return nil
 	}
 	if server == nil {
-		llog.Infof("GoRoutineLogic[%s].Call target[%s] is nil: %s", self.Name, server.GetName(), handler_name)
+		llog.Errorf("GoRoutineLogic[%s].Call target[%s] is nil: %s", self.Name, server.GetName(), handler_name)
 		return nil
 	}
-	if len(server.GetJobChan()) > server.GetChanLen()*2 {
-		llog.Infof("GoRoutineLogic[%s].Call target[%s] too many jon chan: %s", self.Name, server.GetName(), handler_name)
-		return nil
+	left := server.LeftJobNumber()
+	if left > server.GetWarnChanLen() && server.GetWarningTime() > util.TimeStampSec() {
+		llog.Errorf("GoRoutineLogic.Call:[src=%s,target=%s (chan may overlow[now=%d, max=%d])] func=%s", self.Name, server.GetName(), server.LeftJobNumber(), server.GetChanLen(), handler_name)
+		server.SetWarningTime(util.TimeStampSec() + CHAN_OVERLOW)
 	}
+
+	if left > server.GetChanLen() {
+		llog.Errorf("GoRoutineLogic.Call:[src=%s,target=%s (chan overlow[now=%d, max=%d])] func=%s", self.Name, server.GetName(), server.LeftJobNumber(), server.GetChanLen(), handler_name)
+	}
+
 	job := ChannelContext{Handler: handler_name, ReadChan: self.readChan}
 	if sdata != nil {
 		job.Data = *sdata
@@ -359,7 +395,7 @@ func (self *GoRoutineLogic) Call(server IGoRoutine, handler_name string, sdata *
 		rdata := <-self.readChan
 		return rdata.Data.Data
 	case <-time.After(CALL_TIMEOUT * time.Second):
-		llog.Infof("GoRoutineLogic[%s] Call timeout: %s", self.Name, handler_name)
+		llog.Warningf("GoRoutineLogic[%s] Call timeout: %s", self.Name, handler_name)
 		return nil
 	}
 }
@@ -428,6 +464,7 @@ func (self *GoRoutineLogic) init(name string) {
 		n = CHAN_BUFFER_LEN
 	}
 	self.ChanSize = n
+	self.chanWarningSize = n * 2 / 3
 	self.jobChan = make(chan ChannelContext, n)
 	self.readChan = make(chan ChannelContext)
 	self.actionChan = make(chan int, 1)

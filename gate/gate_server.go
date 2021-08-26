@@ -2,13 +2,12 @@
 package gate
 
 import (
-	"encoding/json"
 	"fmt"
+	"sync"
+
 	"github.com/snowyyj001/loumiao/base/maps"
 	"github.com/snowyyj001/loumiao/message"
-	"github.com/snowyyj001/loumiao/msg"
-	"strings"
-	"sync"
+	"github.com/snowyyj001/loumiao/timer"
 
 	"github.com/snowyyj001/loumiao/lnats"
 
@@ -28,10 +27,10 @@ var (
 )
 
 type Token struct {
-	UserId  int 	//userid
-	WouldId int		//world uid
-	ZoneUid int		//zone uid
-	TokenId int		//合法性校验tokenid
+	UserId  int //userid
+	WouldId int //world uid
+	ZoneUid int //zone uid
+	TokenId int //合法性校验tokenid
 }
 
 /*tokens, tokens_u, users_u说明
@@ -58,16 +57,17 @@ type GateServer struct {
 	pInnerService network.ISocket
 	ServerType    int
 	//
-	tokens     map[int]*Token
-	tokens_u   map[int]int
-	users_u    map[int]int
-	OnlineNum  int
-	clientEtcd *etcd.ClientDis
-	rpcMap     map[string][]int
-	rpcGates   []int //space for time
-	msgQueueMap     map[string]*maps.Map		//单个actor内的消息pub/sub
+	tokens   map[int]*Token
+	tokens_u map[int]int
+	users_u  map[int]int
 
-	m_etcdKey string
+	//rpc相关
+	rpcMap   map[string]string
+	rpcGates []int //space for time, all rpcserver's uid
+	rpcUids  sync.Map
+
+	//单个actor内的消息pub/sub
+	msgQueueMap map[string]*maps.Map
 
 	lock sync.Mutex
 
@@ -89,10 +89,6 @@ func (self *GateServer) DoInit() bool {
 		self.pService.Init(config.NET_LISTEN_SADDR)
 		self.pService.BindPacketFunc(packetFunc_client)
 		self.pService.SetConnectType(network.CLIENT_CONNECT)
-	}
-
-	if self.ServerType == network.CLIENT_CONNECT { //对外(login,gate)
-		self.clients = make(map[int]*network.ClientSocket)
 	} else {
 		self.pInnerService = new(network.ServerSocket)
 		self.pInnerService.(*network.ServerSocket).SetMaxClients(config.NET_MAX_RPC_CONNS)
@@ -101,11 +97,14 @@ func (self *GateServer) DoInit() bool {
 		self.pInnerService.SetConnectType(network.SERVER_CONNECT)
 	}
 
+	self.clients = make(map[int]*network.ClientSocket)
+
 	self.tokens = make(map[int]*Token)
 	self.tokens_u = make(map[int]int)
 	self.users_u = make(map[int]int)
-	self.rpcMap = make(map[string][]int) //base64(funcname) -> [uid,uid,...]
-	self.msgQueueMap = make(map[string]*maps.Map)	//key -> [actorname,actorname,...]
+	self.rpcMap = make(map[string]string)
+	self.rpcGates = make([]int, 0)
+	self.msgQueueMap = make(map[string]*maps.Map) //key -> [actorname,actorname,...]
 
 	handler_Map = make(map[string]string)
 
@@ -123,13 +122,10 @@ func (self *GateServer) DoRegsiter() {
 	self.Register("UnRegisterNet", unRegisterNet)
 	self.Register("SendClient", sendClient)
 	self.Register("SendMulClient", sendMulClient)
-	self.Register("NewRpc", newRpc)
+	self.Register("NewClient", newClient)
 	self.Register("SendRpc", sendRpc)
-	self.Register("BroadCastRpc", broadCastRpc)
 	self.Register("SendGate", sendGate)
-	self.Register("SendRpcMsgToServer", sendRpcMsgToServer)
 	self.Register("RecvPackMsgClient", recvPackMsgClient)
-	self.Register("ReportOnLineNum", reportOnLineNum)
 	self.Register("CloseServer", closeServer)
 	self.Register("BindGate", bindGate)
 	self.Register("Publish", publish)
@@ -150,9 +146,6 @@ func (self *GateServer) DoRegsiter() {
 
 	handler_Map["LouMiaoLoginGate"] = "GateServer"
 	self.RegisterGate("LouMiaoLoginGate", innerLouMiaoLoginGate)
-
-	handler_Map["LouMiaoRpcRegister"] = "GateServer"
-	self.RegisterGate("LouMiaoRpcRegister", innerLouMiaoRpcRegister)
 
 	handler_Map["LouMiaoRpcMsg"] = "GateServer"
 	self.RegisterGate("LouMiaoRpcMsg", innerLouMiaoRpcMsg)
@@ -178,73 +171,46 @@ func (self *GateServer) DoStart() {
 	llog.Info("GateServer DoStart")
 
 	//etcd client
-	client, err := etcd.NewClientDis(config.Cfg.EtcdAddr)
+	err := etcd.NewClientDis(config.Cfg.EtcdAddr)
 	if util.CheckErr(err) {
 		llog.Fatalf("etcd connect failed: %v", config.Cfg.EtcdAddr)
 	}
-	self.m_etcdKey = fmt.Sprintf("%s%s", define.ETCD_NODEINFO, config.NET_GATE_SADDR)
-	self.clientEtcd = client
-	self.clientEtcd.SetLeasefunc(leaseCallBack)
-	self.clientEtcd.SetLease(int64(config.GAME_LEASE_TIME), true)
-
-	//server discover
-	if self.ServerType == network.CLIENT_CONNECT { //account/gate watch server
-		//watch status, for balance
-		err = self.clientEtcd.WatchStatusList(define.ETCD_NODESTATUS, nodemgr.NodeStatusUpdate)
+	nodemgr.ServerEnabled = true
+	etcd.EtcdClient.PutStatus()  //服务如果异常关闭，是没有撤销租约的，在三秒内重启会保留上次状态，这里强制刷新一下
+	timer.DelayJob(100, func() { //delay 100ms, that all RegisterRpcHandler should be compled
+		//server discover
+		//watch all node, just for account, to gate balance
+		err = etcd.EtcdClient.WatchCommon(fmt.Sprintf("%s%d", define.ETCD_NODESTATUS, config.NET_NODE_ID), self.serverStatusUpdate)
 		if err != nil {
 			llog.Fatalf("etcd watch ETCD_NODESTATUS error : %s", err.Error())
 		}
-		//watch all node, just for account, to gate balance
-		_, err = self.clientEtcd.WatchNodeList(define.ETCD_NODEINFO, self.newServerDiscover)
+		//watch status, for balance
+		err = etcd.EtcdClient.WatchCommon(fmt.Sprintf("%s%d", define.ETCD_NODEINFO, config.NET_NODE_ID), self.newServerDiscover)
 		if err != nil {
 			llog.Fatalf("etcd watch NET_GATE_SADDR error : %s", err.Error())
 		}
-	} else { //for simple, only login and gate need server infos, others should goto gate for query
-		if config.NET_NODE_TYPE == config.ServerType_World { //need know the zone's state
-			_, err = self.clientEtcd.WatchNodeList(define.ETCD_NODEINFO, self.newServerDiscover)
-			if err != nil {
-				llog.Fatalf("etcd watch NET_GATE_SADDR error : %s", err.Error())
-			}
-		}
-	}
-
+	}, false)
+	lnats.SubscribeAsyn(define.TOPIC_SERVER_LOG, llog.Tp_SetLevel)
 	llog.Infof("GateServer DoStart success: name=%s,saddr=%s,uid=%d", self.Name, config.NET_GATE_SADDR, config.SERVER_NODE_UID)
 }
 
 //begin start socket servie
 func (self *GateServer) DoOpen() {
 	if self.pService != nil {
-		if self.pService.Start() == false {
-			util.Assert(nil)
-		}
+		util.Assert(self.pService.Start(), fmt.Sprintf("GateServer listen failed: saddr=%s", self.pService.GetSAddr()))
 	}
 	if self.pInnerService != nil {
-		if self.pInnerService.Start() == false {
-			util.Assert(nil)
-		}
+		util.Assert(self.pInnerService.Start(), fmt.Sprintf("GateServer listen failed: saddr=%s", self.pInnerService.GetSAddr()))
 	}
+
 	//register to etcd when the socket is ok
-	obj, _ := json.Marshal(&config.Cfg.NetCfg)
-	if err := self.clientEtcd.PutService(self.m_etcdKey, string(obj)); err != nil {
+	if err := etcd.EtcdClient.PutNode(); err != nil {
 		llog.Fatalf("etcd PutService error %v", err)
 	}
 
-	nodemgr.SocketActive = true
-
 	llog.Infof("GateServer DoOpen success: name=%s,saddr=%s,uid=%d", self.Name, config.NET_GATE_SADDR, config.SERVER_NODE_UID)
 
-	reqParam := &struct {
-		Tag     int    `json:"tag"`     //邮件类型
-		Id      int    `json:"id"`      //区服id
-		Content string `json:"content"` //邮件内容
-	}{}
-	reqParam.Tag = define.MAIL_TYPE_START
-	reqParam.Id = config.NET_NODE_ID
-	reqParam.Content = fmt.Sprintf("uid: %d \nname: %s\nhost: %s\n服务器完成启动", config.SERVER_NODE_UID, config.SERVER_NAME, config.NET_GATE_SADDR)
-	buffer, err := json.Marshal(&reqParam)
-	if err == nil {
-		lnats.Publish(define.TOPIC_SERVER_MAIL, buffer)
-	}
+	llog.ReportMail(define.MAIL_TYPE_START, "服务器完成启动")
 }
 
 //simple register self net hanlder, this func can only be called before igo started
@@ -257,54 +223,71 @@ func (self *GateServer) RegisterSelfNet(hanlderName string, hanlderFunc gorpc.Ha
 	self.RegisterGate(hanlderName, hanlderFunc)
 }
 
-//goroutine unsafe
-func (self *GateServer) newServerDiscover(key, val string, dis bool) {
-	arrStr := strings.Split(key, "/")
-	if len(arrStr) < 3 {
-		llog.Errorf("newServerDiscover error fromat key : %s", key)
-		return
-	}
-	saddr := arrStr[2]
-	llog.Debugf("newServerDiscover: key=%s,val=%s,dis=%t,debug=%s", key, val, dis, saddr)
-
-	if dis == true {
-		node := nodemgr.GetNodeByAddr(saddr)
-		if node != nil { //maybe, etcd still have older data, etcd has a huge delay
-			llog.Warningf("newServerDiscover: saddr=%s,old server=%v,new server=%s", saddr, node, val)
-			nodemgr.RemoveNode(saddr)
-		}
-		node = &nodemgr.NodeInfo{}
-		json.Unmarshal([]byte(val), node)
-		node.SocketActive = true
-		nodemgr.AddNode(node)
-
-		if config.NET_NODE_TYPE != config.ServerType_Gate {
-			return
-		}
-
-		//filter gate account
-		if node.Type == config.ServerType_Gate || node.Type == config.ServerType_Account {
-			return
-		}
-		/*if config.NET_NODE_TYPE == config.ServerType_Account {
-			if node.Type != config.ServerType_World { //Account only connect to world,just for using the socket state, knowing the world is closed in time
-				return
-			}
-		}*/
-		rpcClient := self.GetRpcClient(node.Uid)
-		if rpcClient == nil {	//this conditation can be etcd reconnect
-			client := self.buildRpc(node.Uid, saddr)
-			if self.enableRpcClient(client) {
-				m := &gorpc.M{Id: node.Uid, Data: client}
-				gorpc.MGR.Send("GateServer", "NewRpc", m)
-			}
-		}
+//
+func (self *GateServer) getServerService() network.ISocket {
+	if self.ServerType == network.CLIENT_CONNECT { //对外(login,gate)
+		return self.pService
 	} else {
-		nodemgr.RemoveNode(saddr)
+		return self.pInnerService
 	}
 }
 
-func (self *GateServer) enableRpcClient(client *network.ClientSocket) bool {
+//goroutine unsafe
+func (self *GateServer) serverStatusUpdate(key, val string, dis bool) {
+	node := nodemgr.NodeStatusUpdate(key, val, dis)
+	if node == nil || !dis {
+		return
+	}
+
+	if node.Uid > 0 && node.SocketActive == false && node.Type == config.ServerType_RPCGate {
+		_, ok := This.rpcUids.Load(node.Uid)
+		if ok {
+			gorpc.MGR.SendActor("GateServer", "CloseServer", node.Uid)
+		}
+	}
+}
+
+//goroutine unsafe
+func (self *GateServer) newServerDiscover(key, val string, dis bool) {
+	node := nodemgr.NodeDiscover(key, val, dis)
+	if node == nil || !dis {
+		return
+	}
+
+	if node.Type == config.ServerType_WEB_LOGIN ||
+		node.Type == config.ServerType_WEB_GM { //filter weblogin/webserver,他们不参与rpc调用，不参与集群组网
+		return
+	}
+
+	if !node.SocketActive { //已经关闭的节点就不去连接了
+		llog.Infof("newServerDiscover: discover a closed node: uid = %d", node.Uid)
+		return
+	}
+
+	if node.Type == config.ServerType_RPCGate {
+		rpcClient := self.GetRpcClient(node.Uid)
+		if rpcClient == nil { //this conditation can be etcd reconnect
+			client := self.buildClient(node.Uid, node.SAddr)
+			if self.enableClient(client) {
+				m := &gorpc.M{Id: node.Uid, Data: client, Param: 0} //rpc client
+				gorpc.MGR.Send("GateServer", "NewClient", m)
+			}
+		}
+	} else if node.Type != config.ServerType_Gate && node.Type != config.ServerType_Account {
+		if config.NET_NODE_TYPE == config.ServerType_Gate { //网关直连其他server转发来客户端和其他server的网络消息，不使用rpc方式
+			rpcClient := self.GetRpcClient(node.Uid)
+			if rpcClient == nil { //this conditation can be etcd reconnect
+				client := self.buildClient(node.Uid, node.SAddr)
+				if self.enableClient(client) {
+					m := &gorpc.M{Id: node.Uid, Data: client, Param: 1} //client client
+					gorpc.MGR.Send("GateServer", "NewClient", m)
+				}
+			}
+		}
+	}
+}
+
+func (self *GateServer) enableClient(client *network.ClientSocket) bool {
 	if client.Start() {
 		llog.Infof("GateServer rpc connected %s success", client.GetSAddr())
 		return true
@@ -316,10 +299,9 @@ func (self *GateServer) enableRpcClient(client *network.ClientSocket) bool {
 }
 
 func (self *GateServer) DoDestory() {
-	nodemgr.SocketActive = false
-	if self.clientEtcd != nil {
-		self.clientEtcd.RevokeLease()
-	}
+	llog.Info("GateServer DoDestory")
+	nodemgr.ServerEnabled = false
+	etcd.EtcdClient.RevokeLease()
 }
 
 //goroutine unsafe
@@ -332,7 +314,7 @@ func packetFunc_client(socketid int, buff []byte, nlen int) bool {
 		llog.Errorf("packetFunc_client Decode error: %s", err.Error())
 		//This.closeClient(socketid)
 	} else {
-		if target == config.NET_NODE_TYPE || target <= 0 { 			//msg to me
+		if target == config.NET_NODE_TYPE || target <= 0 { //msg to me，client使用的是server type
 			handler, ok := handler_Map[name]
 			if ok {
 				nm := &gorpc.M{Id: socketid, Name: name, Data: pm}
@@ -340,8 +322,8 @@ func packetFunc_client(socketid int, buff []byte, nlen int) bool {
 			} else {
 				llog.Errorf("packetFunc_client handler is nil, drop it[%s]", name)
 			}
-		} else { 	//msg to other server
-			if config.NET_NODE_TYPE != config.ServerType_Gate { 	//only gate can forward msg
+		} else { //msg to other server
+			if config.NET_NODE_TYPE != config.ServerType_Gate { //only gate can forward msg
 				llog.Errorf("packetFunc_client target may be error: target=%d, mytype=%d, name=%s", target, config.NET_NODE_TYPE, name)
 				return true
 			}
@@ -361,37 +343,26 @@ func packetFunc_server(socketid int, buff []byte, nlen int) bool {
 	err, target, name, pm := message.Decode(config.SERVER_NODE_UID, buff, nlen)
 	//llog.Debugf("packetFunc_server %d %s %v", target, name, pm)
 	if nil != err {
-		llog.Errorf("packetFunc_rpc Decode error: %s", err.Error())
+		llog.Errorf("packetFunc_server Decode error: %s", err.Error())
 		//This.closeClient(socketid)
 	} else {
-		if target == config.SERVER_NODE_UID || target <= 0 { //msg to me
-			if config.NET_NODE_TYPE == config.ServerType_Gate { //only gate can forward msg, filter msg to deal here
-				if strings.Compare(name,"LouMiaoRpcMsg") == 0 {		//if rpc msg to other server, just forward,
-					req := pm.(*msg.LouMiaoRpcMsg)
-					message.ReplacePakcetTarget(req.TargetId, buff)		//just change targetid, do not need encode again anymore
-					newbuff := message.GetBuffer(nlen)
-					copy(newbuff, buff[:nlen])
-					m := &gorpc.M{Id: int(req.TargetId), Name: req.FuncName, Data: newbuff}
-					gorpc.MGR.Send("GateServer", "SendRpcMsgToServer", m)
-					message.PutPakcet(name, req)
-					return true
-				}
-			}
-			handler, ok := handler_Map[name]		//handler_Map will not changed, so use here is ok
+		if target == config.SERVER_NODE_UID || target <= 0 { //server使用的是server uid
+			handler, ok := handler_Map[name] //handler_Map will not changed, so use here is ok
 			if ok {
 				nm := &gorpc.M{Id: socketid, Name: name, Data: pm}
 				gorpc.MGR.Send(handler, "ServiceHandler", nm)
 			} else {
 				llog.Errorf("packetFunc_server handler is nil, drop it[%s]", name)
 			}
-		} else { 		//msg to other server
+		} else { //msg to other server
 			llog.Errorf("packetFunc_server target may be error: targetuid=%d, myuid=%d, name=%s", target, config.SERVER_NODE_UID, name)
 		}
 	}
 	return true
 }
 
-func (self *GateServer) buildRpc(uid int, addr string) *network.ClientSocket {
+//创建一个clientsocket连接server
+func (self *GateServer) buildClient(uid int, addr string) *network.ClientSocket {
 	client := new(network.ClientSocket)
 	client.SetClientId(uid)
 	client.Init(addr)
@@ -402,7 +373,7 @@ func (self *GateServer) buildRpc(uid int, addr string) *network.ClientSocket {
 	return client
 }
 
-func (self *GateServer) removeRpc(uid int) {
+func (self *GateServer) removeClient(uid int) {
 	_, ok := self.clients[uid]
 	if !ok {
 		return
@@ -411,23 +382,8 @@ func (self *GateServer) removeRpc(uid int) {
 
 	delete(self.clients, uid)
 
-	//remove rpc handler
-	self.removeRpcHanlder(uid)
-
-	//reset node ststus
-	nodemgr.DisableNode(uid)
-}
-
-func (self *GateServer) removeRpcHanlder(uid int) {
-	//remove rpc handler
-	for key, arr := range self.rpcMap {
-		for i, val := range arr {
-			if val == uid {
-				self.rpcMap[key] = append(arr[:i], arr[i+1:]...)
-				break
-			}
-		}
-	}
+	self.rpcGates = util.RemoveSlice(self.rpcGates, uid) //将这个gate的rpc调用移除
+	self.rpcUids.Delete(uid)
 }
 
 func (self *GateServer) GetRpcClient(uid int) *network.ClientSocket {
@@ -439,35 +395,18 @@ func (self *GateServer) GetRpcClient(uid int) *network.ClientSocket {
 }
 
 //rpc调用的gate选择
-func (self *GateServer) getCluserGateClientId() int {
-	if self.ServerType == network.CLIENT_CONNECT {
-		llog.Fatalf("getCluserGate: gate or login can not call this func")
+func (self *GateServer) getCluserRpcGateUid() int {
+
+	sz := len(self.rpcGates)
+	if sz == 0 {
+		llog.Warning("0.getCluserGateUid no rpc gate server finded ")
 		return 0
 	} else {
-		sz := len(self.rpcGates)
-		if sz == 0 {
-			llog.Warning("0.getCluserGateClientId no gate server finded ")
-			return 0
-		} else {
-			index := util.Random(sz) //choose a gate by random
-			return self.rpcGates[index]
-		}
+		index := util.Random(sz) //choose a gate by random
+		return self.rpcGates[index]
 	}
-	return 0
-}
 
-//rpc调用的目标server选择
-func (self *GateServer) getCluserServer(funcName string) *network.ClientSocket {
-	arr := self.rpcMap[funcName]
-	sz := len(arr)
-	if sz == 0 {
-		llog.Warningf("0.getCluserServerUid no rpc server hanlder finded %s", funcName)
-		return nil
-	}
-	index := util.Random(sz) //choose a server by random
-	uid := arr[index]
-	client, _ := self.clients[uid]
-	return client
+	return 0
 }
 
 func (self *GateServer) GetClientToken(socketId int) *Token {
@@ -533,11 +472,9 @@ func (self *GateServer) BindClient(socketId, userid, tokenid, worlduid int) {
 }
 
 // gate绑定server，server使用
-func (self *GateServer) BindRpcGate(socketId, userid, tokenid int) {
+func (self *GateServer) BindServerGate(socketId, userid, tokenid int) {
 	self.tokens[socketId] = &Token{TokenId: tokenid, UserId: userid}
 	self.tokens_u[userid] = socketId
-	self.rpcGates = append(self.rpcGates, socketId)
-	onClientConnected(userid, 0)
 }
 
 // 客户端解绑gate，gate使用
@@ -561,13 +498,12 @@ func (self *GateServer) BindGate(userid, gateuid int) {
 
 // 解除gate的绑定，server使用
 func (self *GateServer) UnBindGate(socketId int) {
-	This.rpcGates = util.RemoveSlice(self.rpcGates, socketId)		//将这个gate的rpc调用移除
 	token := This.GetClientToken(socketId)
-	if token != nil{
+	if token != nil {
 		gateuid := token.UserId
-		delete(This.tokens, socketId)		//和gate解绑
+		delete(This.tokens, socketId) //和gate解绑
 		delete(This.tokens_u, gateuid)
-		for userid, mygateuid := range This.users_u {		//在这个gate上的user都应该掉线
+		for userid, mygateuid := range This.users_u { //在这个gate上的user都应该掉线
 			if mygateuid == gateuid {
 				onClientDisConnected(userid, gateuid)
 				self.BindGate(userid, 0)
@@ -576,20 +512,6 @@ func (self *GateServer) UnBindGate(socketId int) {
 	}
 }
 
-// 解除server的绑定，gate使用
-func (self *GateServer) UnBindServer(uid int) {
-	if config.NET_NODE_TYPE != config.ServerType_Gate {
-		return
-	}
-	This.removeRpc(uid)					//将这个server的rpc移除
-	for socketid, token := range self.tokens {
-		if token.WouldId == uid {
-			self.StopClient(false, socketid)
-		}
-	}
-}
-
-
 // 向内部server直接发送buffer消息,专为gate使用，
 // 必须保证线程安全，即需要在gateserver的igo中调用该函数
 func (self *GateServer) SendServer(target int, buff []byte) {
@@ -597,6 +519,6 @@ func (self *GateServer) SendServer(target int, buff []byte) {
 	if rpcClient != nil {
 		rpcClient.Send(buff)
 	} else {
-		llog.Errorf("GateServer.SendServer target error: target=%d", target)
+		llog.Warningf("GateServer.SendServer target error: target=%d", target)
 	}
 }

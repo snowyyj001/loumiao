@@ -2,7 +2,6 @@ package lnats
 
 import (
 	"fmt"
-	"github.com/prometheus/common/log"
 	"strings"
 	"time"
 
@@ -15,6 +14,10 @@ var (
 	lnc *nats.Conn
 )
 
+const (
+	TIMEOUT_NATS = 3
+)
+
 func FormatTopic(topic, prefix string) string {
 	return fmt.Sprintf("%s-%s", prefix, topic)
 }
@@ -22,22 +25,21 @@ func FormatTopic(topic, prefix string) string {
 //不带分组得消息订阅发布，会采用one-many的方式
 //带分组的方式，会采用one-one的方式
 
-
 //同步订阅消息,带分组
 func QueueSubscribeTagSync(topic, prefix, queue string) ([]byte, error) {
 	newtopic := FormatTopic(topic, prefix)
-	return QueueSubscribeSync(newtopic, queue)
+	return QueueSubscribeSync(newtopic, queue, TIMEOUT_NATS)
 }
 
 //同步订阅消息,带分组
-func QueueSubscribeSync(topic, queue string) ([]byte, error) {
+func QueueSubscribeSync(topic, queue string, waittime int) ([]byte, error) {
 	// Subscribe
 	sub, err := lnc.QueueSubscribeSync(topic, queue)
 	if err != nil {
 		return nil, err
 	}
 	// Wait for a message
-	msg, err := sub.NextMsg(10 * time.Second)
+	msg, err := sub.NextMsg(time.Duration(waittime) * time.Second)
 	if err != nil {
 		return nil, err
 	}
@@ -62,18 +64,18 @@ func QueueSubscribeTag(topic, prefix, queue string, call func([]byte)) error {
 //同步订阅消息
 func SubscribeTagSync(topic string, prefix string) ([]byte, error) {
 	newtopic := FormatTopic(topic, prefix)
-	return SubscribeSync(newtopic)
+	return SubscribeSync(newtopic, TIMEOUT_NATS)
 }
 
 //同步订阅消息
-func SubscribeSync(topic string) ([]byte, error) {
+func SubscribeSync(topic string, waittime int) ([]byte, error) {
 	// Subscribe
 	sub, err := lnc.SubscribeSync(topic)
 	if err != nil {
 		return nil, err
 	}
 	// Wait for a message
-	msg, err := sub.NextMsg(10 * time.Second)
+	msg, err := sub.NextMsg(time.Duration(waittime) * time.Second)
 	if err != nil {
 		return nil, err
 	}
@@ -117,10 +119,10 @@ func PublishInt(topic string, message int) error {
 }
 
 //请求消息
-func Request(topic string, message []byte) []byte {
-	msg, err := lnc.Request(topic, message, 3*time.Second)
+func Request(topic string, message []byte, waittime int) []byte {
+	msg, err := lnc.Request(topic, message, time.Duration(waittime)*time.Second)
 	if err != nil {
-		return []byte{}
+		return []byte(err.Error())
 	}
 	return msg.Data
 }
@@ -135,11 +137,11 @@ func Response(topic string, call func([]byte) []byte) error {
 }
 
 //请求消息
-func RequestTag(topic string, prefix string, message []byte) []byte {
+func RequestTag(topic string, prefix string, message []byte, waittime int) []byte {
 	newtopic := FormatTopic(topic, prefix)
-	msg, err := lnc.Request(newtopic, message, 3*time.Second)
+	msg, err := lnc.Request(newtopic, message, time.Duration(waittime)*time.Second)
 	if err != nil {
-		return []byte{}
+		return []byte(err.Error())
 	}
 	return msg.Data
 }
@@ -173,28 +175,58 @@ func QueueResponseTag(topic string, prefix string, queue string, call func([]byt
 	return err
 }
 
-func Init(addr []string) {
+func Init(addr []string, caller func(errstr string)) {
 	target := strings.Join(addr, ",")
 	name := nats.Name(config.NET_GATE_SADDR)
 
 	nc, err := nats.Connect(target, name,
 		nats.DisconnectErrHandler(func(nc *nats.Conn, err error) {
-			log.Errorf("NATS client connection got disconnected: %s %s", nc.LastError(), err.Error())
+			str := fmt.Sprintf("NATS client connection got disconnected: %s %s", nc.LastError(), err.Error())
+			if caller != nil {
+				caller(str)
+			} else {
+				fmt.Println(str)
+			}
 		}),
 		nats.ReconnectHandler(func(nc *nats.Conn) {
-			log.Errorf("NATS client reconnected after a previous disconnection, connected to %s", nc.ConnectedUrl())
+			str := fmt.Sprintf("NATS client reconnected after a previous disconnection, connected to %s", nc.ConnectedUrl())
+			if caller != nil {
+				caller(str)
+			} else {
+				fmt.Println(str)
+			}
 		}),
 		nats.ClosedHandler(func(nc *nats.Conn) {
-			log.Errorf("NATS client connection closed: %s", nc.LastError())
+			str := fmt.Sprintf("NATS client connection closed: %s", nc.LastError())
+			if caller != nil {
+				caller(str)
+			} else {
+				fmt.Println(str)
+			}
 		}),
 		nats.ErrorHandler(func(nc *nats.Conn, sub *nats.Subscription, err error) {
-			log.Errorf("NATS client on %s encountered an error: %s", nc.ConnectedUrl(), err.Error())
+			str := fmt.Sprintf("NATS client on %s encountered an error: %s", nc.ConnectedUrl(), err.Error())
+			if caller != nil {
+				caller(str)
+			} else {
+				fmt.Println(str)
+			}
 		}))
 
 	if err != nil {
-		log.Fatalf("nats connect failed: %s", target)
+		str := fmt.Sprintf("nats connect failed: %s", target)
+		if caller != nil {
+			caller(str)
+		} else {
+			fmt.Println(str)
+		}
 	} else {
-		log.Infof("nats connect success: nickname=%s,target=%s", config.NET_GATE_SADDR, target)
+		str := fmt.Sprintf("nats connect success: %s", target)
+		if caller != nil {
+			caller(str)
+		} else {
+			fmt.Println(str)
+		}
 	}
 	lnc = nc
 }

@@ -49,6 +49,8 @@ func (self *WebSocket) Init(saddr string) bool {
 	self.Socket.Init(saddr)
 	self.m_ClientList = make(map[int]*WebSocketClient)
 	self.m_ClientLocker = &sync.RWMutex{}
+	self.m_bShuttingDown = true
+	self.m_nState = SSF_INIT
 	return true
 }
 func (self *WebSocket) Start() bool {

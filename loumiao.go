@@ -1,19 +1,20 @@
 package loumiao
 
 import (
-	"github.com/snowyyj001/loumiao/base"
-	"github.com/snowyyj001/loumiao/config"
 	"os"
 	"os/signal"
 	"reflect"
 	"runtime"
 	"syscall"
 
+	"github.com/snowyyj001/loumiao/base"
+	"github.com/snowyyj001/loumiao/config"
+
 	"github.com/snowyyj001/loumiao/gorpc"
 	"github.com/snowyyj001/loumiao/llog"
 	"github.com/snowyyj001/loumiao/message"
 	"github.com/snowyyj001/loumiao/msg"
-	"github.com/snowyyj001/loumiao/util/timer"
+	"github.com/snowyyj001/loumiao/timer"
 )
 
 var c chan os.Signal
@@ -46,6 +47,13 @@ func Start(igo gorpc.IGoRoutine, name string, sync bool) {
 
 //开启游戏
 func Run() {
+	defer func() {
+		if r := recover(); r != nil {
+			buf := make([]byte, 2048)
+			l := runtime.Stack(buf, false)
+			llog.Errorf("loumiao run error: name=%s, error=%v, stack=%s", config.SERVER_NAME, r, buf[:l])
+		}
+	}()
 
 	gorpc.MGR.DoStart()
 
@@ -58,7 +66,7 @@ func Run() {
 	}, true)
 
 	c = make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, os.Kill, syscall.SIGTERM)
+	signal.Notify(c, os.Interrupt, os.Kill, syscall.SIGTERM, syscall.SIGINT)
 	sig := <-c
 	llog.Infof("loumiao closing down (signal: %v)", sig)
 
@@ -167,30 +175,12 @@ func SendRpc(funcName string, data interface{}, target int) {
 	gorpc.MGR.Send("GateServer", "SendRpc", m)
 }
 
-//远程rpc消息广播调用-*********还没测试
-//@funcName: rpc函数
-//@data: 函数参数,如果data是[]byte类型，则代表使用bitstream或自定义二进制内容，否则data应该是一个messgae注册的pb或json结构体
-//@target: 目标server的type
-func BroadCastRpc(funcName string, data interface{}, target int) {
-	m := &gorpc.M{Id: target, Name: funcName}
-	if reflect.TypeOf(data).Kind() == reflect.Slice { //bitstream
-		m.Data = data
-		m.Param = 1
-	} else {
-		buff, _ := message.Encode(target, "", data)
-		m.Data = buff
-	}
-	llog.Debugf("BroadCastRpc: %s, %d", funcName, target)
-	//base64str := base64.StdEncoding.EncodeToString([]byte(funcName))
-	gorpc.MGR.Send("GateServer", "BroadCastRpc", m)
-}
-
 //发送给gate的消息
-//@clientid: 目标gate的uid，如果clientid=0，则会随机选择一个gate发送
+//@uid: 目标gate的uid，如果uid=0，则会随机选择一个gate发送
 //@data: 发送消息
-func SendGate(clientid int, data interface{}) {
-	buff, _ := message.Encode(clientid, "", data)
-	m := &gorpc.M{Id: clientid, Data: buff}
+func SendGate(uid int, data interface{}) {
+	buff, _ := message.Encode(uid, "", data)
+	m := &gorpc.M{Id: uid, Data: buff}
 	gorpc.MGR.Send("GateServer", "SendGate", m)
 }
 
@@ -217,31 +207,38 @@ func BindGate(userid int64, gateuid int, targetuid int) {
 //发布
 //@key: 发布的key
 //@value: 发布的值
-func Publish(key, value string) {		//发布
+func Publish(key, value string) { //发布
 	igo := gorpc.MGR.GetRoutine("GateServer")
 	if igo == nil {
 		llog.Errorf("loumiao.Publish error, no gate actor: key=%s,value=%s", key, value)
 		return
 	}
-	bitstream := base.NewBitStream_1(base.BitStrLen(key)+base.BitStrLen(value) + 1)
+	bitstream := base.NewBitStream_1(base.BitStrLen(key) + base.BitStrLen(value) + 1)
 	bitstream.WriteString(key)
 	bitstream.WriteString(value)
 	SendAcotr("GateServer", "Publish", bitstream.GetBuffer())
 }
+
 //订阅
 //@name: 订阅者的igo name
 //@key: 订阅的key
 //@hanlder: 订阅的actor处理函数,为""即为取消订阅
-func Subscribe(igo gorpc.IGoRoutine, key string, call gorpc.HanlderFunc) {		//订阅
+func Subscribe(igo gorpc.IGoRoutine, key string, call gorpc.HanlderFunc) { //订阅
 	gateigo := gorpc.MGR.GetRoutine("GateServer")
 	if gateigo == nil {
 		llog.Errorf("loumiao.Subscribe error, no gate actor: key=%s", key)
 		return
 	}
 	name := igo.GetName()
-	hanlder := RpcFuncName(call)
-	igo.Register(hanlder, call)
-	bitstream := base.NewBitStream_1(base.BitStrLen(name)+base.BitStrLen(key)+base.BitStrLen(hanlder) + 1)
+	var hanlder string
+	if call != nil {
+		hanlder = RpcFuncName(call)
+		igo.Register(hanlder, call)
+	} else {
+		hanlder = ""
+	}
+
+	bitstream := base.NewBitStream_1(base.BitStrLen(name) + base.BitStrLen(key) + base.BitStrLen(hanlder) + 1)
 	bitstream.WriteString(name)
 	bitstream.WriteString(key)
 	bitstream.WriteString(hanlder)

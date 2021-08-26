@@ -53,6 +53,8 @@ func (self *KcpSocket) Init(saddr string) bool {
 	self.Socket.Init(saddr)
 	self.m_ClientList = make(map[int]*KCPSocketClient)
 	self.m_ClientLocker = &sync.RWMutex{}
+	self.m_bShuttingDown = true
+	self.m_nState = SSF_INIT
 	return true
 }
 func (self *KcpSocket) Start() bool {

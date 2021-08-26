@@ -2,6 +2,7 @@ package gorpc
 
 import (
 	"github.com/snowyyj001/loumiao/llog"
+	"github.com/snowyyj001/loumiao/timer"
 )
 
 //服务启动后，不允许再开新的service
@@ -91,7 +92,6 @@ func (self *GoRoutineMgr) DoStart() {
 			igo.Run()
 			igo.DoStart()
 		}
-
 	}
 	for name, igo := range self.go_name_Tmp {
 		if igo.IsRunning() == false && igo.IsInited() == true {
@@ -109,6 +109,8 @@ func (self *GoRoutineMgr) DoStart() {
 	}
 	self.is_starting = false
 	self.has_started = true
+
+	self.Statistics()
 }
 
 //开启服务
@@ -136,10 +138,28 @@ func (self *GoRoutineMgr) Send(target string, funcName string, data *M) {
 		llog.Errorf("GoRoutineMgr.Send target[%s] is nil: %s", target, funcName)
 		return
 	}
-	if len(igo.GetJobChan()) > igo.GetChanLen()*2 {
-		llog.Errorf("GoRoutineMgr.Send:[%s (chan overlow[%d, %d])] %s", target, igo.GetJobChan(), igo.GetChanLen(), funcName)
+	igo.Send(funcName, data)
+}
+
+//内部rpc调用
+//@target: 目标actor
+//@funcName: rpc函数
+//@data: 函数参数
+func (self *GoRoutineMgr) SendActor(target string, funcName string, data interface{}) {
+	igo := self.GetRoutine(target)
+	if igo == nil {
+		llog.Errorf("GoRoutineMgr.SendActor target[%s] is nil: %s", target, funcName)
 		return
 	}
-	job := ChannelContext{funcName, *data, nil, nil}
-	igo.GetJobChan() <- job
+	igo.SendActor(funcName, data)
+}
+
+//统计每个actor的job队列情况
+func (self *GoRoutineMgr) Statistics() {
+	timer.NewTimer(CHAN_Statistics_Time, func(dt int64) bool { //30s统计一次
+		for _, igo := range self.go_name_Map {
+			llog.Debugf("GoRoutineMgr.Statistics: name=%s, jobleft=%d, jobmax=%d", igo.GetName(), igo.LeftJobNumber(), igo.GetChanLen())
+		}
+		return true
+	}, true)
 }

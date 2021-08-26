@@ -14,23 +14,20 @@ func Assert(x bool, y string) {
 		log.Fatalf("Assert: %s", y)
 	}
 }
-
+//随机数[i,n]
 func RandI(i int, n int) int {
 	if i > n {
-		Assert(false, "Rand::RandI: inverted range")
 		return i
 	}
-
 	return int(i + rand.Int()%(n-i+1))
 }
 
+//随机数[i,n]
 func RandF(i float32, n float32) float32 {
 	if i > n {
-		Assert(false, "Rand::RandF: inverted range")
 		return i
 	}
-
-	return (i + (n-i)*rand.Float32())
+	return i + (n-i)*rand.Float32()
 }
 
 //-----------string strconv type-------------//

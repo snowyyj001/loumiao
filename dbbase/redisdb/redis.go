@@ -4,6 +4,7 @@ package redisdb
 import (
 	"fmt"
 	"math/rand"
+	"runtime"
 	"time"
 
 	"github.com/gomodule/redigo/redis"
@@ -11,10 +12,6 @@ import (
 	"github.com/snowyyj001/loumiao/config"
 	"github.com/snowyyj001/loumiao/llog"
 	"github.com/snowyyj001/loumiao/util"
-)
-
-const (
-	POOL_SIZE = 10
 )
 
 var (
@@ -26,15 +23,18 @@ var (
 ///例如： Redis.Dial("127.0.0.1:6379")
 func Dial(url string) error {
 	llog.Debugf("redis Dial: %s", config.DBCfg.RedisUri)
-	pool = redis.NewPool(func() (redis.Conn, error) {
-		c, err := redis.Dial("tcp", url)
-		if err != nil {
-			return nil, err
-		}
-		return c, nil
-	}, POOL_SIZE)
+	cpuNum := runtime.NumCPU()
+	pool =& redis.Pool{
+		MaxIdle:     cpuNum,
+		Dial: func () (redis.Conn, error) {
+			return redis.Dial("tcp", url)
+		},
+		TestOnBorrow: func(c redis.Conn, t time.Time) error {
+			_, err := c.Do("PING")
+			return err
+		},
+	}
 
-	util.Assert(pool)
 	c, err := pool.Dial()
 	if util.CheckErr(err) {
 		return fmt.Errorf("redis Dial error: %s", url)
@@ -48,22 +48,7 @@ func Dial(url string) error {
 //连接数据库,使用config-redis默认参数
 func DialDefault() error {
 	llog.Debugf("redis DialDefault: %s", config.DBCfg.RedisUri)
-	pool = redis.NewPool(func() (redis.Conn, error) {
-		c, err := redis.Dial("tcp", config.DBCfg.RedisUri)
-		if err != nil {
-			return nil, err
-		}
-		return c, nil
-	}, POOL_SIZE)
-	util.Assert(pool)
-	c, err := pool.Dial()
-	if util.CheckErr(err) {
-		return fmt.Errorf("redis DialDefault error: %s", config.DBCfg.RedisUri)
-	}
-	c.Close()
-	llog.Infof("redis DialDefault success: %s", config.DBCfg.RedisUri)
-
-	return nil
+	return Dial(config.DBCfg.RedisUri)
 }
 
 //关闭连接

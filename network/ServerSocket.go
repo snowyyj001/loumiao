@@ -38,6 +38,8 @@ func (self *ServerSocket) Init(saddr string) bool {
 	self.Socket.Init(saddr)
 	self.m_ClientList = make(map[int]*ServerSocketClient)
 	self.m_ClientLocker = &sync.RWMutex{}
+	self.m_bShuttingDown = true
+	self.m_nState = SSF_INIT
 	return true
 }
 func (self *ServerSocket) Start() bool {
@@ -75,6 +77,7 @@ func (self *ServerSocket) Start() bool {
 func (self *ServerSocket) AssignClientId() int {
 	return int(atomic.AddInt32(&self.m_nIdSeed, 1))
 }
+
 
 func (self *ServerSocket) GetClientById(id int) *ServerSocketClient {
 	self.m_ClientLocker.RLock()

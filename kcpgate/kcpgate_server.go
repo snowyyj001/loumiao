@@ -13,7 +13,6 @@ type KcpGateServer struct {
 
 	Id        int
 	pService  *network.KcpSocket
-	OnlineNum int
 	ListenStr string
 
 	InitFunc func() //需要额外处理的函数回调

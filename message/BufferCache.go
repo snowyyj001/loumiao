@@ -1,9 +1,10 @@
 package message
 
 import (
-	"github.com/snowyyj001/loumiao/base/vector"
-	"github.com/snowyyj001/loumiao/util/timer"
 	"sync"
+
+	"github.com/snowyyj001/loumiao/base/vector"
+	"github.com/snowyyj001/loumiao/timer"
 )
 
 /*

@@ -2,10 +2,14 @@ package etcd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
 
+	"github.com/snowyyj001/loumiao/nodemgr"
+
+	"github.com/snowyyj001/loumiao/config"
 	"github.com/snowyyj001/loumiao/llog"
 	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/clientv3/concurrency"
@@ -17,7 +21,7 @@ import (
 type HanlderFunc func(string, string, bool)
 
 var (
-	This *clientv3.Client
+	This       *clientv3.Client
 	EtcdClient *ClientDis
 )
 
@@ -74,6 +78,37 @@ func (self *EtcdBase) Get(key string) (*clientv3.GetResponse, error) {
 	return gresp, err
 }
 
+func (self *EtcdBase) GetOne(key string) (string, error) {
+	resp, err := self.Get(key)
+	if err != nil {
+		return "", err
+	}
+	if resp == nil {
+		return "", nil
+	}
+	for i := range resp.Kvs {
+		if string(resp.Kvs[i].Key) == key {
+			return string(resp.Kvs[i].Value), nil
+		}
+	}
+	return "", nil
+}
+
+func (self *EtcdBase) GetAll(key string) ([]string, error) {
+	resp, err := self.Get(key)
+	if err != nil {
+		return []string{}, err
+	}
+	if resp == nil {
+		return []string{}, nil
+	}
+	rets := []string{}
+	for i := range resp.Kvs {
+		rets = append(rets, string(resp.Kvs[i].Value))
+	}
+	return rets, nil
+}
+
 //设置租约
 //@timeNum: 过期时间
 //@keepalive: 是否自动续约
@@ -115,7 +150,7 @@ func (self *EtcdBase) listenLeaseRespChan() {
 		select {
 		case leaseKeepResp := <-self.keepAliveChan:
 			if leaseKeepResp == nil {
-				llog.Debugf("已经关闭续租功能")
+				llog.Warningf("EtcdBase.listenLeaseRespChan: 续租功能已经关闭")
 				self.lease = nil
 				if self.leasefunc != nil {
 					self.leasefunc(false)
@@ -137,6 +172,7 @@ func (self *EtcdBase) RevokeLease() error {
 		return fmt.Errorf("RevokeLease: lease has already been ewvoked")
 	}
 	self.canclefunc()
+	self.leasefunc = nil //主动撤销不再回调
 	_, err := self.lease.Revoke(context.TODO(), self.leaseResp.ID)
 	self.leaseResp = nil
 	return err
@@ -233,24 +269,18 @@ type ClientDis struct {
 	EtcdBase
 	otherFunc sync.Map //[string]HanlderFunc
 
-	NodeListFuc   func(string, string, bool) //服发现
-	StatusListFuc func(string, string, bool) //状态更新
+	etcdKey   string
+	statusKey string
 }
 
 func (self *ClientDis) watchFuc(prefix, key, value string, put bool) {
-	switch prefix {
-	case define.ETCD_NODEINFO:
-		self.NodeListFuc(key, value, put)
-	case define.ETCD_NODESTATUS:
-		self.StatusListFuc(key, value, put)
-	default:
-		cb, ok := self.otherFunc.Load(prefix)
-		if ok {
-			cb.(HanlderFunc)(key, value, put)
-		} else {
-			llog.Errorf("etcd WatchFuc prefix no handler: %s", prefix)
-		}
+	cb, ok := self.otherFunc.Load(prefix)
+	if ok {
+		cb.(HanlderFunc)(key, value, put)
+	} else {
+		llog.Errorf("etcd WatchFuc prefix no handler: %s", prefix)
 	}
+
 }
 
 func (self *ClientDis) watcher(prefix string) {
@@ -270,59 +300,27 @@ func (self *ClientDis) watcher(prefix string) {
 //通用发现
 //@prefix: 监听key值
 //@hanlder: key值变化回调
-func (self *ClientDis) WatchCommon(prefix string, hanlder HanlderFunc) ([]string, error) {
+func (self *ClientDis) WatchCommon(prefix string, hanlder HanlderFunc) error {
 	resp, err := self.client.Get(context.Background(), prefix, clientv3.WithPrefix())
 	if err != nil {
-		return nil, err
+		return err
 	}
 	self.otherFunc.Store(prefix, hanlder)
-	addrs := self.extractOthers(hanlder, resp)
+	self.extractOthers(hanlder, resp)
 
 	go self.watcher(prefix)
-	return addrs, nil
+	return nil
 }
 
-func (self *ClientDis) extractOthers(hanlder HanlderFunc, resp *clientv3.GetResponse) []string {
-	addrs := make([]string, 0)
+func (self *ClientDis) extractOthers(hanlder HanlderFunc, resp *clientv3.GetResponse) {
 	if resp == nil || resp.Kvs == nil {
-		return addrs
+		return
 	}
 	for i := range resp.Kvs {
 		if v := resp.Kvs[i].Value; v != nil {
 			hanlder(string(resp.Kvs[i].Key), string(resp.Kvs[i].Value), true)
-			addrs = append(addrs, string(v))
 		}
 	}
-	return addrs
-}
-
-//服发现
-//@prefix: 监听key值
-//@hanlder: key值变化回调
-func (self *ClientDis) WatchNodeList(prefix string, hanlder func(string, string, bool)) ([]string, error) {
-	resp, err := self.client.Get(context.Background(), prefix, clientv3.WithPrefix())
-	if err != nil {
-		return nil, err
-	}
-	self.NodeListFuc = hanlder
-	addrs := self.extractAddrs_All(resp)
-
-	go self.watcher(prefix)
-	return addrs, nil
-}
-
-func (self *ClientDis) extractAddrs_All(resp *clientv3.GetResponse) []string {
-	addrs := make([]string, 0)
-	if resp == nil || resp.Kvs == nil {
-		return addrs
-	}
-	for i := range resp.Kvs {
-		if v := resp.Kvs[i].Value; v != nil {
-			self.NodeListFuc(string(resp.Kvs[i].Key), string(resp.Kvs[i].Value), true)
-			addrs = append(addrs, string(v))
-		}
-	}
-	return addrs
 }
 
 //通过租约 注册服务
@@ -337,19 +335,37 @@ func (self *ClientDis) DelService(key string) {
 	self.Delete(key)
 }
 
-//状态更新
-//@prefix: 监听key值
-//@hanlder: key值变化回调
-func (self *ClientDis) WatchStatusList(prefix string, hanlder func(string, string, bool)) error {
-	self.StatusListFuc = hanlder
+func (self *ClientDis) leaseCallBack(success bool) {
+	if success { //成功续租
+		self.PutStatus()
+	} else {
+		llog.Errorf("leaseCallBack续租失败: uid = %d", config.SERVER_NODE_UID)
+		err := self.SetLease(int64(config.GAME_LEASE_TIME), true)
+		if err != nil {
+			llog.Debugf("尝试重新续租失败: err=%s", err.Error())
+		} else {
+			llog.Debugf("尝试重新续租成功")
+			err = self.PutNode()
+			if err != nil {
+				llog.Errorf("leaseCallBack PutService error: err=%v", err)
+				self.RevokeLease()
+			}
+		}
+	}
+}
 
-	go self.watcher(prefix)
-	return nil
+func (self *ClientDis) PutStatus() error {
+	val := fmt.Sprintf("%d:%t", nodemgr.OnlineNum, nodemgr.ServerEnabled)
+	return self.Put(self.statusKey, val, true)
+}
+
+func (self *ClientDis) PutNode() error {
+	obj, _ := json.Marshal(&config.Cfg.NetCfg)
+	return self.PutService(self.etcdKey, string(obj))
 }
 
 //创建服务发现
-func NewClientDis(addr []string) (*ClientDis, error) {
-	llog.Debugf("etcd connect: %v", addr)
+func NewClientDis(addr []string) error {
 	conf := clientv3.Config{
 		Endpoints:   addr,
 		DialTimeout: 3 * time.Second,
@@ -361,14 +377,18 @@ func NewClientDis(addr []string) (*ClientDis, error) {
 		_, err = client.Status(timeoutCtx, conf.Endpoints[0])
 		if err != nil {
 			This = nil
-			return nil, err
+			return err
 		}
-		llog.Infof("NewClientDis, etcd connect success: %v", addr)
+		llog.Infof("etcd connect success: %v", addr)
 		EtcdClient = &ClientDis{
 			EtcdBase: EtcdBase{client: client},
 		}
-		return EtcdClient, nil
+		EtcdClient.etcdKey = fmt.Sprintf("%s%d/%s", define.ETCD_NODEINFO, config.NET_NODE_ID, config.NET_GATE_SADDR)
+		EtcdClient.statusKey = fmt.Sprintf("%s%d/%s", define.ETCD_NODESTATUS, config.NET_NODE_ID, config.NET_GATE_SADDR)
+		EtcdClient.SetLeasefunc(EtcdClient.leasefunc)
+		EtcdClient.SetLease(int64(config.GAME_LEASE_TIME), true)
+		return nil
 	} else {
-		return nil, err
+		return err
 	}
 }

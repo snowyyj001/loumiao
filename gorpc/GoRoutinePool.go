@@ -101,7 +101,7 @@ func (self *GoRoutinePool) CloseAll() {
 	self.actorLock.RUnlock()
 }
 
-//遍历所有actor
+//遍历所有actor，效率堪忧
 func (self *GoRoutinePool) RangeRoutine(hanlder func(igo IGoRoutine)) {
 	self.actorLock.RLock()
 	for _, igo := range self.go_name_Tmp {

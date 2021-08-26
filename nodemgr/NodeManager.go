@@ -2,18 +2,15 @@ package nodemgr
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"sync"
+
+	"github.com/snowyyj001/loumiao/llog"
 
 	"github.com/snowyyj001/loumiao/config"
 	"github.com/snowyyj001/loumiao/util"
 )
-
-type NodeInfo struct {
-	config.NetNode      //所有的服务器列表，如果要删除，需要删除etcd里面的内容
-	Number         int  //-1代表服务器未激活,服务器通过ETCD_NODESTATUS上报状态，就算激活，即number >= 0，socket断开或etcd断开都意味着节点不可用，已经关闭
-	SocketActive   bool //服务被主动关闭，节点还可用（因为节点是有状态的，为了不丢失数据），但节点不再被集群主动发现使用，
-}
 
 //负载均衡策略都是挑选number最小的
 //gate和accout目前有监控服务器信息,account挑选gate和world给客户端使用
@@ -22,93 +19,157 @@ var (
 	node_Map      map[string]*NodeInfo //服务器信息
 	saddr_uid_Map map[int]string       //saddr -> uid
 	nodeLock      sync.RWMutex
-	SocketActive  bool //本子节点网络状态
+	ServerEnabled bool
+	OnlineNum     int
 )
 
 func init() {
 	node_Map = make(map[string]*NodeInfo)
 	saddr_uid_Map = make(map[int]string)
+	ServerEnabled = false
 }
 
 func AddNode(node *NodeInfo) {
+	defer nodeLock.Unlock()
 	nodeLock.Lock()
 	node_Map[node.SAddr] = node
 	saddr_uid_Map[node.Uid] = node.SAddr
-	nodeLock.Unlock()
 }
 
-func RemoveNode(saddr string) {
+func RemoveNodeById(uid int) {
+	defer nodeLock.Unlock()
+	nodeLock.Lock()
+	saddr, ok := saddr_uid_Map[uid]
+	if ok {
+		delete(node_Map, saddr)
+		delete(saddr_uid_Map, uid)
+	}
+}
+
+func RemoveNode(saddr string) *NodeInfo {
+	defer nodeLock.Unlock()
 	nodeLock.Lock()
 	node, _ := node_Map[saddr]
 	if node != nil {
 		delete(node_Map, saddr)
 		delete(saddr_uid_Map, node.Uid)
 	}
-	nodeLock.Unlock()
+	return node
 }
 
 func GetNodeByAddr(saddr string) *NodeInfo {
 	//llog.Debugf("GetNodeByAddr: %s", saddr)
+	defer nodeLock.RUnlock()
 	nodeLock.RLock()
 	node, _ := node_Map[saddr]
-	nodeLock.RUnlock()
 	return node
 }
 
 //服务状态更新，间隔GAME_LEASE_TIME/3
-func NodeStatusUpdate(key string, val string, dis bool) {
-	var saddr string
+func NodeStatusUpdate(key string, val string, dis bool) *NodeInfo {
+	if !dis {
+		return nil
+	}
 	//var group string
 	arrStr := strings.Split(key, "/")
-	saddr = arrStr[2]
-	//group = arrStr[2]
-
-	//llog.Debugf("NodeStatusUpdate: key=%s,val=%s,dis=%t", key, val, dis)
-	/*	if config.NET_NODE_TYPE == config.ServerType_Gate {
-		if group != config.SERVER_GROUP {
-			return
-		}
+	/*areaid := util.Atoi(arrStr[2])
+	if areaid != config.NET_NODE_ID { //不关心其他服的情况
+		return
 	}*/
 
-	nodeLock.RLock()
+	saddr := arrStr[3]
+	//llog.Debugf("NodeStatusUpdate: key=%s,val=%s,dis=%t,saddr=%s", key, val, dis, saddr)
+
+	defer nodeLock.Unlock()
+	nodeLock.Lock()
 	node, _ := node_Map[saddr]
-	nodeLock.RUnlock()
 	if node == nil {
-		return
+		node = new(NodeInfo)
+		node.SAddr = saddr
+		node_Map[node.SAddr] = node
 	}
+	fmt.Sscanf(val, "%d:%t", &node.Number, &node.SocketActive)
+	//llog.Debugf("NodeStatusUpdate: saddr=%s,active=%t", node.SAddr, node.SocketActive)
+	return node
+}
+
+//服发现
+func NodeDiscover(key string, val string, dis bool) *NodeInfo {
+	arrStr := strings.Split(key, "/")
+	if len(arrStr) < 3 {
+		llog.Errorf("NodeDiscover error fromat key : %s", key)
+		return nil
+	}
+	/*areaid := util.Atoi(arrStr[2])
+	if areaid != config.NET_NODE_ID { //不关心其他服的情况
+		return
+	}*/
+
+	saddr := arrStr[3]
+	llog.Debugf("NodeDiscover: key=%s,val=%s,dis=%t,debug=%s", key, val, dis, saddr)
 	if dis == true {
-		node.Number = util.Atoi(val)
+		node := GetNodeByAddr(saddr)
+		if node == nil { //maybe, etcd still have older data, etcd has a huge delay
+			node = new(NodeInfo)
+			node.SocketActive = true
+		}
+		json.Unmarshal([]byte(val), node)
+		AddNode(node)
+		return node
 
 	} else {
-		node.Number = -1
+		return RemoveNode(saddr)
+
 	}
 }
 
 //pick a gate and world for client
-func GetBalanceServer(group string, onlyworld bool) (string, int) {
+func GetBalanceServer(widthgate bool, widthworld bool) (string, int) {
 	//pick the gate and the world
-	var saddr string
-	var worlduid int
+	var saddr []string
+	var worlduid []int
 
 	var minNum int = 0x7fffffff
 	var minNum_2 int = 0x7fffffff
-
+	defer nodeLock.RUnlock()
 	nodeLock.RLock()
 	for val, node := range node_Map {
-		if node.SocketActive && node.Number != -1 && node.Number < minNum && node.Type == config.ServerType_Gate {
-			saddr = val
-			minNum = node.Number
+		//llog.Debugf("GetBalanceServer %t, %d, %d", node.SocketActive , node.Number, node.Type)
+		if widthgate {
+			if node.SocketActive && node.Number <= minNum && node.Type == config.ServerType_Gate {
+				if node.Number == minNum {
+					saddr = append(saddr, val)
+				} else {
+					saddr = []string{val}
+					minNum = node.Number
+				}
+			}
 		}
-		if onlyworld == false {
-			if node.SocketActive && /* && node.Group == group*/ node.Number != -1 && node.Number < minNum_2 && node.Type == config.ServerType_World {
-				worlduid = node.Uid
-				minNum_2 = node.Number
+		if widthworld == true {
+			if node.SocketActive && node.Number <= minNum_2 && node.Type == config.ServerType_World {
+				if node.Number == minNum_2 {
+					worlduid = append(worlduid, node.Uid)
+				} else {
+					worlduid = []int{node.Uid}
+					minNum_2 = node.Number
+				}
 			}
 		}
 	}
-	nodeLock.RUnlock()
 
-	return saddr, worlduid
+	sz := len(saddr)
+	var retsaddr string
+	if sz > 0 {
+		retsaddr = saddr[util.Random(sz)]
+	}
+
+	var retuid int
+	sz = len(worlduid)
+	if sz > 0 {
+		retuid = worlduid[util.Random(sz)]
+	}
+
+	return retsaddr, retuid
 }
 
 //pick a zone server
@@ -116,42 +177,44 @@ func GetBalanceZone(group string) int {
 	var uid int
 
 	var minNum int = 0x7fffffff
-
+	defer nodeLock.RUnlock()
 	nodeLock.RLock()
 	for _, node := range node_Map {
-		if node.SocketActive /* && node.Group == group */ && node.Number != -1 && node.Number < minNum && node.Type == config.ServerType_Zone {
+		if node.SocketActive /* && node.Group == group */ && node.Number < minNum && node.Type == config.ServerType_Zone {
 			uid = node.Uid
 			minNum = node.Number
 		}
 	}
-	nodeLock.RUnlock()
 
 	return uid
 }
 
-func DisableNode(uid int) {
-	node := GetNode(uid)
-	if node != nil {
-		node.Number = -1
-	}
-}
-
 func GetNode(uid int) (ret *NodeInfo) {
+	defer nodeLock.RUnlock()
 	nodeLock.RLock()
 	saddr, ok := saddr_uid_Map[uid]
 	if ok {
 		ret, _ = node_Map[saddr]
 	}
-	nodeLock.RUnlock()
 	return
 }
 
 func GetActiveNode(uid int) (ret *NodeInfo) {
 	node := GetNode(uid)
-	if node != nil && node.SocketActive && node.Number != -1 {
+	if node != nil && node.SocketActive {
 		ret = node
 	}
 	return
+}
+
+func DisableNode(uid int) {
+	node := GetNode(uid)
+	if node != nil {
+		node.SocketActive = false
+	}
+	if uid == config.SERVER_NODE_UID {
+		ServerEnabled = false
+	}
 }
 
 /*
@@ -210,14 +273,13 @@ func PackNodeInfos(group string, stype int) []byte {
 	st := struct {
 		Nodes []*NodeInfo `json:"nodes"`
 	}{}
-
+	defer nodeLock.RUnlock()
 	nodeLock.RLock()
 	for _, node := range node_Map {
 		if (node.Group == group || group == "") && (stype == 0 || node.Type == stype) {
 			st.Nodes = append(st.Nodes, node)
 		}
 	}
-	nodeLock.RUnlock()
 
 	buffer, err := json.Marshal(&st)
 	util.CheckErr(err)

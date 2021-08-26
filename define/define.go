@@ -4,10 +4,10 @@ package define
 const ETCD_LOCKUID string = "/lockuid/"
 
 //服务器信息注册
-const ETCD_NODEINFO string = "/nodeinfos/"
+const ETCD_NODEINFO string = "/nodeinfos/" // /nodeinfos/areaid/host/
 
 //node状态
-const ETCD_NODESTATUS string = "/nodestatus/"
+const ETCD_NODESTATUS string = "/nodestatus/" // /nodestatus/areaid/host/
 
 //分布式锁-world position
 const KEY_LOCKWORLD string = "/lockworldpos/"
@@ -22,6 +22,7 @@ const (
 )
 const ( //kafka消息topic
 	TOPIC_SERVER_MAIL = "tp:servermail" //server关键信息，发送邮件
+	TOPIC_SERVER_LOG  = "tp:loglevel"   //日志级别调整
 )
 
 const ( //发送真实邮件类型

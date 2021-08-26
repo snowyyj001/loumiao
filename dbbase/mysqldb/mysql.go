@@ -158,6 +158,27 @@ func MInsert(st schema.Tabler) bool {
 	return true
 }
 
+//使用主库添加st结构
+func MFirstOrCreate(st interface{}, conds ...interface{}) bool {
+	err := Master.FirstOrCreate(st, conds...).Error
+	if err != nil {
+		llog.Warningf("MFirstOrCreate: %s", err.Error())
+		return false
+	}
+	return true
+}
+
+//使用主库更新pst结构,pst是指针，指示key，st支持 struct 和 map[string]interface{} 参数
+//st为结构体时，只会更新非零值的字段
+func MUpdates(pst schema.Tabler, st interface{}) bool {
+	err := Master.Model(pst).Updates(st).Error
+	if err != nil {
+		llog.Warningf("MUpdates: %s", err.Error())
+		return false
+	}
+	return true
+}
+
 //使用主库更新st结构的attrs字段
 func MUpdate(st schema.Tabler, attrs ...interface{}) bool {
 	sz := len(attrs)
@@ -195,7 +216,7 @@ func MDelete(st schema.Tabler) bool {
 }
 
 //使用主库执行一个事务
-func MTransaction (call func(db *gorm.DB, params ...interface{}) error, params ...interface{}) bool {
+func MTransaction(call func(db *gorm.DB, params ...interface{}) error, params ...interface{}) bool {
 	err := Master.Transaction(func(tx *gorm.DB) error {
 		return call(tx, params...)
 	})

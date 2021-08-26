@@ -15,7 +15,8 @@ import (
 )
 
 const (
-	SSF_ACCEPT = iota
+	SSF_INIT = iota
+	SSF_ACCEPT
 	SSF_CONNECT
 	SSF_SHUT_DOWN //已经关闭
 )
@@ -77,6 +78,7 @@ type (
 		Send([]byte) int
 		SendById(int, []byte) int
 		BroadCast(buff []byte)
+		GetSAddr() string
 
 		GetState() int
 		//SetMaxSendBufferSize(int)

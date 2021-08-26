@@ -3,6 +3,7 @@ package llog
 import (
 	"encoding/json"
 	"fmt"
+
 	"github.com/natefinch/lumberjack"
 	go_logger "github.com/phachon/go-logger"
 	"github.com/snowyyj001/loumiao/config"
@@ -15,6 +16,7 @@ import (
 const ( //日志树输出级别
 	DebugLevel = iota
 	InfoLevel
+	NoticeLevel
 	WarnLevel
 	ErrorLevel
 )
@@ -26,6 +28,7 @@ var (
 	logLevel    int
 	//remoteLog   *LogRemoteWrite
 )
+
 /*
 type LogRemoteWrite struct {
 	clientLog  net.Conn
@@ -116,7 +119,7 @@ func init() {
 	//os.Mkdir("logs", os.ModePerm)
 	//os.Mkdir(fmt.Sprintf("logs/%s", config.SERVER_NAME), os.ModePerm)
 	SetLevel(config.GAME_LOG_LEVEL)
-	filename := fmt.Sprintf("./logs/%s/%s.log", config.SERVER_LOG, config.SERVER_NAME)
+	filename := fmt.Sprintf("./logs/%s/%s.log", config.SERVER_TYPE_NAME, config.SERVER_NAME)
 	core := zapcore.NewCore(getEncoder(), getLogWriter(filename), zapcore.DebugLevel)
 	if config.GAME_LOG_CONLOSE {
 		logger = zap.New(core)
@@ -138,7 +141,7 @@ func init() {
 
 //llog Panic level
 func Panic(msg string) {
-	reportMail(msg)
+	ReportMail(define.MAIL_TYPE_ERR, msg)
 	logger.Panic(msg)
 }
 
@@ -150,7 +153,7 @@ func Panicf(format string, a ...interface{}) {
 
 //llog error level
 func Error(msg string) {
-	go reportMail(msg)
+	go ReportMail(define.MAIL_TYPE_ERR, msg)
 	logger.Error(msg)
 	if clogger != nil {
 		clogger.Error(msg)
@@ -161,6 +164,21 @@ func Error(msg string) {
 func Errorf(format string, a ...interface{}) {
 	msg := fmt.Sprintf(format, a...)
 	Error(msg)
+}
+
+//llog notice level
+func Notice(msg string) {
+	go ReportMail(define.MAIL_TYPE_ERR, msg)
+	logger.Warn(msg)
+	if clogger != nil {
+		clogger.Notice(msg)
+	}
+}
+
+//llog Notice format
+func Noticef(format string, a ...interface{}) {
+	msg := fmt.Sprintf(format, a...)
+	Notice(msg)
 }
 
 //llog warning level
@@ -216,7 +234,7 @@ func Debugf(format string, a ...interface{}) {
 
 //llog Fatal
 func Fatal(msg string) {
-	reportMail(msg)
+	ReportMail(define.MAIL_TYPE_ERR, msg)
 	logger.Fatal(msg)
 }
 
@@ -226,21 +244,35 @@ func Fatalf(format string, a ...interface{}) {
 	Fatal(msg)
 }
 
-func reportMail(errstr string) {
+func SetLevel(_level int) {
+	logLevel = _level
+}
+
+func Tp_SetLevel(data []byte) {
+	reqParam := &struct {
+		Uid   int `json:"uid"`
+		Level int `json:"level"`
+	}{}
+	if err := json.Unmarshal(data, reqParam); err == nil {
+		if reqParam.Uid == config.SERVER_NODE_UID {
+			Infof("Tp_SetLevel: oldlevel=%d, newlevel=%d", logLevel, reqParam.Level)
+			SetLevel(reqParam.Level)
+		}
+	}
+}
+
+//上报服务器关键信息
+func ReportMail(tag int, str string) {
 	reqParam := &struct {
 		Tag     int    `json:"tag"`     //邮件类型
 		Id      int    `json:"id"`      //区服id
 		Content string `json:"content"` //邮件内容
 	}{}
-	reqParam.Tag = define.MAIL_TYPE_ERR
+	reqParam.Tag = tag
 	reqParam.Id = config.NET_NODE_ID
-	reqParam.Content = fmt.Sprintf("uid: %d \nname: %s\nhost: %s\r\n%s", config.SERVER_NODE_UID, config.SERVER_NAME, config.NET_GATE_SADDR, errstr)
+	reqParam.Content = fmt.Sprintf("uid: %d \nname: %s\nhost: %s\r\ncontent: %s", config.SERVER_NODE_UID, config.SERVER_NAME, config.NET_GATE_SADDR, str)
 	buffer, err := json.Marshal(&reqParam)
 	if err == nil {
 		lnats.Publish(define.TOPIC_SERVER_MAIL, buffer)
 	}
-}
-
-func SetLevel(_level int) {
-	logLevel = _level
 }
