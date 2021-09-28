@@ -168,7 +168,7 @@ func Errorf(format string, a ...interface{}) {
 
 //llog notice level
 func Notice(msg string) {
-	go ReportMail(define.MAIL_TYPE_ERR, msg)
+	go ReportMail(define.MAIL_TYPE_WARING, msg)
 	logger.Warn(msg)
 	if clogger != nil {
 		clogger.Notice(msg)

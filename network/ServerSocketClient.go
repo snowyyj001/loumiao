@@ -32,8 +32,8 @@ func (self *ServerSocketClient) Start() bool {
 	self.m_nState = SSF_CONNECT
 	//self.m_Conn.(*net.TCPConn).SetNoDelay(true)		//default is true，禁用Nagle算法
 	//self.m_Conn.(*net.TCPConn).SetKeepAlive(true)		//default is enable，链接检测
-	//self.m_Conn.(*net.TCPConn).SetKeepAlivePeriod(5*time.Second)		//default is 15 second (defaultTCPKeepAlive)
-	//self.m_Conn.(*net.TCPConn).SetLinger(-1);		//default is < 0, 内核缺省close操作是立即返回，如果有数据残留在socket缓冲区中则系统将试着将这些数据发送给对方。
+	//self.m_Conn.(*net.TCPConn).SetKeepAlivePeriod(5*time.Second)		//default is 15 second (defaultTCPKeepAlive)，linux默认是7200秒
+	//self.m_Conn.(*net.TCPConn).SetLinger(-1);		//default is < 0, 内核缺省close操作是立即返回，如果有数据残留在socket缓冲区中则系统将试着将这些数据发 送给对方。
 	// cat /proc/sys/net/ipv4/tcp_max_syn_backlog		//半连接队列大小，在Linux内核2.2之后，分离为两个backlog来分别限制半连接（SYN_RCVD状态）队列大小和全连接（ESTABLISHED状态）队列大小
 	// cat /proc/sys/net/core/somaxconn	//全连接队列大小,int listen(int sockfd, int backlog),值取somaxconn和backlog的最小的
 	// cat /proc/sys/net/core/rmem_max		//可设置的最大读缓冲区大小

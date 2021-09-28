@@ -1,6 +1,9 @@
 package loumiao
 
 import (
+	"github.com/snowyyj001/loumiao/callrpc"
+	"github.com/snowyyj001/loumiao/define"
+	"github.com/snowyyj001/loumiao/nodemgr"
 	"os"
 	"os/signal"
 	"reflect"
@@ -9,12 +12,12 @@ import (
 
 	"github.com/snowyyj001/loumiao/base"
 	"github.com/snowyyj001/loumiao/config"
-
 	"github.com/snowyyj001/loumiao/gorpc"
 	"github.com/snowyyj001/loumiao/llog"
 	"github.com/snowyyj001/loumiao/message"
 	"github.com/snowyyj001/loumiao/msg"
 	"github.com/snowyyj001/loumiao/timer"
+	"github.com/snowyyj001/loumiao/util"
 )
 
 var c chan os.Signal
@@ -22,6 +25,7 @@ var c chan os.Signal
 //最开始的初始化
 func DoInit() {
 	message.DoInit()
+	Start(new(callrpc.CallRpcServer), "CallRpcServer", true)
 }
 
 func init() {
@@ -136,25 +140,13 @@ func BroadCastMsg(data interface{}) {
 	SendMulClient(nil, data)
 }
 
-//获得rpc注册名
-func RpcFuncName(call interface{}) string {
-	//base64str := base64.StdEncoding.EncodeToString([]byte(funcName))
-	funcName := runtime.FuncForPC(reflect.ValueOf(call).Pointer()).Name()
-	return funcName
-}
-
 //注册rpc消息
 func RegisterRpcHandler(igo gorpc.IGoRoutine, call gorpc.HanlderNetFunc) {
-	funcName := RpcFuncName(call)
+	util.Assert(nodemgr.ServerEnabled==false, "RegisterRpcHandler can not register after server started")
+	funcName := util.RpcFuncName(call)
 	//base64str := base64.StdEncoding.EncodeToString([]byte(funcName))
 	gorpc.MGR.Send("GateServer", "RegisterNet", &gorpc.M{Id: -1, Name: funcName, Data: igo.GetName()})
 	igo.RegisterGate(funcName, call)
-}
-
-func UnRegisterRpcHandler(igo gorpc.IGoRoutine, call gorpc.HanlderNetFunc) {
-	funcName := RpcFuncName(call)
-	gorpc.MGR.Send("GateServer", "UnRegisterNet", &gorpc.M{Id: -1, Name: funcName})
-	igo.UnRegisterGate(funcName)
 }
 
 //远程rpc调用
@@ -165,14 +157,57 @@ func SendRpc(funcName string, data interface{}, target int) {
 	m := &gorpc.M{Id: target, Name: funcName}
 	if reflect.TypeOf(data).Kind() == reflect.Slice { //bitstream
 		m.Data = data
-		m.Param = 1
 	} else {
 		buff, _ := message.Encode(target, "", data)
+		m.Param = define.RPCMSG_FLAG_PB
 		m.Data = buff
 	}
 	llog.Debugf("SendRpc: %s, %d", funcName, target)
 	//base64str := base64.StdEncoding.EncodeToString([]byte(funcName))
 	gorpc.MGR.Send("GateServer", "SendRpc", m)
+}
+
+//注册rpc消息
+//return: call应该返回一个[]byte类型，或pb结构体
+func RegisterRpcCallHandler(igo gorpc.IGoRoutine, call gorpc.HanlderFunc) {
+	util.Assert(nodemgr.ServerEnabled==false, "RegisterRpcCallHandler can not register after server started")
+	funcName := util.RpcFuncName(call)
+	igo.Register(funcName, call)
+	mm := &gorpc.MM{}
+	mm.Id = igo.GetName()
+	mm.Data = funcName
+	gorpc.MGR.SendActor("CallRpcServer", "RegisterRpcHanlder", mm)
+	gorpc.MGR.Send("GateServer", "RegisterNet", &gorpc.M{Id: -1, Name: funcName, Data: igo.GetName()})
+}
+
+//远程rpc调用
+//@funcName: rpc函数
+//@data: 函数参数,如果data是[]byte类型，则代表使用bitstream或自定义二进制内容，否则data应该是一个messgae注册的pb或json结构体
+//@target: 目标server的uid，如果target==0，则随机指定目标地址, 否则gate会把消息转发给指定的target服务
+func CallRpc(igo gorpc.IGoRoutine, funcName string, data interface{}, target int) (interface{}, bool) {
+	m := &gorpc.M{Id: target, Name: funcName}
+	m.Param = define.RPCMSG_FLAG_CALL
+	session := igo.GetName()
+	if reflect.TypeOf(data).Kind() == reflect.Slice { //bitstream
+		orgbuff := data.([]byte)
+		bitstream := base.NewBitStream_1(len(orgbuff) + base.BitStrLen(session))
+		bitstream.WriteString(session)
+		bitstream.WriteBits(orgbuff, base.BytesLen(orgbuff))
+		m.Data = bitstream.GetBuffer()
+	} else {
+		orgbuff, sz := message.Encode(target, "", data)
+		bitstream := base.NewBitStream_1(sz + base.BitStrLen(session))
+		bitstream.WriteString(session)
+		bitstream.WriteBits(orgbuff, base.BytesLen(orgbuff))
+		m.Data = bitstream.GetBuffer()
+		m.Param = util.BitOr(m.Param, define.RPCMSG_FLAG_PB)
+	}
+	llog.Infof("CallRpc: session=%s, funcName=%s, target=%d", session, funcName, target)
+	//base64str := base64.StdEncoding.EncodeToString([]byte(funcName))
+	gorpc.MGR.Send("GateServer", "SendRpc", m)
+
+	resp, ok := igo.CallActor("CallRpcServer", "CallRpc", session)
+	return resp, ok
 }
 
 //发送给gate的消息
@@ -207,20 +242,20 @@ func BindGate(userid int64, gateuid int, targetuid int) {
 //发布
 //@key: 发布的key
 //@value: 发布的值
-func Publish(key, value string) { //发布
+func Publish(key string, data interface{}) { //发布
 	igo := gorpc.MGR.GetRoutine("GateServer")
 	if igo == nil {
-		llog.Errorf("loumiao.Publish error, no gate actor: key=%s,value=%s", key, value)
+		llog.Errorf("loumiao.Publish error, no gate actor: key=%s,value=%v", key, data)
 		return
 	}
-	bitstream := base.NewBitStream_1(base.BitStrLen(key) + base.BitStrLen(value) + 1)
-	bitstream.WriteString(key)
-	bitstream.WriteString(value)
-	SendAcotr("GateServer", "Publish", bitstream.GetBuffer())
+	mm := &gorpc.MM{}
+	mm.Id = key
+	mm.Data = data
+	SendAcotr("GateServer", "Publish", mm)
 }
 
 //订阅
-//@name: 订阅者的igo name
+//@name: 订阅者的igo
 //@key: 订阅的key
 //@hanlder: 订阅的actor处理函数,为""即为取消订阅
 func Subscribe(igo gorpc.IGoRoutine, key string, call gorpc.HanlderFunc) { //订阅
@@ -232,7 +267,7 @@ func Subscribe(igo gorpc.IGoRoutine, key string, call gorpc.HanlderFunc) { //订
 	name := igo.GetName()
 	var hanlder string
 	if call != nil {
-		hanlder = RpcFuncName(call)
+		hanlder = util.RpcFuncName(call)
 		igo.Register(hanlder, call)
 	} else {
 		hanlder = ""

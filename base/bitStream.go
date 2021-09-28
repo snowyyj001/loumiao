@@ -366,3 +366,12 @@ func BitStrLen(str string) int {
 	}
 	return sz + 2
 }
+
+//一个字符串占用的字节大小
+func BytesLen(buff []byte) int {
+	sz := len(buff)
+	if sz  == 0 {
+		return 0
+	}
+	return sz * 8
+}

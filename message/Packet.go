@@ -82,7 +82,7 @@ func DecodeProBuff(uid int, buff []byte, length int) (error, int, string, interf
 		return fmt.Errorf("DecodeProBuff: msgname len is illegal: %d", nameLen), 0, "", nil
 	}
 	msgName := string(buff[8 : 8+nameLen])
-	if length == 8+int(nameLen) { //just for on CONNECT/DISCONNECT or []byte{}
+	if length == 8+len(msgName) { //just for on CONNECT/DISCONNECT or []byte{}
 		if filterWarning[msgName] {
 			return nil, target, msgName, nil
 		} else {

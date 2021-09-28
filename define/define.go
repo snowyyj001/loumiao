@@ -27,7 +27,36 @@ const ( //kafka消息topic
 
 const ( //发送真实邮件类型
 	MAIL_TYPE_ERR   = 0 //服务器发生error
-	MAIL_TYPE_START = 1 //服务器启动
-	MAIL_TYPE_STOP  = 2 //服务器关闭
-	MAIL_SYS_WARN   = 3 //系统资源告警
+	MAIL_TYPE_WARING   = 1 //服务器发生需要注意的警告
+	MAIL_TYPE_START = 5 //服务器启动
+	MAIL_TYPE_STOP  = 6 //服务器关闭
+	MAIL_SYS_WARN   = 7 //系统资源告警
+)
+
+const (
+	RPCMSG_FLAG_PB =  1 << 0
+	RPCMSG_FLAG_CALL = 1 << 1
+	RPCMSG_FLAG_RESP= 1 << 2
+)
+
+var (
+	RESERVED_PORT = map[int]bool{ //保留的端口，自己服务不使用这些
+		3306:  true, //mysql
+		6379:  true, //redis
+		27017: true, //mongodb
+		2379:  true, //etcd
+		2380:  true, //etcd
+		22379: true, //etcd
+		22380: true, //etcd
+		32379: true, //etcd
+		32380: true, //etcd
+		4222:  true, //nats
+		6222:  true, //nats
+		5044:  true, //logstash
+		8000:  true, //web
+		80:    true, //web
+		8080:  true, //web
+		9000:  true, //docker Portainer
+		9001:  true, //docker Portainer
+	}
 )

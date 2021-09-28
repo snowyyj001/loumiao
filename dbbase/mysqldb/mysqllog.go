@@ -25,15 +25,15 @@ func (self *SqlLog) LogMode(level logger.LogLevel) logger.Interface {
 }
 
 func (self *SqlLog) Info(ctx context.Context, msg string, data ...interface{}) {
-	llog.Debugf("mysql: %s", fmt.Sprintf("msg=%s, data=%v", msg, data))
+	llog.Debugf("mysql : %s", fmt.Sprintf("msg=%s, data=%v", msg, data))
 }
 
 func (self *SqlLog) Warn(ctx context.Context, msg string, data ...interface{}) {
-	llog.Warningf("mysql: %s", fmt.Sprintf("msg=%s, data=%v", msg, data))
+	llog.Warningf("mysql Warn: %s", fmt.Sprintf("msg=%s, data=%v", msg, data))
 }
 
 func (self *SqlLog) Error(ctx context.Context, msg string, data ...interface{}) {
-	llog.Errorf("mysql: %s", fmt.Sprintf("msg=%s, data=%v", msg, data))
+	llog.Errorf("mysql Error : %s", fmt.Sprintf("msg=%s, data=%v", msg, data))
 }
 
 func (self *SqlLog) Trace(ctx context.Context, begin time.Time, fc func() (string, int64), err error) {

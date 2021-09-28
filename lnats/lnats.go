@@ -206,6 +206,15 @@ func Init(addr []string, caller func(errstr string)) {
 		}),
 		nats.ErrorHandler(func(nc *nats.Conn, sub *nats.Subscription, err error) {
 			str := fmt.Sprintf("NATS client on %s encountered an error: %s", nc.ConnectedUrl(), err.Error())
+			if err == nats.ErrSlowConsumer {
+				pendingMsgs, _, err := sub.Pending()
+				if err != nil {
+					fmt.Printf("couldn't get pending messages: %v", err)
+					return
+				}
+				str = fmt.Sprintf("%s\nFalling behind with %d pending messages on subject %q.\n", str, pendingMsgs, sub.Subject)
+				// Log error, notify operations...
+			}
 			if caller != nil {
 				caller(str)
 			} else {

@@ -119,14 +119,30 @@ func innerLouMiaoLoginGate(igo gorpc.IGoRoutine, socketId int, data interface{})
 //recv rpc msg
 func innerLouMiaoRpcMsg(igo gorpc.IGoRoutine, socketId int, data interface{}) {
 	req := data.(*msg.LouMiaoRpcMsg)
-	llog.Debugf("innerLouMiaoRpcMsg=%s, socurce=%d, target=%d, ByteBuffer=%d", req.FuncName, req.SourceId, req.TargetId, req.ByteBuffer)
+	llog.Debugf("innerLouMiaoRpcMsg=%s, socurce=%d, target=%d, Flag=%d", req.FuncName, req.SourceId, req.TargetId, req.Flag)
+	if util.HasBit(int(req.Flag), define.RPCMSG_FLAG_CALL) {
+		if util.HasBit(int(req.Flag), define.RPCMSG_FLAG_RESP) {
+			gorpc.MGR.SendActor("CallRpcServer", "RespRpcCall", *req)
+		} else {
+			handler, ok := handler_Map[req.FuncName]
+			if !ok {
+				llog.Errorf("2.InnerLouMiaoRpcMsg no rpc hanlder %s, %d", req.FuncName, socketId)
+				return
+			}
+			mm := &gorpc.MM{}
+			mm.Id = handler
+			mm.Data = *req
+			gorpc.MGR.SendActor("CallRpcServer", "ReqRpcCall", mm)
+		}
+		return
+	}
+
 	handler, ok := handler_Map[req.FuncName]
 	if !ok {
 		llog.Errorf("0.InnerLouMiaoRpcMsg no rpc hanlder %s, %d", req.FuncName, socketId)
 		return
 	}
-
-	if req.ByteBuffer > 0 { //not pb but bytes
+	if util.HasNotBit(int(req.Flag), define.RPCMSG_FLAG_PB) { //not pb but bytes
 		m := &gorpc.M{Id: int(req.SourceId), Name: req.FuncName, Data: req.Buffer}
 		if handler == "GateServer" {
 			igo.CallNetFunc(m)
@@ -135,9 +151,7 @@ func innerLouMiaoRpcMsg(igo gorpc.IGoRoutine, socketId int, data interface{}) {
 		}
 	} else {
 		err, _, _, pm := message.Decode(config.SERVER_NODE_UID, req.Buffer, len(req.Buffer))
-		//llog.Debugf("innerLouMiaoRpcMsg : pm = %v", pm)
-		//spm := reflect.Indirect(reflect.ValueOf(pm))
-		//llog.Debugf("innerLouMiaoRpcMsg : spm = %v, typename=%v", spm, reflect.TypeOf(spm.Interface()).Name
+	//	err, target, msgName, pm := message.Decode(config.SERVER_NODE_UID, req.Buffer, len(req.Buffer))
 		if err != nil {
 			llog.Errorf("1.innerLouMiaoRpcMsg decode msg error : func=%s, error=%s ", req.FuncName, err.Error())
 			return
@@ -382,7 +396,7 @@ func sendRpc(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	}
 	//llog.Debugf("sendRpc: %d", clientuid)
 	client := This.GetRpcClient(clientuid)
-	outdata := &msg.LouMiaoRpcMsg{TargetId: int32(m.Id), FuncName: m.Name, Buffer: m.Data.([]byte), SourceId: int32(config.SERVER_NODE_UID), ByteBuffer: int32(m.Param)}
+	outdata := &msg.LouMiaoRpcMsg{TargetId: int32(m.Id), FuncName: m.Name, Buffer: m.Data.([]byte), SourceId: int32(config.SERVER_NODE_UID), Flag: int32(m.Param)}
 	buff, _ := message.Encode(0, "LouMiaoRpcMsg", outdata)
 	client.Send(buff)
 
@@ -472,17 +486,14 @@ func broadCastClients(buff []byte) {
 }
 
 func publish(igo gorpc.IGoRoutine, data interface{}) interface{} {
-	buffer := data.([]byte)
-	bitstream := base.NewBitStream(buffer, len(buffer))
-	key := bitstream.ReadString()
-	value := bitstream.ReadString()
-	vec, ok := This.msgQueueMap[key]
+	mm := data.(*gorpc.MM)
+	vec, ok := This.msgQueueMap[mm.Id]
 	if !ok {
 		return nil
 	}
 	it := vec.Iterator()
 	for it.Next() {
-		loumiao.SendAcotr(it.Key().(string), it.Value().(string), value)
+		loumiao.SendAcotr(it.Key().(string), it.Value().(string), mm.Data)
 	}
 	return nil
 }

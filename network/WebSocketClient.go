@@ -61,14 +61,11 @@ func (self *WebSocketClient) OnNetFail(error int) {
 }
 
 func (self *WebSocketClient) Close() {
-	if self.m_WsConn != nil {
-		self.m_WsConn.Close()
-	}
-	self.m_WsConn = nil
-	self.Socket.Close()
 	if self.m_pServer != nil {
 		self.m_pServer.DelClinet(self)
+		self.m_pServer = nil
 	}
+	self.Socket.Close()
 }
 
 func wserverclientRoutine(pClient *WebSocketClient) bool {

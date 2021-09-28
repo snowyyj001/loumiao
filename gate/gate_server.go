@@ -23,7 +23,7 @@ import (
 
 var (
 	This        *GateServer
-	handler_Map map[string]string
+	handler_Map map[string]string		//goroutine unsafe
 )
 
 type Token struct {
@@ -62,6 +62,7 @@ type GateServer struct {
 	users_u  map[int]int
 
 	//rpc相关
+	rpcWait   map[string]string
 	rpcMap   map[string]string
 	rpcGates []int //space for time, all rpcserver's uid
 	rpcUids  sync.Map
@@ -116,7 +117,7 @@ func (self *GateServer) DoInit() bool {
 }
 
 func (self *GateServer) DoRegsiter() {
-	llog.Info("GateServer DoRegsiter")
+	llog.Infof("%s DoRegsiter", self.Name)
 
 	self.Register("RegisterNet", registerNet)
 	self.Register("UnRegisterNet", unRegisterNet)
@@ -175,16 +176,17 @@ func (self *GateServer) DoStart() {
 	if util.CheckErr(err) {
 		llog.Fatalf("etcd connect failed: %v", config.Cfg.EtcdAddr)
 	}
-	nodemgr.ServerEnabled = true
-	etcd.EtcdClient.PutStatus()  //服务如果异常关闭，是没有撤销租约的，在三秒内重启会保留上次状态，这里强制刷新一下
+	//nodemgr.ServerEnabled = true
+	//etcd.EtcdClient.PutStatus()  //服务如果异常关闭，是没有撤销租约的，在三秒内重启会保留上次状态(可能是关闭状态)，这里强制刷新一下，
+	//nodemgr.ServerEnabled = false
 	timer.DelayJob(100, func() { //delay 100ms, that all RegisterRpcHandler should be compled
 		//server discover
-		//watch all node, just for account, to gate balance
+		//watch all node
 		err = etcd.EtcdClient.WatchCommon(fmt.Sprintf("%s%d", define.ETCD_NODESTATUS, config.NET_NODE_ID), self.serverStatusUpdate)
 		if err != nil {
 			llog.Fatalf("etcd watch ETCD_NODESTATUS error : %s", err.Error())
 		}
-		//watch status, for balance
+		//watch status
 		err = etcd.EtcdClient.WatchCommon(fmt.Sprintf("%s%d", define.ETCD_NODEINFO, config.NET_NODE_ID), self.newServerDiscover)
 		if err != nil {
 			llog.Fatalf("etcd watch NET_GATE_SADDR error : %s", err.Error())
@@ -203,11 +205,15 @@ func (self *GateServer) DoOpen() {
 		util.Assert(self.pInnerService.Start(), fmt.Sprintf("GateServer listen failed: saddr=%s", self.pInnerService.GetSAddr()))
 	}
 
+	nodemgr.ServerEnabled = true
+	etcd.EtcdClient.PutStatus()  //服务如果异常关闭，是没有撤销租约的，在三秒内重启会保留上次状态(可能是关闭状态)，这里强制刷新一下，
+
 	//register to etcd when the socket is ok
 	if err := etcd.EtcdClient.PutNode(); err != nil {
 		llog.Fatalf("etcd PutService error %v", err)
 	}
 
+	nodemgr.ServerEnabled = true
 	llog.Infof("GateServer DoOpen success: name=%s,saddr=%s,uid=%d", self.Name, config.NET_GATE_SADDR, config.SERVER_NODE_UID)
 
 	llog.ReportMail(define.MAIL_TYPE_START, "服务器完成启动")
@@ -221,6 +227,18 @@ func (self *GateServer) RegisterSelfNet(hanlderName string, hanlderFunc gorpc.Ha
 	}
 	handler_Map[hanlderName] = "GateServer"
 	self.RegisterGate(hanlderName, hanlderFunc)
+}
+
+//simple register self rpc hanlder, this func can only be called before igo started
+func (self *GateServer) RegisterSelfRpc(hanlderFunc gorpc.HanlderNetFunc) {
+	if self.IsRunning() {
+		llog.Fatal("RegisterSelfNet error, igo has already started")
+		return
+	}
+	funcName := util.RpcFuncName(hanlderFunc)
+	handler_Map[funcName] = "GateServer"
+	This.rpcMap[funcName] = "GateServer"
+	self.RegisterGate(funcName, hanlderFunc)
 }
 
 //

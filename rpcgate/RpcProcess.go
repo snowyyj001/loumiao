@@ -41,7 +41,7 @@ func innerLouMiaoRpcRegister(igo gorpc.IGoRoutine, socketId int, data interface{
 //recv rpc msg
 func innerLouMiaoRpcMsg(igo gorpc.IGoRoutine, socketId int, data interface{}) {
 	req := data.(*msg.LouMiaoRpcMsg)
-	llog.Debugf("0.innerLouMiaoRpcMsg=%s, socurce=%d, target=%d, ByteBuffer=%d", req.FuncName, req.SourceId, req.TargetId, req.ByteBuffer)
+	llog.Debugf("0.innerLouMiaoRpcMsg=%s, socurce=%d, target=%d, Flag=%d", req.FuncName, req.SourceId, req.TargetId, req.Flag)
 	var rpcClientId int
 	if req.TargetId <= 0 {
 		rpcClientId = This.getCluserServerSocketId(req.FuncName)

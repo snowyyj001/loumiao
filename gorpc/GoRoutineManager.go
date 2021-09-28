@@ -158,7 +158,12 @@ func (self *GoRoutineMgr) SendActor(target string, funcName string, data interfa
 func (self *GoRoutineMgr) Statistics() {
 	timer.NewTimer(CHAN_Statistics_Time, func(dt int64) bool { //30s统计一次
 		for _, igo := range self.go_name_Map {
-			llog.Debugf("GoRoutineMgr.Statistics: name=%s, jobleft=%d, jobmax=%d", igo.GetName(), igo.LeftJobNumber(), igo.GetChanLen())
+			if igo.IsSync() {
+				llog.Debugf("GoRoutineMgr.Statistics: name=%s, jobing=%d,jobleft=%d, jobmax=%d", igo.GetName(), igo.RunningJobNumber() ,igo.LeftJobNumber(), igo.GetChanLen())
+			} else {
+				llog.Debugf("GoRoutineMgr.Statistics: name=%s, ,jobleft=%d, jobmax=%d", igo.GetName(), igo.LeftJobNumber(), igo.GetChanLen())
+			}
+
 		}
 		return true
 	}, true)

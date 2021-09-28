@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 	"runtime"
+	"strconv"
 	"time"
 
 	"github.com/gomodule/redigo/redis"
@@ -22,19 +23,24 @@ var (
 //url：数据库地址
 ///例如： Redis.Dial("127.0.0.1:6379")
 func Dial(url string) error {
-	llog.Debugf("redis Dial: %s", config.DBCfg.RedisUri)
+	llog.Debugf("redis Dial: %s", config.Cfg.RedisUri)
 	cpuNum := runtime.NumCPU()
-	pool =& redis.Pool{
-		MaxIdle:     cpuNum,
-		Dial: func () (redis.Conn, error) {
+	pool = &redis.Pool{
+		MaxIdle: cpuNum,
+		Dial: func() (redis.Conn, error) {
 			return redis.Dial("tcp", url)
 		},
 		TestOnBorrow: func(c redis.Conn, t time.Time) error {
+			if time.Since(t) < time.Second {
+				return nil
+			}
 			_, err := c.Do("PING")
+			if err != nil {
+				llog.Fatalf("redis[%s] ping error: %s", url, err.Error())
+			}
 			return err
 		},
 	}
-
 	c, err := pool.Dial()
 	if util.CheckErr(err) {
 		return fmt.Errorf("redis Dial error: %s", url)
@@ -47,8 +53,8 @@ func Dial(url string) error {
 
 //连接数据库,使用config-redis默认参数
 func DialDefault() error {
-	llog.Debugf("redis DialDefault: %s", config.DBCfg.RedisUri)
-	return Dial(config.DBCfg.RedisUri)
+	llog.Debugf("redis DialDefault: %s", config.Cfg.RedisUri)
+	return Dial(config.Cfg.RedisUri)
 }
 
 //关闭连接
@@ -58,16 +64,24 @@ func Close() {
 }
 
 ///Do a command
-func Do(command string ,args ...interface{}) (interface{},  error) {
+func Do(command string, args ...interface{}) (interface{}, error) {
 	db := pool.Get()
 	defer db.Close()
-	return db.Do(command, args...)
+	v, err := db.Do(command, args...)
+	if err != nil {
+		llog.Errorf("Do: command = %s, args = %v, err = %s", command, args, err.Error())
+	}
+	return v, err
 }
 
-func Set(args ...interface{}) {
+func Set(args ...interface{}) (interface{}, error) {
 	db := pool.Get()
 	defer db.Close()
-	db.Do("SET", args...)
+	v, err := db.Do("SET", args...)
+	if err != nil {
+		llog.Errorf("Set: args = %v, err = %s", args, err.Error())
+	}
+	return v, err
 }
 
 //redis分布式锁,尝试expiretime毫秒后拿不到锁就返回0,否则返回锁的随机值
@@ -96,12 +110,12 @@ func AquireLock(key string, expiretime int) int {
 		}
 	}
 	if err != nil {
-		llog.Errorf("redis Lock error: key=%d, error=%s", key, err.Error())
+		llog.Errorf("redis Lock error: key=%s, error=%s", key, err.Error())
 	}
 	if ret != nil {
 		return val
 	}
-	return 0 			//没有拿到锁
+	return 0 //没有拿到锁
 }
 
 func UnLock(key string, val int) {
@@ -120,42 +134,139 @@ func UnLock(key string, val int) {
 	db.Do("eval", luascript, 1, key, val)
 }
 
+// String is a helper that converts a command reply to a string. If err is not
+// equal to nil, then String returns "", err. Otherwise String converts the
+// reply to a string as follows:
+//
+//  Reply type      Result
+//  bulk string     string(reply), nil
+//  simple string   reply, nil
+//  nil             "",  nil
+//  other           "",  error
+func String(reply interface{}, err error) (string, error) {
+	if err != nil {
+		return "", err
+	}
+	switch reply := reply.(type) {
+	case []byte:
+		return string(reply), nil
+	case string:
+		return reply, nil
+	case nil:
+		return "", nil		//不使用redis.String，这里行为不一样
+	case redis.Error:
+		return "", reply
+	}
+	return "", fmt.Errorf("redisdb: unexpected type for String, got type %T", reply)
+}
+
 func GetString(key string) (string, error) {
 	db := pool.Get()
 	defer db.Close()
-	return redis.String(db.Do("GET", key))
+	reply, err := db.Do("GET", key)
+	v, err := String(reply, err)
+	if err != nil {
+		llog.Errorf("GetString: key = %s, err = %s", key, err.Error())
+	}
+	return v, err
+}
+
+// Int is a helper that converts a command reply to an integer. If err is not
+// equal to nil, then Int returns 0, err. Otherwise, Int converts the
+// reply to an int as follows:
+//
+//  Reply type    Result
+//  integer       int(reply), nil
+//  bulk string   parsed reply, nil
+//  nil           0, nil
+//  other         0, error
+func Int(reply interface{}, err error) (int, error) {
+	if err != nil {
+		return 0, err
+	}
+	switch reply := reply.(type) {
+	case int64:
+		x := int(reply)
+		if int64(x) != reply {
+			return 0, strconv.ErrRange
+		}
+		return x, nil
+	case []byte:
+		n, err := strconv.ParseInt(string(reply), 10, 0)
+		return int(n), err
+	case nil:
+		return 0, nil		//不使用redis.Int，这里行为不一样
+	case redis.Error:
+		return 0, reply
+	}
+	return 0, fmt.Errorf("redigo: unexpected type for Int, got type %T", reply)
 }
 
 func GetInt(key string) (int, error) {
 	db := pool.Get()
 	defer db.Close()
-	return redis.Int(db.Do("GET", key))
+	v, err := Int(db.Do("GET", key))
+	if err != nil {
+		llog.Errorf("GetInt: key = %s, err = %s", key, err.Error())
+	}
+	return v, err
+}
+
+// Int64 is a helper that converts a command reply to 64 bit integer. If err is
+// not equal to nil, then Int64 returns 0, err. Otherwise, Int64 converts the
+// reply to an int64 as follows:
+//
+//  Reply type    Result
+//  integer       reply, nil
+//  bulk string   parsed reply, nil
+//  nil           0, nil
+//  other         0, error
+func Int64(reply interface{}, err error) (int64, error) {
+	if err != nil {
+		return 0, err
+	}
+	switch reply := reply.(type) {
+	case int64:
+		return reply, nil
+	case []byte:
+		n, err := strconv.ParseInt(string(reply), 10, 64)
+		return n, err
+	case nil:
+		return 0, nil
+	case redis.Error:
+		return 0, reply
+	}
+	return 0, fmt.Errorf("redigo: unexpected type for Int64, got type %T", reply)
 }
 
 func GetInt64(key string) (int64, error) {
 	db := pool.Get()
 	defer db.Close()
-	return redis.Int64(db.Do("GET", key))
+	v, err := Int64(db.Do("GET", key))
+	if err != nil {
+		llog.Errorf("GetInt64: key = %s, err = %s", key, err.Error())
+	}
+	return v, err
 }
 
 // 判断所在的 key 是否存在
-func Exist(name string) (bool, error) {
+func Exist(key string) (bool, error) {
 	db := pool.Get()
 	defer db.Close()
-	v, err := redis.Bool(db.Do("EXISTS", name))
+	v, err := redis.Bool(db.Do("EXISTS", key))
 	if err != nil {
-		llog.Error(err.Error())
+		llog.Errorf("Exist: name = %s, err = %s", key, err.Error())
 	}
 	return v, err
 }
 
 // 自增
-func StringIncr(name string) (int, error) {
+func StringIncr(key string) (int, error) {
 	db := pool.Get()
 	defer db.Close()
-	v, err := redis.Int(db.Do("INCR", name))
+	v, err := Int(db.Do("INCR", key))
 	if err != nil {
-		llog.Error(err.Error())
+		llog.Errorf("StringIncr: name = %s, err = %s", key, err.Error())
 	}
 	return v, err
 }
@@ -167,18 +278,44 @@ func Expire(name string, newSecondsLifeTime int64) error {
 	// 设置key 的过期时间
 	_, err := db.Do("EXPIRE", name, newSecondsLifeTime)
 	if err != nil {
-		llog.Error(err.Error())
+		llog.Errorf("Delete: name = %s, newSecondsLifeTime = %d, err = %s", name, newSecondsLifeTime, err.Error())
 	}
 	return err
+}
+
+// Bool is a helper that converts a command reply to a boolean. If err is not
+// equal to nil, then Bool returns false, err. Otherwise Bool converts the
+// reply to boolean as follows:
+//
+//  Reply type      Result
+//  integer         value != 0, nil
+//  bulk string     strconv.ParseBool(reply)
+//  nil             false, ErrNil
+//  other           false, error
+func Bool(reply interface{}, err error) (bool, error) {
+	if err != nil {
+		return false, err
+	}
+	switch reply := reply.(type) {
+	case int64:
+		return reply != 0, nil
+	case []byte:
+		return strconv.ParseBool(string(reply))
+	case nil:
+		return false, nil
+	case redis.Error:
+		return false, reply
+	}
+	return false, fmt.Errorf("redigo: unexpected type for Bool, got type %T", reply)
 }
 
 // 删除指定的键
 func Delete(keys ...interface{}) (bool, error) {
 	db := pool.Get()
 	defer db.Close()
-	v, err := redis.Bool(db.Do("DEL", keys...))
+	v, err := Bool(db.Do("DEL", keys...))
 	if err != nil {
-		llog.Error(err.Error())
+		llog.Errorf("Delete: keys = %v, err = %s", keys, err.Error())
 	}
 	return v, err
 }
@@ -187,9 +324,9 @@ func Delete(keys ...interface{}) (bool, error) {
 func StrLen(name string) (int, error) {
 	db := pool.Get()
 	defer db.Close()
-	v, err := redis.Int(db.Do("STRLEN", name))
+	v, err := Int(db.Do("STRLEN", name))
 	if err != nil {
-		llog.Error(err.Error())
+		llog.Errorf("StrLen: name =%s, err = %s", name, err.Error())
 	}
 	return v, err
 }
@@ -200,9 +337,9 @@ func HDel(name, key string) (bool, error) {
 	db := pool.Get()
 	defer db.Close()
 	var err error
-	v, err := redis.Bool(db.Do("HDEL", name, key))
+	v, err := Bool(db.Do("HDEL", name, key))
 	if err != nil {
-		llog.Error(err.Error())
+		llog.Errorf("HMDel: name =%s, key = %s, err = %s", name, key, err.Error())
 	}
 	return v, err
 }
@@ -218,9 +355,9 @@ func HMDel(name string, fields ...string) (bool, error) {
 		args = append(args, field)
 	}
 	var err error
-	v, err := redis.Bool(db.Do("HDEL", args...))
+	v, err := Bool(db.Do("HDEL", args...))
 	if err != nil {
-		llog.Error(err.Error())
+		llog.Errorf("HMDel: name =%s, fields = %v, err = %s", name, fields, err.Error())
 	}
 	return v, err
 }
@@ -230,9 +367,9 @@ func HExists(name, field string) (bool, error) {
 	db := pool.Get()
 	defer db.Close()
 	var err error
-	v, err := redis.Bool(db.Do("HEXISTS", name, field))
+	v, err := Bool(db.Do("HEXISTS", name, field))
 	if err != nil {
-		llog.Error(err.Error())
+		llog.Errorf("HExists: name =%s, field = %s, err = %s", name, field, err.Error())
 	}
 	return v, err
 }
@@ -241,9 +378,9 @@ func HExists(name, field string) (bool, error) {
 func HLen(name string) (int, error) {
 	db := pool.Get()
 	defer db.Close()
-	v, err := redis.Int(db.Do("HLEN", name))
+	v, err := Int(db.Do("HLEN", name))
 	if err != nil {
-		llog.Error(err.Error())
+		llog.Errorf("HMget: name =%s, err = %s", name, err.Error())
 	}
 	return v, err
 }
@@ -258,7 +395,7 @@ func HMget(name string, fields ...string) ([]string, error) {
 	}
 	value, err := redis.Values(db.Do("HMGET", args...))
 	if err != nil {
-		llog.Error(err.Error())
+		llog.Errorf("HMget: name =%s, fields = %v, err = %s", name, fields, err.Error())
 	}
 	return redis.Strings(value, err)
 }
@@ -269,54 +406,54 @@ func HSet(name string, key string, value interface{}) (err error) {
 	defer db.Close()
 	_, err = db.Do("HSET", name, key, value)
 	if err != nil {
-		llog.Error(err.Error())
+		llog.Errorf("HSet: name =%s, key = %s, value = %v, err = %s", name, key, value, err.Error())
 	}
 	return
 }
 
 // 设置多个值
-func HMSet(name string, fields ...interface{}) (err error) {
+func HMSet(key string, fields ...interface{}) (err error) {
 	db := pool.Get()
 	defer db.Close()
 	//fmt.Println("HMSet", redis.Args{}.Add(name).Add(fields...))
-	_, err = db.Do("HMSET", redis.Args{}.Add(name).Add(fields...)...)
+	_, err = db.Do("HMSET", redis.Args{}.Add(key).Add(fields...)...)
 	if err != nil {
-		llog.Error(err.Error())
+		llog.Errorf("HMSet: key = %s, fields = %v, err = %s", key, fields, err.Error())
 	}
 	return
 }
 
 // 获取单个hash 中的值
-func HGetString(name, field string) (string, error) {
+func HGetString(key, field string) (string, error) {
 	db := pool.Get()
 	defer db.Close()
-	return redis.String(db.Do("HGET", name, field))
+	v, err := String(db.Do("HGET", key, field))
+	if err != nil {
+		llog.Errorf("HGET: key = %s, field = %s, err = %s", key, field, err.Error())
+	}
+	return v, err
 }
 
 // 获取单个hash 中的值
-func HGetInt(name, field string) (int, error) {
+func HGetInt(key, field string) (int, error) {
 	db := pool.Get()
 	defer db.Close()
-	return redis.Int(db.Do("HGET", name, field))
+	v, err := Int(db.Do("HGET", key, field))
+	if err != nil {
+		llog.Errorf("HGetInt: key = %s, field = %s, err = %s", key, field, err.Error())
+	}
+	return v, err
 }
 
 // 获取单个hash 中的值
-func HGetInt64(name, field string) (int64, error) {
+func HGetInt64(key, field string) (int64, error) {
 	db := pool.Get()
 	defer db.Close()
-	return redis.Int64(db.Do("HGET", name, field))
-}
-
-func Int64(val interface{}) (int64, error) {
-	return redis.Int64(val, nil)
-}
-
-func Int(val interface{}) (int, error) {
-	return redis.Int(val, nil)
-}
-
-func String(val interface{}) (string, error) {
-	return redis.String(val, nil)
+	v, err := Int64(db.Do("HGET", key, field))
+	if err != nil {
+		llog.Errorf("HGetInt64: key = %s, field = %s, err = %s", key, field, err.Error())
+	}
+	return v, err
 }
 
 // set 集合
@@ -324,18 +461,93 @@ func String(val interface{}) (string, error) {
 func Smembers(args ...interface{}) (interface{}, error) {
 	db := pool.Get()
 	defer db.Close()
-	return db.Do("SMEMBES", args)
+	v, err := db.Do("SMEMBES", args)
+	if err != nil {
+		llog.Errorf("Smembers:  args = %v, err = %s", args, err.Error())
+	}
+	return v, err
+}
+
+// 向 set 集合中添加一个或多个成员
+func SAdd(key string, args ...interface{}) (int, error) {
+	db := pool.Get()
+	defer db.Close()
+	v, err := Int(db.Do("SADD", redis.Args{}.Add(key).AddFlat(args)...))
+	if err != nil {
+		llog.Errorf("SAdd: key = %s, args = %v, err = %s", key, args, err.Error())
+	}
+	return v, err
+}
+
+//删除 set 集合中一个或多个成员
+func SRem(key string, args ...interface{}) (int, error) {
+	db := pool.Get()
+	defer db.Close()
+	v, err := Int(db.Do("SREM ", redis.Args{}.Add(key).AddFlat(args)...))
+	if err != nil {
+		llog.Errorf("SRem: key = %s, args = %v, err = %s", key, args, err.Error())
+	}
+	return v, err
 }
 
 // 获取集合中元素的个数
-func ScardInt64s(name string) (int64, error) {
+func ScardInt(key string) (int, error) {
 	db := pool.Get()
 	defer db.Close()
-	v, err := redis.Int64(db.Do("SCARD", name))
+	v, err := Int(db.Do("SCARD", key))
 	if err != nil {
-		llog.Error(err.Error())
+		llog.Errorf("ScardInt64s: key = %s, err = %s", key, err.Error())
 	}
 	return v, err
+}
+
+//判断 member 元素是否是集合 key 的成员
+func SisMember(key string, member interface{}) (int, error) {
+	db := pool.Get()
+	defer db.Close()
+	v, err := Int(db.Do("SISMEMBER ", key, member))
+	if err != nil {
+		llog.Errorf("SisMember: key = %s, member = %v, err = %s", key, member, err.Error())
+	}
+	return v, err
+}
+
+// 迭代集合中键的元素
+func Sscan(key string, cursor int) ([]string, int) {
+	db := pool.Get()
+	defer db.Close()
+	results := make([]string, 0)
+	v, err := redis.Values(db.Do("SSCAN ", key, cursor, "COUNT", 100))
+	if err != nil {
+		llog.Errorf("Sscan: key = %s, SSCAN %s", key, err.Error())
+		return results, 0
+	}
+	v1, _ := redis.Values(v[1], nil)
+	if err = redis.ScanSlice(v1, &results); err != nil {
+		llog.Errorf("Sscan:  key = %s, ScanSlice %s", key, err.Error())
+		return results, 0
+	}
+	if n, err := Int(v[0], nil); err != nil {
+		llog.Errorf("Sscan: key = %s, Int %s", key, err.Error())
+		return results, 0
+	} else {
+		return results, n
+	}
+}
+
+// 迭代集合中的元素
+func SscanSimple(key string, call func(members string) ) {
+	var c int
+	for {
+		res, n := Sscan(key, c)
+		for _, st := range res {
+			call(st)
+		}
+		c = n
+		if c == 0 {
+			break
+		}
+	}
 }
 
 // sort set 有序集合
@@ -343,15 +555,90 @@ func ScardInt64s(name string) (int64, error) {
 func ZRevrangeInt64(key string, start, stop int) ([]int64, error) {
 	db := pool.Get()
 	defer db.Close()
-	return redis.Int64s(db.Do("ZREVRANGE", key, start, stop, "WITHSCORES"))
+	v, err := redis.Int64s(db.Do("ZREVRANGE", key, start, stop, "WITHSCORES"))
+	if err != nil && err != redis.ErrNil {
+		llog.Errorf("ZRevrangeInt64: key = %s, start = %d, stop = %d, err = %s", key, start, stop, err.Error())
+	}
+	return v, err
 }
 
 // 向 sort set 集合中添加一个或多个成员，或者更新已存在成员的分数
 func ZAdd(key string, args ...interface{}) (int, error) {
 	db := pool.Get()
 	defer db.Close()
-	return redis.Int(db.Do("ZADD", redis.Args{}.Add(key).AddFlat(args)...))
+	v, err := Int(db.Do("ZADD", redis.Args{}.Add(key).AddFlat(args)...))
+	if err != nil {
+		llog.Errorf("ZAdd: key = %s, args = %v, err = %s", key, args, err.Error())
+	}
+	return v, err
 }
+
+
+// 移除有序集中的一个或多个成员，不存在的成员将被忽略。
+func Zrem (key string, args ...interface{}) (int, error) {
+	db := pool.Get()
+	defer db.Close()
+	v, err := Int(db.Do("ZREM ", redis.Args{}.Add(key).AddFlat(args)...))
+	if err != nil {
+		llog.Errorf("Zrem: key = %s, args = %v, err = %s", key, args, err.Error())
+	}
+	return v, err
+}
+
+// 返回有序集中，成员的分数值
+func Zscore(key string, member interface{}) (int, error) {
+	db := pool.Get()
+	defer db.Close()
+	v, err := Int(db.Do("ZSCORE", key, member))
+	if err != nil {
+		llog.Errorf("Zscore: key = %s, member = %v, err = %s", key, member, err.Error())
+	}
+	return v, err
+}
+
+type ZSetUnit struct {
+	Key string
+	Score int
+}
+
+// 迭代有序集合中的元素（包括元素成员和元素分值）
+func Zscan (key string, cursor int) ([]ZSetUnit, int) {
+	db := pool.Get()
+	defer db.Close()
+	results := make([]ZSetUnit, 0)
+	v, err := redis.Values(db.Do("ZSCAN", key, cursor, "COUNT", 100))
+	if err != nil {
+		llog.Errorf("Zscan: ZSCAN key = %s, err = %s", key, err.Error())
+		return results, 0
+	}
+	v1, _ := redis.Values(v[1], nil)
+	if err = redis.ScanSlice(v1, &results); err != nil {
+		llog.Errorf("Zscan: ScanSlice key = %s, err = %s", key, err.Error())
+		return results, 0
+	}
+	if n, err := Int(v[0], nil); err != nil {
+		llog.Errorf("Zscan: Int key = %s, err = %s", key, err.Error())
+		return results, 0
+	} else {
+		return results, n
+	}
+}
+
+// 迭代有序集合中的元素（包括元素成员和元素分值）
+func ZscanSimple(key string, call func(key string, score int) )  {
+	var c int
+	for {
+		res, n := Zscan(key, c)
+		for _, st := range res {
+			call(st.Key, st.Score)
+		}
+		c = n
+		if c == 0 {
+			break
+		}
+	}
+}
+
 
 //选举leader，所有参与选举的人使用相同的value和prefix，leader负责设置value
 //@prefix: 选举区分标识
@@ -359,10 +646,10 @@ func ZAdd(key string, args ...interface{}) (int, error) {
 func AquireLeader(prefix string, value int) (isleader bool) {
 	isleader = false
 	val := AquireLock(prefix, 200)
-	if val > 0 { 			//拿到锁了
+	if val > 0 { //拿到锁了
 		key := prefix + "leader"
 		val, _ = GetInt(key)
-		if val != value {		//还未被设置
+		if val != value { //还未被设置
 			Set(key, value)
 			isleader = true
 		}

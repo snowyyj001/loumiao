@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math"
 	rand2 "math/rand"
+	"reflect"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -14,6 +16,13 @@ import (
 
 func init() {
 	rand2.Seed(time.Now().UnixNano())
+}
+
+// 获得rpc注册名
+func RpcFuncName(call interface{}) string {
+	//base64str := base64.StdEncoding.EncodeToString([]byte(funcName))
+	funcName := runtime.FuncForPC(reflect.ValueOf(call).Pointer()).Name()
+	return funcName
 }
 
 //随机数[0,n)

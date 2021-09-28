@@ -3,7 +3,9 @@ package mysqldb
 
 import (
 	"fmt"
+	"gorm.io/gorm/clause"
 	"sync"
+	"time"
 
 	"github.com/snowyyj001/loumiao/util"
 
@@ -23,11 +25,17 @@ const (
 var (
 	Master   *gorm.DB
 	Slaves   []*gorm.DB
-	SLen     int32
-	SIndex   int32
+	SLen     int
+	SIndex   int
 	mLock    sync.Mutex
 	logLevel logger.LogLevel = logger.Info
 )
+/*
+GORM provides First, Take, Last methods to retrieve a single object from the database,
+it adds LIMIT 1 condition when querying the database,
+and it will return the error ErrRecordNotFound if no record is found.
+因此，如果使用这三个方法，err错误处理要注意
+ */
 
 type ORMDB struct {
 	m_Db *gorm.DB
@@ -69,8 +77,9 @@ func STble(tname string) *gorm.DB {
 
 //连接数据库,使用config-mysql参数,同时创建修改表
 func Dial(tbs []interface{}) error {
-	for _, cfg := range config.DBCfg.SqlCfg {
-		uri := fmt.Sprintf("%s:%s@tcp(%s)/%s?charset=utf8&parseTime=True&loc=Local", cfg.DBAccount, cfg.DBPass, cfg.SqlUri, cfg.DBName)
+	for _, cfg := range config.Cfg.SqlCfg {
+		//account:pass@tcp(url)/dbname
+		uri := fmt.Sprintf("%s?charset=utf8&parseTime=True&loc=Local", cfg.SqlUri)
 		llog.Debugf("mysql Dial: %s", uri)
 		engine, err := gorm.Open(mysql.Open(uri), &gorm.Config{
 			NamingStrategy: schema.NamingStrategy{
@@ -91,8 +100,8 @@ func Dial(tbs []interface{}) error {
 			}
 			Master = engine
 		} else { //从库最大连接数根据从库数量调整
-			sqlDB.SetMaxIdleConns(util.Max(POOL_IDLE/(len(config.DBCfg.SqlCfg)-1), 1))
-			sqlDB.SetMaxOpenConns(util.Max(POOL_MAX/(len(config.DBCfg.SqlCfg)-1), 1))
+			sqlDB.SetMaxIdleConns(util.Max(POOL_IDLE/(len(config.Cfg.SqlCfg)-1), 1))
+			sqlDB.SetMaxOpenConns(util.Max(POOL_MAX/(len(config.Cfg.SqlCfg)-1), 1))
 			Slaves = append(Slaves, engine)
 			SLen++
 		}
@@ -102,7 +111,24 @@ func Dial(tbs []interface{}) error {
 		create(Master, tbs)
 	}
 
-	llog.Infof("mysql dail success: %v", config.DBCfg.SqlCfg)
+	go func() { //每秒钟检测一次数据库连接状态，主库连接失败直接退出程序
+		for {
+			sqlDB, _ := Master.DB()
+			if err := sqlDB.Ping(); err != nil {
+				llog.Fatalf("mysql master db ping error: %s", err.Error())
+			}
+			for i := 0; i < SLen; i++ {
+				sqlDB, _ := Slaves[i].DB()
+				if err := sqlDB.Ping(); err != nil {
+					llog.Errorf("mysql slave[%s] db ping error: %s", config.Cfg.SqlCfg[i].SqlUri, err.Error())
+					Slaves[i] = Master
+				}
+			}
+			time.Sleep(time.Second * 1)
+		}
+	}()
+
+	llog.Infof("mysql dail success: %v", config.Cfg.SqlCfg)
 
 	return nil
 }
@@ -144,7 +170,10 @@ func DialOrm(uri string, idle int, maxconn int, tbs []interface{}) *ORMDB {
 //创建数据表
 func create(db *gorm.DB, tbs []interface{}) {
 	for _, tb := range tbs {
-		db.Table(tb.(schema.Tabler).TableName()).Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(tb)
+		err := db.Table(tb.(schema.Tabler).TableName()).Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(tb)
+		if err != nil {
+			llog.Fatalf("create mysql table error: %s", err.Error())
+		}
 	}
 }
 
@@ -152,7 +181,7 @@ func create(db *gorm.DB, tbs []interface{}) {
 func MInsert(st schema.Tabler) bool {
 	err := Master.Table(st.TableName()).Create(st).Error
 	if err != nil {
-		llog.Warningf("MInsert: %s", err.Error())
+		llog.Errorf("MInsert: %s", err.Error())
 		return false
 	}
 	return true
@@ -162,7 +191,7 @@ func MInsert(st schema.Tabler) bool {
 func MFirstOrCreate(st interface{}, conds ...interface{}) bool {
 	err := Master.FirstOrCreate(st, conds...).Error
 	if err != nil {
-		llog.Warningf("MFirstOrCreate: %s", err.Error())
+		llog.Errorf("MFirstOrCreate: %s", err.Error())
 		return false
 	}
 	return true
@@ -173,7 +202,7 @@ func MFirstOrCreate(st interface{}, conds ...interface{}) bool {
 func MUpdates(pst schema.Tabler, st interface{}) bool {
 	err := Master.Model(pst).Updates(st).Error
 	if err != nil {
-		llog.Warningf("MUpdates: %s", err.Error())
+		llog.Errorf("MUpdates: %s", err.Error())
 		return false
 	}
 	return true
@@ -185,7 +214,7 @@ func MUpdate(st schema.Tabler, attrs ...interface{}) bool {
 	if sz == 0 {
 		err := Master.Table(st.TableName()).Select("*").UpdateColumns(st).Error
 		if err != nil {
-			llog.Warningf("MUpdate: %s", err.Error())
+			llog.Errorf("MUpdate: %s", err.Error())
 			return false
 		}
 	} else { //这里拆分attrs为两部分，以符合Select函数的参数要求，这很奇葩
@@ -198,7 +227,7 @@ func MUpdate(st schema.Tabler, attrs ...interface{}) bool {
 		}
 		err := Master.Table(st.TableName()).Select(first, second...).Updates(st).Error
 		if err != nil {
-			llog.Warningf("MUpdate: %s", err.Error())
+			llog.Errorf("MUpdate: %s", err.Error())
 			return false
 		}
 	}
@@ -216,13 +245,28 @@ func MDelete(st schema.Tabler) bool {
 }
 
 //使用主库执行一个事务
-func MTransaction(call func(db *gorm.DB, params ...interface{}) error, params ...interface{}) bool {
+func MTransaction(call func(db *gorm.DB, params ...interface{}) error, params ...interface{}) error {
 	err := Master.Transaction(func(tx *gorm.DB) error {
 		return call(tx, params...)
 	})
 	if err != nil {
 		llog.Errorf("MTransaction: %s", err.Error())
-		return false
+		return err
+	}
+	return err
+}
+
+//使用主库添加数据，冲突的话更新 ON DUPLICATE KEY UPDATE
+//coloms为空时，更新除主键以外的所有列到新值
+func MDuplicate(st schema.Tabler, coloms []string) bool {
+	if len(coloms) == 0 {
+		Master.Clauses(clause.OnConflict{
+			UpdateAll: true,
+		}).Table(st.TableName()).Create(st)
+	} else {
+		Master.Clauses(clause.OnConflict{
+			DoUpdates: clause.AssignmentColumns(coloms),
+		}).Table(st.TableName()).Create(st)
 	}
 	return true
 }

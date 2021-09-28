@@ -79,16 +79,25 @@ func NodeStatusUpdate(key string, val string, dis bool) *NodeInfo {
 
 	saddr := arrStr[3]
 	//llog.Debugf("NodeStatusUpdate: key=%s,val=%s,dis=%t,saddr=%s", key, val, dis, saddr)
+	var number int
+	var socketActive bool
+	fmt.Sscanf(val, "%d:%t", &number, &socketActive)
 
 	defer nodeLock.Unlock()
 	nodeLock.Lock()
 	node, _ := node_Map[saddr]
 	if node == nil {
-		node = new(NodeInfo)
-		node.SAddr = saddr
-		node_Map[node.SAddr] = node
+		if socketActive {
+			node = new(NodeInfo)
+			node.SAddr = saddr
+			node_Map[node.SAddr] = node
+		} else {
+			return nil
+		}
 	}
-	fmt.Sscanf(val, "%d:%t", &node.Number, &node.SocketActive)
+	node.Number = number
+	node.SocketActive = socketActive
+
 	//llog.Debugf("NodeStatusUpdate: saddr=%s,active=%t", node.SAddr, node.SocketActive)
 	return node
 }
@@ -106,7 +115,7 @@ func NodeDiscover(key string, val string, dis bool) *NodeInfo {
 	}*/
 
 	saddr := arrStr[3]
-	llog.Debugf("NodeDiscover: key=%s,val=%s,dis=%t,debug=%s", key, val, dis, saddr)
+	llog.Debugf("NodeDiscover: key=%s,val=%s,dis=%t,saddr=%s", key, val, dis, saddr)
 	if dis == true {
 		node := GetNodeByAddr(saddr)
 		if node == nil { //maybe, etcd still have older data, etcd has a huge delay

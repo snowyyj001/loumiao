@@ -121,6 +121,7 @@ func (self *EtcdBase) SetLease(timeNum int64, keepalive bool) error {
 	//设置租约时间
 	leaseResp, err := lease.Grant(context.TODO(), timeNum)
 	if err != nil {
+		llog.Warning("lease.Grant error")
 		return err
 	}
 
@@ -128,8 +129,9 @@ func (self *EtcdBase) SetLease(timeNum int64, keepalive bool) error {
 	if keepalive {
 		ctx, cancelFunc := context.WithCancel(context.TODO())
 		leaseRespChan, err := lease.KeepAlive(ctx, leaseResp.ID)
-
 		if err != nil {
+			llog.Warning("lease.KeepAlive error")
+			lease.Close()
 			return err
 		}
 		self.canclefunc = cancelFunc
@@ -151,6 +153,7 @@ func (self *EtcdBase) listenLeaseRespChan() {
 		case leaseKeepResp := <-self.keepAliveChan:
 			if leaseKeepResp == nil {
 				llog.Warningf("EtcdBase.listenLeaseRespChan: 续租功能已经关闭")
+				self.lease.Close()
 				self.lease = nil
 				if self.leasefunc != nil {
 					self.leasefunc(false)
@@ -337,12 +340,17 @@ func (self *ClientDis) DelService(key string) {
 
 func (self *ClientDis) leaseCallBack(success bool) {
 	if success { //成功续租
+		//llog.Debugf("leaseCallBack")
 		self.PutStatus()
 	} else {
-		llog.Errorf("leaseCallBack续租失败: uid = %d", config.SERVER_NODE_UID)
+		llog.Errorf("etcd lease 续租失败")
+	T:
+		llog.Debug("尝试重新续租")
 		err := self.SetLease(int64(config.GAME_LEASE_TIME), true)
 		if err != nil {
 			llog.Debugf("尝试重新续租失败: err=%s", err.Error())
+			time.Sleep(time.Second)
+			goto T
 		} else {
 			llog.Debugf("尝试重新续租成功")
 			err = self.PutNode()
@@ -385,7 +393,7 @@ func NewClientDis(addr []string) error {
 		}
 		EtcdClient.etcdKey = fmt.Sprintf("%s%d/%s", define.ETCD_NODEINFO, config.NET_NODE_ID, config.NET_GATE_SADDR)
 		EtcdClient.statusKey = fmt.Sprintf("%s%d/%s", define.ETCD_NODESTATUS, config.NET_NODE_ID, config.NET_GATE_SADDR)
-		EtcdClient.SetLeasefunc(EtcdClient.leasefunc)
+		EtcdClient.SetLeasefunc(EtcdClient.leaseCallBack)
 		EtcdClient.SetLease(int64(config.GAME_LEASE_TIME), true)
 		return nil
 	} else {

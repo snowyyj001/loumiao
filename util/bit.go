@@ -13,8 +13,13 @@ func BitOr(n1 int, n2 int) int {
 }
 
 func HasBit(n1 int, n2 int) bool {
-	return (n1 & Bit(n2)) != 0
+	return (n1 & n2) != 0
 }
+
+func HasNotBit(n1 int, n2 int) bool {
+	return (n1 & n2) == 0
+}
+
 
 func EqualBit(val int, flag int) bool {
 	return (val & flag) == flag

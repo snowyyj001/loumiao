@@ -1,16 +1,16 @@
 /*
 * Snowflake
 *
-* 1                                               39              41             64
-* +-----------------------------------------------+---------------+---------------+
-* | timestamp(ms)                                 |  workerid     | sequence      |
-* +-----------------------------------------------+---------------+---------------+
-* | 0000000000 0000000000 0000000000 000000000    | 0000000000 00 | 0000000000 00 |
-* +-----------------------------------------------+---------------+---------------+
-*
-* 1. 39位时间截(毫秒级)，注意这是时间截的差值（当前时间截 - 开始时间截)。可以使用约17年: (1L << 39) / (1000L * 60 * 60 * 24 * 365) = 17
-* 2. 12位数据机器位，可以部署在4095个节点
-* 3. 12位序列，毫秒内的计数，同一机器，同一时间截并发4095个序号
+* 1                                         37                51              64
+* +-----------------------------------------+-----------------+---------------+
+* | timestamp(0.01s)                        |      workerid   |   sequence    |
+* +-----------------------------------------+-----------------+---------------+
+* | 0000000000 0000000000 0000000000 000000 | 0000000000 0000 | 0000000000 00 |
+* +-----------------------------------------+-----------------+---------------+
+* 0. 最高位1bit，其值始终是0
+* 1. 36位时间截(0.01秒)，注意这是时间截的差值（当前时间截 - 开始时间截)。可以使用约21年: (1L << 36) / (100L * 60 * 60 * 24 * 365) = 21
+* 2. 14位数据机器位，可以部署在16383(0x3FFF)个节点，每个服按10个节点算，可以开1638个服
+* 3. 12位序列，0.01秒内的计数，同一机器，同一时间截并发4095个序号
  */
 package util
 
@@ -24,13 +24,15 @@ import (
 )
 
 const (
-	twepoch        = int64(1609344000000)             //开始时间截 (2021-1-1)
-	workeridBits   = uint(12)                         //机器id所占的位数
+	twepoch        = int64(160934400000)             //开始时间截 (2020-12-31 00:00:00), 0.01秒
+	workeridBits   = uint(14)                         //机器id所占的位数
 	sequenceBits   = uint(12)                         //序列所占的位数
 	workeridMax    = int64(-1 ^ (-1 << workeridBits)) //支持的最大机器id数量
 	sequenceMask   = int64(-1 ^ (-1 << sequenceBits)) //
 	workeridShift  = sequenceBits                     //机器id左移位数
 	timestampShift = sequenceBits + workeridBits      //时间戳左移位数
+	maxuid = 1000		//最大开服数
+	timescale = 100000		//UnixNano/timescale=10ms
 )
 
 var SnowFlakeInst *Snowflake
@@ -66,14 +68,13 @@ func (s *Snowflake) Generate() int64 {
 
 	s.Lock()
 
-	now := time.Now().UnixNano() / 1000000
+	now := time.Now().UnixNano() / timescale		//0.01秒
 
 	if s.timestamp == now {
 		s.sequence = (s.sequence + 1) & sequenceMask
-
 		if s.sequence == 0 { //毫秒内序列溢出
 			for now <= s.timestamp {
-				now = time.Now().UnixNano() / 1000000
+				now = time.Now().UnixNano() / timescale
 			}
 		}
 	} else {
@@ -91,6 +92,10 @@ func (s *Snowflake) Generate() int64 {
 func UUID() int64 { //该函数调用应该在config.SERVER_NODE_UID赋值之后
 	if config.SERVER_NODE_UID <= 0 {
 		fmt.Errorf("UUID: wrong server uid: %d", config.SERVER_NODE_UID)
+		return 0
+	}
+	if config.SERVER_NODE_UID > maxuid {
+		fmt.Errorf("UUID: too big(>%d) server uid: %d", maxuid, config.SERVER_NODE_UID)
 		return 0
 	}
 	if SnowFlakeInst == nil {
