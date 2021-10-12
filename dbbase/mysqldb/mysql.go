@@ -37,6 +37,31 @@ and it will return the error ErrRecordNotFound if no record is found.
 因此，如果使用这三个方法，err错误处理要注意
  */
 
+func init() {
+//	uri := fmt.Sprintf("%s?charset=utf8&parseTime=True&loc=Local", "root:123456&Tower@tcp(192.168.27.19:3306)/towergame")
+	engine, _ := gorm.Open(mysql.Open(""), &gorm.Config{
+		DryRun: true,
+		NamingStrategy: schema.NamingStrategy{
+			SingularTable: true, // 使用单数表名，启用该选项，此时，`User` 的表名应该是 `user`
+		},
+		Logger:                 newloger().LogMode(logger.Silent),
+		SkipDefaultTransaction: true, //创建、更新、删除，禁用事务提交的方式
+	})
+	Master = engine
+}
+
+//生成call调用后的执行的mysql语句
+func Explain(call func () *gorm.DB) (string, bool) {
+	tx := call()
+	if tx.Error != nil {
+		llog.Errorf("mysql Explain: %s", tx.Error.Error())
+		return "", false
+	}
+	stmt := tx.Statement
+	strsql := tx.Dialector.Explain(stmt.SQL.String(), stmt.Vars...)
+	return strsql, true
+}
+
 type ORMDB struct {
 	m_Db *gorm.DB
 }
@@ -82,7 +107,7 @@ func Dial(tbs []interface{}) error {
 		uri := fmt.Sprintf("%s?charset=utf8&parseTime=True&loc=Local", cfg.SqlUri)
 		llog.Debugf("mysql Dial: %s", uri)
 		engine, err := gorm.Open(mysql.Open(uri), &gorm.Config{
-			NamingStrategy: schema.NamingStrategy{
+			NamingStrategy: schema.NamingStrategy {
 				SingularTable: true, // 使用单数表名，启用该选项，此时，`User` 的表名应该是 `user`
 			},
 			Logger:                 newloger().LogMode(logLevel),

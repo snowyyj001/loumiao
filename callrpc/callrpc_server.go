@@ -14,21 +14,17 @@ type CallRpcServer struct {
 	gorpc.GoRoutineLogic
 
 	mRpcWait sync.Map //map[string]chan interface{}		//igo name -> chan
-	mRpcHanlder map[string]string		//func -> igo name
 }
 
 func (self *CallRpcServer) DoInit() bool {
 	llog.Infof("%s DoInit", self.Name)
 	This = self
-
-	self.mRpcHanlder = make(map[string]string)
 	return true
 }
 
 func (self *CallRpcServer) DoRegsiter() {
 	llog.Infof("%s DoRegsiter", self.Name)
 
-	self.Register("RegisterRpcHanlder", registerRpcHanlder)
 	self.Register("CallRpc", callRpc)
 	self.Register("ReqRpcCall", reqRpcCall)
 	self.Register("RespRpcCall", respRpcCall)

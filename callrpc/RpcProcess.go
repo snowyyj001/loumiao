@@ -12,12 +12,6 @@ import (
 	"reflect"
 )
 
-func registerRpcHanlder(igo gorpc.IGoRoutine, data interface{}) interface{} {
-	req := data.(*gorpc.MM)
-	This.mRpcHanlder[req.Id] = req.Data.(string)
-	return nil
-}
-
 func callRpc(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	session := data.(string)
 

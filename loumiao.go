@@ -173,10 +173,6 @@ func RegisterRpcCallHandler(igo gorpc.IGoRoutine, call gorpc.HanlderFunc) {
 	util.Assert(nodemgr.ServerEnabled==false, "RegisterRpcCallHandler can not register after server started")
 	funcName := util.RpcFuncName(call)
 	igo.Register(funcName, call)
-	mm := &gorpc.MM{}
-	mm.Id = igo.GetName()
-	mm.Data = funcName
-	gorpc.MGR.SendActor("CallRpcServer", "RegisterRpcHanlder", mm)
 	gorpc.MGR.Send("GateServer", "RegisterNet", &gorpc.M{Id: -1, Name: funcName, Data: igo.GetName()})
 }
 

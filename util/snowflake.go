@@ -3,7 +3,7 @@
 *
 * 1                                         37                51              64
 * +-----------------------------------------+-----------------+---------------+
-* | timestamp(0.01s)                        |      workerid   |   sequence    |
+* | timestamp(0.01s)                        |    workerid     |   sequence    |
 * +-----------------------------------------+-----------------+---------------+
 * | 0000000000 0000000000 0000000000 000000 | 0000000000 0000 | 0000000000 00 |
 * +-----------------------------------------+-----------------+---------------+
@@ -24,7 +24,7 @@ import (
 )
 
 const (
-	twepoch        = int64(160934400000)             //开始时间截 (2020-12-31 00:00:00), 0.01秒
+	twepoch        = int64(16093440000000)             //开始时间截 (2020-12-31 00:00:00), 0.01秒
 	workeridBits   = uint(14)                         //机器id所占的位数
 	sequenceBits   = uint(12)                         //序列所占的位数
 	workeridMax    = int64(-1 ^ (-1 << workeridBits)) //支持的最大机器id数量
@@ -32,7 +32,7 @@ const (
 	workeridShift  = sequenceBits                     //机器id左移位数
 	timestampShift = sequenceBits + workeridBits      //时间戳左移位数
 	maxuid = 1000		//最大开服数
-	timescale = 100000		//UnixNano/timescale=10ms
+	timescale = 10000000		//UnixNano/timescale=10ms
 )
 
 var SnowFlakeInst *Snowflake
@@ -101,5 +101,11 @@ func UUID() int64 { //该函数调用应该在config.SERVER_NODE_UID赋值之后
 	if SnowFlakeInst == nil {
 		NewSnowflake(int64(config.SERVER_NODE_UID))
 	}
-	return SnowFlakeInst.Generate()
+	r := SnowFlakeInst.Generate()
+
+	if r <= 0  {
+		fmt.Errorf("UUID:uuid: %d", r)
+		return 0
+	}
+	return r
 }

@@ -340,7 +340,7 @@ func (self *ClientDis) DelService(key string) {
 
 func (self *ClientDis) leaseCallBack(success bool) {
 	if success { //成功续租
-		//llog.Debugf("leaseCallBack")
+	//	llog.Debugf("leaseCallBack")
 		self.PutStatus()
 	} else {
 		llog.Errorf("etcd lease 续租失败")
