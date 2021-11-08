@@ -1,6 +1,8 @@
 package callrpc
 
 import (
+	"reflect"
+
 	"github.com/snowyyj001/loumiao/base"
 	"github.com/snowyyj001/loumiao/config"
 	"github.com/snowyyj001/loumiao/define"
@@ -9,7 +11,6 @@ import (
 	"github.com/snowyyj001/loumiao/message"
 	"github.com/snowyyj001/loumiao/msg"
 	"github.com/snowyyj001/loumiao/util"
-	"reflect"
 )
 
 func callRpc(igo gorpc.IGoRoutine, data interface{}) interface{} {
@@ -20,17 +21,17 @@ func callRpc(igo gorpc.IGoRoutine, data interface{}) interface{} {
 		ch = make(chan interface{})
 		This.mRpcWait.Store(session, ch)
 	}
-	resp := <- ch.(chan interface{})
+	resp := <-ch.(chan interface{})
 	return resp
 }
 
-func respRpcCall(igo gorpc.IGoRoutine, data interface{}) interface{}  {
-	rpcmsg := data.(msg.LouMiaoRpcMsg)
+func respRpcCall(igo gorpc.IGoRoutine, data interface{}) interface{} {
+	rpcmsg := data.(*msg.LouMiaoRpcMsg)
 	bitstream := base.NewBitStream(rpcmsg.Buffer, len(rpcmsg.Buffer))
 	session := bitstream.ReadString()
 	respdata := bitstream.GetBytePtr()
 	var resp interface{}
-	if util.HasBit(int(rpcmsg.Flag), define.RPCMSG_FLAG_PB) { //not pb but bytes
+	if util.HasBit(int(rpcmsg.Flag), define.RPCMSG_FLAG_PB) { //pb format
 		err, _, _, pm := message.Decode(config.SERVER_NODE_UID, respdata, len(respdata))
 		if err != nil {
 			llog.Errorf("respRpcCall decode msg error: session = %s, func=%s, error=%s ", session, rpcmsg.FuncName, err.Error())
@@ -49,7 +50,7 @@ func respRpcCall(igo gorpc.IGoRoutine, data interface{}) interface{}  {
 
 func reqRpcCall(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	req := data.(*gorpc.MM)
-	rpcmsg := req.Data.(msg.LouMiaoRpcMsg)
+	rpcmsg := req.Data.(*msg.LouMiaoRpcMsg)
 	bitstream := base.NewBitStream(rpcmsg.Buffer, len(rpcmsg.Buffer))
 	session := bitstream.ReadString()
 	respdata := bitstream.GetBytePtr()
@@ -61,17 +62,17 @@ func reqRpcCall(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	} else {
 		err, _, _, pm := message.Decode(config.SERVER_NODE_UID, respdata, len(respdata))
 		if err != nil {
-			llog.Errorf("reqRpcCall decode msg error : target = %s, func=%s, error=%s ",req.Id, rpcmsg.FuncName, err.Error())
+			llog.Errorf("reqRpcCall decode msg error : target = %s, func=%s, error=%s ", req.Id, rpcmsg.FuncName, err.Error())
 			return nil
 		}
-		resp , ok = igo.CallActor(req.Id, rpcmsg.FuncName, pm)
+		resp, ok = igo.CallActor(req.Id, rpcmsg.FuncName, pm)
 	}
 	if ok == false {
 		return nil
 	}
 	m := &gorpc.M{Id: int(rpcmsg.SourceId), Name: session}
 	m.Param = util.BitOr(define.RPCMSG_FLAG_RESP, define.RPCMSG_FLAG_CALL)
-	if reflect.TypeOf(resp).Kind() == reflect.Slice { 		//bitstream
+	if reflect.TypeOf(resp).Kind() == reflect.Slice { //bitstream
 		orgbuff := resp.([]byte)
 		bitstream := base.NewBitStream_1(len(orgbuff) + base.BitStrLen(session))
 		bitstream.WriteString(session)
@@ -86,10 +87,5 @@ func reqRpcCall(igo gorpc.IGoRoutine, data interface{}) interface{} {
 		m.Param = util.BitOr(m.Param, define.RPCMSG_FLAG_PB)
 	}
 	gorpc.MGR.Send("GateServer", "SendRpc", m)
-	return  nil
+	return nil
 }
-
-
-
-
-

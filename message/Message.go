@@ -3,9 +3,10 @@ package message
 import (
 	"encoding/binary"
 	_ "fmt"
-	"github.com/snowyyj001/loumiao/config"
 	"reflect"
 	"sync"
+
+	"github.com/snowyyj001/loumiao/config"
 )
 
 const (
@@ -21,15 +22,19 @@ type MsgPool struct {
 	cache sync.Pool
 }
 
+type ClassNewHandler func() interface{}
+
+//消息结构创建不缓存了，经测试反射性能也还可以，见reflect_test.go
 var (
-	Packet_CreateFactorStringMap map[string]*MsgPool
+	//Packet_CreateFactorStringMap map[string]*MsgPool
+	Packet_CreateFactorStringMap map[string]ClassNewHandler
 	filterWarning                map[string]bool
 	MaxPacketSize                int //一个消息包的最大大小,如果一个消息超过该阀值，那么就需要分包
 )
 
 func init() {
 	//Packet_CreateFactorStringMap = make(map[string]func() interface{})
-	Packet_CreateFactorStringMap = make(map[string]*MsgPool)
+	Packet_CreateFactorStringMap = make(map[string]ClassNewHandler)
 	filterWarning = make(map[string]bool)
 	filterWarning["CONNECT"] = true
 	filterWarning["DISCONNECT"] = true
@@ -43,16 +48,17 @@ func RegisterPacket(packet interface{}) {
 	packetName := GetMessageName(packet)
 	//fmt.Println("RegisterPacket", packetName)
 	pt := reflect.TypeOf(packet).Elem()
-	/*	packetFunc := func() interface{} {
+	packetFunc := func() interface{} {
 		packet := reflect.New(pt).Interface()
 		return packet
-	}*/
+	}
+	Packet_CreateFactorStringMap[packetName] = packetFunc
 	//fmt.Println("RegisterPacket: " + packetName)
-	mpool := &MsgPool{name: packetName, mtype: pt}
+	/*mpool := &MsgPool{name: packetName, mtype: pt}
 	mpool.cache.New = func() interface{} {
 		return reflect.New(mpool.mtype).Interface()
 	}
-	Packet_CreateFactorStringMap[packetName] = mpool
+	Packet_CreateFactorStringMap[packetName] = mpool*/
 }
 
 func GetMessageName(packet interface{}) string {
@@ -61,30 +67,23 @@ func GetMessageName(packet interface{}) string {
 	return elem.Name()
 }
 
-/*
 func GetPakcet(name string) interface{} {
 	packetFunc, exist := Packet_CreateFactorStringMap[name]
 	if exist {
+		//return packetFunc.cache.Get()
 		return packetFunc()
 	}
 	return nil
 }
-*/
 
-func GetPakcet(name string) interface{} {
-	packetFunc, exist := Packet_CreateFactorStringMap[name]
-	if exist {
-		return packetFunc.cache.Get()
-	}
-	return nil
-}
-
+/*
 func PutPakcet(name string, data interface{}) {
 	packetFunc, exist := Packet_CreateFactorStringMap[name]
 	if exist {
 		packetFunc.cache.Put(data)
 	}
 }
+*/
 
 //替换消息包的target字段(5,6字节)
 func ReplacePakcetTarget(target int32, buff []byte) {

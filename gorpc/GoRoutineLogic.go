@@ -6,8 +6,6 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/snowyyj001/loumiao/message"
-
 	"github.com/snowyyj001/loumiao/llog"
 	"github.com/snowyyj001/loumiao/timer"
 	"github.com/snowyyj001/loumiao/util"
@@ -522,7 +520,6 @@ func ServiceHandler(igo IGoRoutine, data interface{}) interface{} {
 	//llog.Debugf("ServiceHandler[%s]: %v", igo.GetName(), data)
 	m := data.(*M)
 	igo.CallNetFunc(m)
-	message.PutPakcet(m.Name, m.Data)
 	return nil
 }
 

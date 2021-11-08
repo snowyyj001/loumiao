@@ -1,8 +1,13 @@
 package util
 
+//数据AB切换可能隐藏的问题：
+//在一个逻辑里，多次调用GetBaseData没有可能拿到不同的数据
+//所以，应该在一个逻辑里使用一次GetBaseData，然后使用返回的值
 type (
 	BaseDataRes struct {
-		DataMap map[interface{}]interface{}
+		flag      bool //A:true, B:false
+		dataMap_A map[interface{}]interface{}
+		dataMap_B map[interface{}]interface{}
 	}
 
 	IBaseDataRes interface {
@@ -11,7 +16,8 @@ type (
 		Init()
 		AddData(int, interface{})
 		GetBaseData(int) interface{}
-		Read() bool
+		Read() error
+		ReadDone()
 	}
 )
 
@@ -20,27 +26,45 @@ func (self *BaseDataRes) Close() {
 }
 
 func (self *BaseDataRes) Clear() {
-	for i, _ := range self.DataMap {
-		delete(self.DataMap, i)
-	}
+	self.dataMap_A = nil
+	self.dataMap_B = nil
 }
 
 func (self *BaseDataRes) AddData(id int, pData interface{}) {
-	self.DataMap[id] = pData
+	if self.flag { //a is using, read to b
+		self.dataMap_B[id] = pData
+	} else {
+		self.dataMap_A[id] = pData
+	}
+
 }
 
 func (self *BaseDataRes) GetBaseData(id int) interface{} {
-	pData, exist := self.DataMap[id]
-	if exist {
-		return pData
+	if self.flag {
+		pData, exist := self.dataMap_A[id]
+		if exist {
+			return pData
+		}
+		return nil
+	} else {
+		pData, exist := self.dataMap_B[id]
+		if exist {
+			return pData
+		}
+		return nil
 	}
-	return nil
 }
 
 func (self *BaseDataRes) Init() {
-	self.DataMap = make(map[interface{}]interface{})
+	self.dataMap_A = make(map[interface{}]interface{})
+	self.dataMap_B = make(map[interface{}]interface{})
+	self.flag = false
 }
 
-func (self *BaseDataRes) Read() bool {
-	return true
+func (self *BaseDataRes) Read() error {
+	return nil
+}
+
+func (self *BaseDataRes) ReadDone() {
+	self.flag = !self.flag
 }

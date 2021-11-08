@@ -143,40 +143,6 @@ func (self *RpcGateServer) DoDestory() {
 	nodemgr.ServerEnabled = false
 }
 
-/*
-//goroutine unsafe
-//net msg handler,this func belong to socket's goroutine
-func packetFunc_rpc(socketid int, buff []byte, nlen int) bool {
-	//llog.Debugf("packetFunc_rpc: socketid=%d, bufferlen=%d", socketid, nlen)
-	err, _, name, pm := message.Decode(config.SERVER_NODE_UID, buff, nlen)
-	//llog.Debugf("packetFunc_rpc  %s %v", name, pm)
-	if nil != err {
-		llog.Errorf("packetFunc_rpc Decode error: %s", err.Error())
-		//This.closeClient(socketid)
-	} else {
-		if strings.Compare(name ,"LouMiaoRpcMsg") == 0 {
-			req := pm.(*msg.LouMiaoRpcMsg)
-			message.ReplacePakcetTarget(req.TargetId, buff) //just change targetid, do not need encode again anymore
-			newbuff := message.GetBuffer(nlen)
-			copy(newbuff, buff[:nlen])
-			m := &gorpc.M{Id: int(req.TargetId), Name: req.FuncName, Data: newbuff}
-			gorpc.MGR.Send("GateServer", "SendRpcMsgToServer", m)
-			message.PutPakcet(name, req)
-		} else {
-			handler, ok := handler_Map[name]
-			if ok {
-				nm := &gorpc.M{Id: socketid, Name: name, Data: pm}
-				gorpc.MGR.Send(handler, "ServiceHandler", nm)
-			} else {
-				llog.Errorf("packetFunc_rpc handler is nil, drop it[%s]", name)
-			}
-		}
-
-	}
-	return true
-}
-*/
-
 //goroutine unsafe
 //net msg handler,this func belong to socket's goroutine
 func packetFunc_rpc(socketid int, buff []byte, nlen int) bool {

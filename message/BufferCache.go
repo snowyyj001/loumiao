@@ -14,7 +14,7 @@ sync.Map的性能高体现在读操作远多于写操作的时候。 极端情�
 经测试，在几乎全是读的情况下，sync.Map的效率不如sync.RWMutex
 */
 const (
-	EXPIRE  = 60 * 1000 //每分钟，删除过多的缓存
+	EXPIRE  = 10 * 1000 //每10s，删除过多的缓存
 	KEEPLEN = 640       //缓存超过KEEPLEN，开始清理
 )
 

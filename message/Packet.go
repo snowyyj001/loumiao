@@ -46,6 +46,7 @@ func EncodeProBuff(target int, name string, packet interface{}) ([]byte, int) {
 		buff, err = proto.Marshal(pd) //buff不为nil，是[]byte{},如果pd没有数据的话
 	}
 	if err != nil {
+		llog.Errorf("EncodeProBuff: encode error: %s", err.Error())
 		return nil, 0
 	}
 

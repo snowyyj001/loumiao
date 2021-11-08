@@ -194,3 +194,18 @@ func String2Array(str string) []int {
 	}
 	return arr
 }
+
+//@version: format 1.0.1,max value is 999
+func GetVersionCode(version string) int {
+	arr := strings.Split(version, ".")
+	vcode := Atoi(arr[0])*1000*1000 + Atoi(arr[1])*1000 + Atoi(arr[2])
+	return vcode
+}
+
+func GetVersionString(version int) string {
+	v1 := version / (1000 * 1000)
+	v2 := version / 1000 % 1000
+	v3 := version % 1000
+
+	return fmt.Sprintf("%d.%d.%d", v1, v2, v3)
+}

@@ -122,7 +122,8 @@ func innerLouMiaoRpcMsg(igo gorpc.IGoRoutine, socketId int, data interface{}) {
 	llog.Debugf("innerLouMiaoRpcMsg=%s, socurce=%d, target=%d, Flag=%d", req.FuncName, req.SourceId, req.TargetId, req.Flag)
 	if util.HasBit(int(req.Flag), define.RPCMSG_FLAG_CALL) {
 		if util.HasBit(int(req.Flag), define.RPCMSG_FLAG_RESP) {
-			gorpc.MGR.SendActor("CallRpcServer", "RespRpcCall", *req)
+			
+			gorpc.MGR.SendActor("CallRpcServer", "RespRpcCall", req)
 		} else {
 			handler, ok := handler_Map[req.FuncName]
 			if !ok {
@@ -131,7 +132,7 @@ func innerLouMiaoRpcMsg(igo gorpc.IGoRoutine, socketId int, data interface{}) {
 			}
 			mm := &gorpc.MM{}
 			mm.Id = handler
-			mm.Data = *req
+			mm.Data = req
 			gorpc.MGR.SendActor("CallRpcServer", "ReqRpcCall", mm)
 		}
 		return
@@ -426,11 +427,14 @@ func recvPackMsgClient(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	socketid := m.Id
 	target := m.Param
 	rebuff := m.Data.([]byte)
+	
+	defer func() {
+		message.BackBuffer(rebuff)
+	}()
 
 	token := This.GetClientToken(socketid)
 	if token == nil {
 		llog.Warningf("1.recvPackMsgClient msg, but server has lost, target=%d ", target)
-		message.BackBuffer(rebuff)
 		return nil
 	}
 	targetUid := 0
@@ -442,19 +446,17 @@ func recvPackMsgClient(igo gorpc.IGoRoutine, data interface{}) interface{} {
 
 	rpcClient := This.GetRpcClient(targetUid)
 	if rpcClient == nil {
-		llog.Warningf("1.recvPackMsgClient msg, but server has lost, target=%d,targetuid=%d ", target, targetUid)
+		llog.Warningf("2.recvPackMsgClient msg, but server has lost, target=%d,targetuid=%d ", target, targetUid)
 		node := nodemgr.GetNode(targetUid)
 		if node == nil || node.Type == config.ServerType_World { //if the world lost,we should let the client relogin
 			This.closeClient(socketid)
 		}
-		message.BackBuffer(rebuff)
 		return nil
 	}
 
 	msg := &msg.LouMiaoNetMsg{ClientId: int64(token.UserId), Buffer: rebuff}
 	buff, newlen := message.Encode(targetUid, "LouMiaoNetMsg", msg)
 	rpcClient.Send(buff[0:newlen])
-	message.BackBuffer(rebuff)
 
 	return nil
 }

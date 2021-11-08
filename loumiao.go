@@ -1,14 +1,15 @@
 package loumiao
 
 import (
-	"github.com/snowyyj001/loumiao/callrpc"
-	"github.com/snowyyj001/loumiao/define"
-	"github.com/snowyyj001/loumiao/nodemgr"
 	"os"
 	"os/signal"
 	"reflect"
 	"runtime"
 	"syscall"
+
+	"github.com/snowyyj001/loumiao/callrpc"
+	"github.com/snowyyj001/loumiao/define"
+	"github.com/snowyyj001/loumiao/nodemgr"
 
 	"github.com/snowyyj001/loumiao/base"
 	"github.com/snowyyj001/loumiao/config"
@@ -142,7 +143,7 @@ func BroadCastMsg(data interface{}) {
 
 //注册rpc消息
 func RegisterRpcHandler(igo gorpc.IGoRoutine, call gorpc.HanlderNetFunc) {
-	util.Assert(nodemgr.ServerEnabled==false, "RegisterRpcHandler can not register after server started")
+	util.Assert(nodemgr.ServerEnabled == false, "RegisterRpcHandler can not register after server started")
 	funcName := util.RpcFuncName(call)
 	//base64str := base64.StdEncoding.EncodeToString([]byte(funcName))
 	gorpc.MGR.Send("GateServer", "RegisterNet", &gorpc.M{Id: -1, Name: funcName, Data: igo.GetName()})
@@ -169,14 +170,16 @@ func SendRpc(funcName string, data interface{}, target int) {
 
 //注册rpc消息
 //return: call应该返回一个[]byte类型，或pb结构体
+//
 func RegisterRpcCallHandler(igo gorpc.IGoRoutine, call gorpc.HanlderFunc) {
-	util.Assert(nodemgr.ServerEnabled==false, "RegisterRpcCallHandler can not register after server started")
+	util.Assert(nodemgr.ServerEnabled == false, "RegisterRpcCallHandler can not register after server started")
 	funcName := util.RpcFuncName(call)
 	igo.Register(funcName, call)
 	gorpc.MGR.Send("GateServer", "RegisterNet", &gorpc.M{Id: -1, Name: funcName, Data: igo.GetName()})
 }
 
 //远程rpc调用
+//注意：如果使用pb或json结构体传递消息，在rpc远端会使用反射来创建decode的结构体
 //@funcName: rpc函数
 //@data: 函数参数,如果data是[]byte类型，则代表使用bitstream或自定义二进制内容，否则data应该是一个messgae注册的pb或json结构体
 //@target: 目标server的uid，如果target==0，则随机指定目标地址, 否则gate会把消息转发给指定的target服务
@@ -192,6 +195,9 @@ func CallRpc(igo gorpc.IGoRoutine, funcName string, data interface{}, target int
 		m.Data = bitstream.GetBuffer()
 	} else {
 		orgbuff, sz := message.Encode(target, "", data)
+		if orgbuff == nil {
+			return nil, false
+		}
 		bitstream := base.NewBitStream_1(sz + base.BitStrLen(session))
 		bitstream.WriteString(session)
 		bitstream.WriteBits(orgbuff, base.BytesLen(orgbuff))
