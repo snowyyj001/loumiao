@@ -9,13 +9,13 @@ import (
 )
 
 //client connect
-func innerConnect(igo gorpc.IGoRoutine, socketId int, data interface{}) {
+func innerConnect(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	llog.Debugf("RpcGateServer innerConnect: %d", socketId)
 	nodemgr.OnlineNum++
 }
 
 //client disconnect
-func innerDisConnect(igo gorpc.IGoRoutine, socketId int, data interface{}) {
+func innerDisConnect(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	llog.Debugf("RpcGateServer innerDisConnect: %d", socketId)
 	nodemgr.OnlineNum--
 	This.removeRpc(socketId)
@@ -23,8 +23,11 @@ func innerDisConnect(igo gorpc.IGoRoutine, socketId int, data interface{}) {
 }
 
 //rpc register
-func innerLouMiaoRpcRegister(igo gorpc.IGoRoutine, socketId int, data interface{}) {
-	req := data.(*msg.LouMiaoRpcRegister)
+func innerLouMiaoRpcRegister(igo gorpc.IGoRoutine, socketId int, data []byte) {
+	req := &msg.LouMiaoRpcRegister{}
+	if message.UnPack(req, data) != nil {
+		return
+	}
 	llog.Debugf("innerLouMiaoRpcRegister: %v", req)
 
 	This.rpcUids.Store(req.Uid, true)
@@ -39,8 +42,11 @@ func innerLouMiaoRpcRegister(igo gorpc.IGoRoutine, socketId int, data interface{
 }
 
 //recv rpc msg
-func innerLouMiaoRpcMsg(igo gorpc.IGoRoutine, socketId int, data interface{}) {
-	req := data.(*msg.LouMiaoRpcMsg)
+func innerLouMiaoRpcMsg(igo gorpc.IGoRoutine, socketId int, data []byte) {
+	req := &msg.LouMiaoRpcMsg{}
+	if message.UnPack(req, data) != nil {
+		return
+	}
 	llog.Debugf("0.innerLouMiaoRpcMsg=%s, socurce=%d, target=%d, Flag=%d", req.FuncName, req.SourceId, req.TargetId, req.Flag)
 	var rpcClientId int
 	if req.TargetId <= 0 {

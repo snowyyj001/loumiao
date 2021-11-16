@@ -1,10 +1,10 @@
 package callrpc
 
 import (
+	"github.com/golang/protobuf/proto"
 	"reflect"
 
 	"github.com/snowyyj001/loumiao/base"
-	"github.com/snowyyj001/loumiao/config"
 	"github.com/snowyyj001/loumiao/define"
 	"github.com/snowyyj001/loumiao/gorpc"
 	"github.com/snowyyj001/loumiao/llog"
@@ -30,18 +30,8 @@ func respRpcCall(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	bitstream := base.NewBitStream(rpcmsg.Buffer, len(rpcmsg.Buffer))
 	session := bitstream.ReadString()
 	respdata := bitstream.GetBytePtr()
-	var resp interface{}
-	if util.HasBit(int(rpcmsg.Flag), define.RPCMSG_FLAG_PB) { //pb format
-		err, _, _, pm := message.Decode(config.SERVER_NODE_UID, respdata, len(respdata))
-		if err != nil {
-			llog.Errorf("respRpcCall decode msg error: session = %s, func=%s, error=%s ", session, rpcmsg.FuncName, err.Error())
-		}
-		resp = pm
-	} else {
-		resp = respdata
-	}
 	if ch, ok := This.mRpcWait.LoadAndDelete(session); ok {
-		ch.(chan interface{}) <- resp
+		ch.(chan interface{}) <- respdata
 	} else {
 		llog.Errorf("respRpcCall session[%s] is nil", session)
 	}
@@ -55,18 +45,7 @@ func reqRpcCall(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	session := bitstream.ReadString()
 	respdata := bitstream.GetBytePtr()
 
-	var resp interface{}
-	var ok bool
-	if util.HasNotBit(int(rpcmsg.Flag), define.RPCMSG_FLAG_PB) { //not pb but bytes
-		resp, ok = igo.CallActor(req.Id, rpcmsg.FuncName, respdata)
-	} else {
-		err, _, _, pm := message.Decode(config.SERVER_NODE_UID, respdata, len(respdata))
-		if err != nil {
-			llog.Errorf("reqRpcCall decode msg error : target = %s, func=%s, error=%s ", req.Id, rpcmsg.FuncName, err.Error())
-			return nil
-		}
-		resp, ok = igo.CallActor(req.Id, rpcmsg.FuncName, pm)
-	}
+	resp, ok := igo.CallActor(req.Id, rpcmsg.FuncName, respdata)
 	if ok == false {
 		return nil
 	}
@@ -79,12 +58,14 @@ func reqRpcCall(igo gorpc.IGoRoutine, data interface{}) interface{} {
 		bitstream.WriteBits(orgbuff, base.BytesLen(orgbuff))
 		m.Data = bitstream.GetBuffer()
 	} else {
-		orgbuff, _ := message.Encode(int(rpcmsg.SourceId), "", resp)
+		orgbuff, err := message.Pack(resp.(proto.Message))
+		if err != nil {
+			llog.Errorf("reqRpcCall: func = %s, session = %s", rpcmsg.FuncName, session)
+		}
 		bitstream := base.NewBitStream_1(len(orgbuff) + base.BitStrLen(session))
 		bitstream.WriteString(session)
 		bitstream.WriteBits(orgbuff, base.BytesLen(orgbuff))
 		m.Data = bitstream.GetBuffer()
-		m.Param = util.BitOr(m.Param, define.RPCMSG_FLAG_PB)
 	}
 	gorpc.MGR.Send("GateServer", "SendRpc", m)
 	return nil

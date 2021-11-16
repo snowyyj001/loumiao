@@ -170,14 +170,32 @@ func DecodeJson(uid int, buff []byte, length int) (error, int, string, interface
 	return nil, target, msgName, packet
 }
 
-func Pack(packet interface{}) ([]byte, error) {
-	return proto.Marshal(packet.(proto.Message))
+
+//解析包头
+//@ret: targetid, 消息名, 包体, error
+func UnPackHead(buff []byte, length int) (int, string, []byte, error) {
+	mbuff1 := buff[4:6]
+	target := int(base.BytesToUInt16(mbuff1, binary.BigEndian))
+
+	mbuff1 = buff[6:8]
+	nameLen := base.BytesToUInt16(mbuff1, binary.BigEndian)
+	if nameLen <= 0 {
+		return 0, "", nil, fmt.Errorf("UnPackHead: msgname len is illegal: %d", nameLen)
+	}
+	msgName := string(buff[8 : 8+nameLen])
+	return target, msgName, buff[8+nameLen:length], nil
 }
 
-func UnPack(msgName string, buff []byte) (interface{}, error) {
-	packet := GetPakcet(msgName)
-	err := proto.Unmarshal(buff, packet.(proto.Message))
-	return packet, err
+func Pack(packet proto.Message) ([]byte, error) {
+	return proto.Marshal(packet)
+}
+
+func UnPack(packet proto.Message, buff []byte) error {
+	err := proto.Unmarshal(buff, packet)
+	if err != nil {
+		llog.Errorf("message.UnPack: err = %s", err.Error())
+	}
+	return  err
 }
 
 func DoInit() {

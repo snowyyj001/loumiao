@@ -6,7 +6,7 @@ import (
 )
 
 /*
-go test -v -bench=. -benchtime=1s reflect_test.go
+go test -v -bench="." -benchtime=1s reflect_test.go
 输出如下：可见创建一个Stu需要200ns
 goos: windows
 goarch: amd64

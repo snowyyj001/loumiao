@@ -162,7 +162,7 @@ func (self *GoRoutineLogic) SetWarningTime(cd int64) {
 	self.lastWarningTime = cd
 }
 func (self *GoRoutineLogic) CallNetFunc(m *M) {
-	self.NetHandler[m.Name](self, m.Id, m.Data)
+	self.NetHandler[m.Name](self, m.Id, m.Data.([]byte))
 }
 
 //同步定时任务，必须在DoStart中调用，不是协程安全的

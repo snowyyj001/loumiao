@@ -50,7 +50,7 @@ func (self *ClientServer) DoDestory() {
 }
 
 func PacketFunc(socketid int, buff []byte, nlen int) bool {
-	err, _, name, pm := message.Decode(0, buff, nlen)
+	_, name, buffbody, err := message.UnPackHead(buff, nlen)
 
 	if err != nil {
 		llog.Errorf("KcpGateServer recvPackMsg Decode error: %s", err.Error())
@@ -63,12 +63,12 @@ func PacketFunc(socketid int, buff []byte, nlen int) bool {
 		if handler == This.Name {
 			cb, ok := This.NetHandler[name]
 			if ok {
-				cb(This, socketid, pm)
+				cb(This, socketid, buffbody)
 			} else {
 				llog.Errorf("ClientServer packetFunc[%s] handler is nil: %s", name, This.Name)
 			}
 		} else {
-			nm := &gorpc.M{Id: socketid, Name: name, Data: pm}
+			nm := &gorpc.M{Id: socketid, Name: name, Data: buffbody}
 			gorpc.MGR.Send(handler, "ServiceHandler", nm)
 		}
 	} else {

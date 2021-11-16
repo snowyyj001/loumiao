@@ -76,6 +76,7 @@ type NetNode struct {
 	MaxNum    int    `json:"maxnum"`
 	Group     string `json:"group"`
 	LogFile   int    `json:"logfile"` //如果-1，代表输出到控制台
+	
 }
 
 type DBNode struct {

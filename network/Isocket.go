@@ -221,7 +221,9 @@ func (self *Socket) BindPacketFunc(callfunc HandleFunc) {
 }
 
 func (self *Socket) HandlePacket(Id int, buff []byte, nlen int) bool {
-	return self.m_PacketFunc(Id, buff, nlen)
+	newbuff := make([]byte, nlen)
+	copy(newbuff, buff[:nlen])
+	return self.m_PacketFunc(Id, newbuff, nlen)
 }
 
 func (self *Socket) ReceivePacket(Id int, dat []byte) bool {

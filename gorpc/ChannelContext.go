@@ -7,7 +7,7 @@ package gorpc
 type HanlderFunc func(igo IGoRoutine, data interface{}) interface{}
 
 //data是一个nil或指针类型，需要
-type HanlderNetFunc func(igo IGoRoutine, clientid int, data interface{})
+type HanlderNetFunc func(igo IGoRoutine, clientid int, buffer []byte)
 
 // 声明一个数据类型
 type M struct {

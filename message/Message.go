@@ -43,7 +43,7 @@ func init() {
 	MaxPacketSize = config.NET_BUFFER_SIZE - MSGNAME_SIZE - MSGNAME_SIZE
 }
 
-//注册网络消息
+//注册消息
 func RegisterPacket(packet interface{}) {
 	packetName := GetMessageName(packet)
 	//fmt.Println("RegisterPacket", packetName)

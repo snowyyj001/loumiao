@@ -3,9 +3,10 @@ package mysqldb
 
 import (
 	"fmt"
-	"gorm.io/gorm/clause"
 	"sync"
 	"time"
+
+	"gorm.io/gorm/clause"
 
 	"github.com/snowyyj001/loumiao/util"
 
@@ -30,15 +31,15 @@ var (
 	mLock    sync.Mutex
 	logLevel logger.LogLevel = logger.Info
 )
+
 /*
 GORM provides First, Take, Last methods to retrieve a single object from the database,
 it adds LIMIT 1 condition when querying the database,
 and it will return the error ErrRecordNotFound if no record is found.
 因此，如果使用这三个方法，err错误处理要注意
- */
+*/
 
 func init() {
-//	uri := fmt.Sprintf("%s?charset=utf8&parseTime=True&loc=Local", "root:123456&Tower@tcp(192.168.27.19:3306)/towergame")
 	engine, _ := gorm.Open(mysql.Open(""), &gorm.Config{
 		DryRun: true,
 		NamingStrategy: schema.NamingStrategy{
@@ -51,7 +52,7 @@ func init() {
 }
 
 //生成call调用后的执行的mysql语句
-func Explain(call func () *gorm.DB) (string, bool) {
+func Explain(call func() *gorm.DB) (string, bool) {
 	tx := call()
 	if tx.Error != nil {
 		llog.Errorf("mysql Explain: %s", tx.Error.Error())
@@ -107,7 +108,7 @@ func Dial(tbs []interface{}) error {
 		uri := fmt.Sprintf("%s?charset=utf8&parseTime=True&loc=Local", cfg.SqlUri)
 		llog.Debugf("mysql Dial: %s", uri)
 		engine, err := gorm.Open(mysql.Open(uri), &gorm.Config{
-			NamingStrategy: schema.NamingStrategy {
+			NamingStrategy: schema.NamingStrategy{
 				SingularTable: true, // 使用单数表名，启用该选项，此时，`User` 的表名应该是 `user`
 			},
 			Logger:                 newloger().LogMode(logLevel),
@@ -120,9 +121,6 @@ func Dial(tbs []interface{}) error {
 		if cfg.Master == 1 { //主数据库
 			sqlDB.SetMaxIdleConns(POOL_IDLE)
 			sqlDB.SetMaxOpenConns(POOL_MAX)
-			if Master != nil {
-				return fmt.Errorf("数据库配置错误：%v", cfg)
-			}
 			Master = engine
 		} else { //从库最大连接数根据从库数量调整
 			sqlDB.SetMaxIdleConns(util.Max(POOL_IDLE/(len(config.Cfg.SqlCfg)-1), 1))

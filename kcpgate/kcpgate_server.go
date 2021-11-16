@@ -44,7 +44,6 @@ func (self *KcpGateServer) DoInit() bool {
 func (self *KcpGateServer) DoRegsiter() {
 	llog.Info("KcpGateServer DoRegsiter")
 
-	self.Register("RecvPackMsg", recvPackMsg)
 	self.Register("RegisterNet", registerNet)
 
 	self.RegisterSelfNet("CONNECT", innerConnect)
@@ -78,27 +77,28 @@ func (self *KcpGateServer) RegisterSelfNet(hanlderName string, hanlderFunc gorpc
 //goroutine unsafe,此时已不涉及map的修改，直处理了，不用再去RecvPackMsg中处理
 func packetFunc(socketid int, buff []byte, nlen int) bool {
 	//llog.Debugf("packetFunc: socketid=%d, bufferlen=%d", socketid, nlen)
-	//m := &gorpc.M{Id: socketid, Param: nlen, Data: buff}
-	//gorpc.MGR.Send("KcpGateServer", "RecvPackMsg", m)
-	err, _, name, pm := message.Decode(This.Id, buff, nlen)
-
+	target, name, buffbody, err := message.UnPackHead(buff, nlen)
 	if err != nil {
-		llog.Errorf("KcpGateServer recvPackMsg Decode error: %s", err.Error())
+		llog.Errorf("KcpGateServer packetFunc Decode error: %s", err.Error())
 		This.closeClient(socketid)
 		return false
 	}
-
+	if target == config.SERVER_NODE_UID || target <= 0 { //server使用的是server uid
+		llog.Errorf("KcpGateServer packetFunc target error: target = %d, my = %d, name = %s", target, config.SERVER_NODE_UID, name)
+		This.closeClient(socketid)
+		return false
+	}
 	handler, ok := handler_Map[name]
 	if ok {
 		if handler == This.Name {
 			cb, ok := This.NetHandler[name]
 			if ok {
-				cb(This, socketid, pm)
+				cb(This, socketid, buffbody)
 			} else {
 				llog.Errorf("KcpGateServer packetFunc[%s] handler is nil: %s", name, This.Name)
 			}
 		} else {
-			nm := &gorpc.M{Id: socketid, Name: name, Data: pm}
+			nm := &gorpc.M{Id: socketid, Name: name, Data: buffbody}
 			gorpc.MGR.Send(handler, "ServiceHandler", nm)
 		}
 	} else {

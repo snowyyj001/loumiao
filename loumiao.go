@@ -1,6 +1,7 @@
 package loumiao
 
 import (
+	"github.com/golang/protobuf/proto"
 	"os"
 	"os/signal"
 	"reflect"
@@ -150,24 +151,6 @@ func RegisterRpcHandler(igo gorpc.IGoRoutine, call gorpc.HanlderNetFunc) {
 	igo.RegisterGate(funcName, call)
 }
 
-//远程rpc调用
-//@funcName: rpc函数
-//@data: 函数参数,如果data是[]byte类型，则代表使用bitstream或自定义二进制内容，否则data应该是一个messgae注册的pb或json结构体
-//@target: 目标server的uid，如果target==0，则随机指定目标地址, 否则gate会把消息转发给指定的target服务
-func SendRpc(funcName string, data interface{}, target int) {
-	m := &gorpc.M{Id: target, Name: funcName}
-	if reflect.TypeOf(data).Kind() == reflect.Slice { //bitstream
-		m.Data = data
-	} else {
-		buff, _ := message.Encode(target, "", data)
-		m.Param = define.RPCMSG_FLAG_PB
-		m.Data = buff
-	}
-	llog.Debugf("SendRpc: %s, %d", funcName, target)
-	//base64str := base64.StdEncoding.EncodeToString([]byte(funcName))
-	gorpc.MGR.Send("GateServer", "SendRpc", m)
-}
-
 //注册rpc消息
 //return: call应该返回一个[]byte类型，或pb结构体
 //
@@ -178,10 +161,31 @@ func RegisterRpcCallHandler(igo gorpc.IGoRoutine, call gorpc.HanlderFunc) {
 	gorpc.MGR.Send("GateServer", "RegisterNet", &gorpc.M{Id: -1, Name: funcName, Data: igo.GetName()})
 }
 
+
+//远程rpc调用
+//@funcName: rpc函数
+//@data: 函数参数,一个二进制buff或pb结构体
+//@target: 目标server的uid，如果target==0，则随机指定目标地址, 否则gate会把消息转发给指定的target服务
+func SendRpc(funcName string, data interface{}, target int) {
+	m := &gorpc.M{Id: target, Name: funcName}
+	if reflect.TypeOf(data).Kind() == reflect.Slice { //bitstream
+		m.Data = data
+	} else {
+		buff, err := message.Pack(data.(proto.Message))
+		if err != nil {
+			return
+		}
+		m.Data = buff
+	}
+	llog.Debugf("SendRpc: %s, %d", funcName, target)
+	//base64str := base64.StdEncoding.EncodeToString([]byte(funcName))
+	gorpc.MGR.Send("GateServer", "SendRpc", m)
+}
+
 //远程rpc调用
 //注意：如果使用pb或json结构体传递消息，在rpc远端会使用反射来创建decode的结构体
 //@funcName: rpc函数
-//@data: 函数参数,如果data是[]byte类型，则代表使用bitstream或自定义二进制内容，否则data应该是一个messgae注册的pb或json结构体
+//@data: 一个二进制buff或pb结构体
 //@target: 目标server的uid，如果target==0，则随机指定目标地址, 否则gate会把消息转发给指定的target服务
 func CallRpc(igo gorpc.IGoRoutine, funcName string, data interface{}, target int) (interface{}, bool) {
 	m := &gorpc.M{Id: target, Name: funcName}
@@ -194,15 +198,14 @@ func CallRpc(igo gorpc.IGoRoutine, funcName string, data interface{}, target int
 		bitstream.WriteBits(orgbuff, base.BytesLen(orgbuff))
 		m.Data = bitstream.GetBuffer()
 	} else {
-		orgbuff, sz := message.Encode(target, "", data)
-		if orgbuff == nil {
+		orgbuff, err := message.Pack(data.(proto.Message))
+		if err != nil {
 			return nil, false
 		}
-		bitstream := base.NewBitStream_1(sz + base.BitStrLen(session))
+		bitstream := base.NewBitStream_1(len(orgbuff) + base.BitStrLen(session))
 		bitstream.WriteString(session)
 		bitstream.WriteBits(orgbuff, base.BytesLen(orgbuff))
 		m.Data = bitstream.GetBuffer()
-		m.Param = util.BitOr(m.Param, define.RPCMSG_FLAG_PB)
 	}
 	llog.Infof("CallRpc: session=%s, funcName=%s, target=%d", session, funcName, target)
 	//base64str := base64.StdEncoding.EncodeToString([]byte(funcName))

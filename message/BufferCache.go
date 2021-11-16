@@ -14,7 +14,7 @@ sync.Map的性能高体现在读操作远多于写操作的时候。 极端情�
 经测试，在几乎全是读的情况下，sync.Map的效率不如sync.RWMutex
 */
 const (
-	EXPIRE  = 10 * 1000 //每10s，删除过多的缓存
+	EXPIRE  = 3 * 1000 //每3s，删除过多的缓存
 	KEEPLEN = 640       //缓存超过KEEPLEN，开始清理
 )
 
@@ -51,6 +51,9 @@ func delExpireCache(sz int) {
 
 //获取一个长度为sz的[]byte对象
 func GetBuffer(sz int) []byte {
+	if sz <= 0 {
+		return nil
+	}
 	rdMutex.RLock()
 	cache, ok := buffers[sz]
 	rdMutex.RUnlock()
@@ -77,9 +80,22 @@ func GetBuffer(sz int) []byte {
 	}
 }
 
+//复制buff对象
+func CloneBuffer(src []byte) []byte {
+	if len(src) == 0 {
+		return nil
+	}
+	target := GetBuffer(len(src))
+	copy(target, src)
+	return target
+}
+
 //缓存buff对象
 func BackBuffer(buff []byte) {
 	sz := len(buff)
+	if sz <= 0 {
+		return
+	}
 	rdMutex.RLock()
 	cache, ok := buffers[sz]
 	rdMutex.RUnlock()
@@ -87,7 +103,6 @@ func BackBuffer(buff []byte) {
 		cache.mutex.Lock()
 		cache.vec.PushBack(buff)
 		cache.mutex.Unlock()
-
 		//fmt.Println("BackBuffer: ", sz, cache.vec.Len(), cache.vec.Size())
 	}
 }

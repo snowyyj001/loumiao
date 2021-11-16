@@ -326,8 +326,8 @@ func (self *GateServer) DoDestory() {
 //net msg handler,this func belong to socket's goroutine
 func packetFunc_client(socketid int, buff []byte, nlen int) bool {
 	//llog.Debugf("packetFunc: socketid=%d, bufferlen=%d", socketid, nlen)
-	err, target, name, pm := message.Decode(config.NET_NODE_TYPE, buff, nlen)
-	//llog.Debugf("packetFunc_client %d %s %v", target, name, pm)
+	target, name, buffbody, err := message.UnPackHead(buff, nlen)
+	//llog.Debugf("packetFunc_client %d %s %d", target, name, nlen)
 	if nil != err {
 		llog.Errorf("packetFunc_client Decode error: %s", err.Error())
 		//This.closeClient(socketid)
@@ -335,7 +335,7 @@ func packetFunc_client(socketid int, buff []byte, nlen int) bool {
 		if target == config.NET_NODE_TYPE || target <= 0 { //msg to me，client使用的是server type
 			handler, ok := handler_Map[name]
 			if ok {
-				nm := &gorpc.M{Id: socketid, Name: name, Data: pm}
+				nm := &gorpc.M{Id: socketid, Name: name, Data: buffbody}
 				gorpc.MGR.Send(handler, "ServiceHandler", nm)
 			} else {
 				llog.Errorf("packetFunc_client handler is nil, drop it[%s]", name)
@@ -345,9 +345,7 @@ func packetFunc_client(socketid int, buff []byte, nlen int) bool {
 				llog.Errorf("packetFunc_client target may be error: target=%d, mytype=%d, name=%s", target, config.NET_NODE_TYPE, name)
 				return true
 			}
-			newbuff := message.GetBuffer(nlen)
-			copy(newbuff, buff[:nlen])
-			m := &gorpc.M{Id: socketid, Param: target, Data: newbuff}
+			m := &gorpc.M{Id: socketid, Param: target, Data: buff}
 			gorpc.MGR.Send("GateServer", "RecvPackMsgClient", m)
 		}
 	}
@@ -358,7 +356,7 @@ func packetFunc_client(socketid int, buff []byte, nlen int) bool {
 //net msg handler,this func belong to socket's goroutine
 func packetFunc_server(socketid int, buff []byte, nlen int) bool {
 	//llog.Debugf("packetFunc_server: socketid=%d, bufferlen=%d", socketid, nlen)
-	err, target, name, pm := message.Decode(config.SERVER_NODE_UID, buff, nlen)
+	target, name, buffbody, err := message.UnPackHead(buff, nlen)
 	//llog.Debugf("packetFunc_server %d %s %v", target, name, pm)
 	if nil != err {
 		llog.Errorf("packetFunc_server Decode error: %s", err.Error())
@@ -367,7 +365,7 @@ func packetFunc_server(socketid int, buff []byte, nlen int) bool {
 		if target == config.SERVER_NODE_UID || target <= 0 { //server使用的是server uid
 			handler, ok := handler_Map[name] //handler_Map will not changed, so use here is ok
 			if ok {
-				nm := &gorpc.M{Id: socketid, Name: name, Data: pm}
+				nm := &gorpc.M{Id: socketid, Name: name, Data: buffbody}
 				gorpc.MGR.Send(handler, "ServiceHandler", nm)
 			} else {
 				llog.Errorf("packetFunc_server handler is nil, drop it[%s]", name)
@@ -489,12 +487,6 @@ func (self *GateServer) BindClient(socketId, userid, tokenid, worlduid int) {
 	onClientConnected(userid, worlduid)
 }
 
-// gate绑定server，server使用
-func (self *GateServer) BindServerGate(socketId, userid, tokenid int) {
-	self.tokens[socketId] = &Token{TokenId: tokenid, UserId: userid}
-	self.tokens_u[userid] = socketId
-}
-
 // 客户端解绑gate，gate使用
 func (self *GateServer) UnBindClient(socketId int) {
 	token := self.GetClientToken(socketId)
@@ -503,6 +495,12 @@ func (self *GateServer) UnBindClient(socketId int) {
 		delete(self.tokens_u, token.UserId)
 		onClientDisConnected(token.UserId, token.WouldId)
 	}
+}
+
+// gate绑定server，server使用
+func (self *GateServer) BindServerGate(socketId, userid, tokenid int) {
+	self.tokens[socketId] = &Token{TokenId: tokenid, UserId: userid}
+	self.tokens_u[userid] = socketId
 }
 
 // 解除/绑定client所属的gate, server使用
@@ -521,6 +519,7 @@ func (self *GateServer) UnBindGate(socketId int) {
 		gateuid := token.UserId
 		delete(This.tokens, socketId) //和gate解绑
 		delete(This.tokens_u, gateuid)
+
 		for userid, mygateuid := range This.users_u { //在这个gate上的user都应该掉线
 			if mygateuid == gateuid {
 				onClientDisConnected(userid, gateuid)

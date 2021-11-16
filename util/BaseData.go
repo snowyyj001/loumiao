@@ -5,6 +5,7 @@ package util
 //所以，应该在一个逻辑里使用一次GetBaseData，然后使用返回的值
 type (
 	BaseDataRes struct {
+		name      string
 		flag      bool //A:true, B:false
 		dataMap_A map[interface{}]interface{}
 		dataMap_B map[interface{}]interface{}
@@ -18,6 +19,8 @@ type (
 		GetBaseData(int) interface{}
 		Read() error
 		ReadDone()
+		Name() string
+		Reset()
 	}
 )
 
@@ -30,17 +33,24 @@ func (self *BaseDataRes) Clear() {
 	self.dataMap_B = nil
 }
 
+func (self *BaseDataRes) Reset() {
+	if self.flag { //a is using, reset b
+		self.dataMap_B = make(map[interface{}]interface{})
+	} else {
+		self.dataMap_A = make(map[interface{}]interface{})
+	}
+}
+
 func (self *BaseDataRes) AddData(id int, pData interface{}) {
 	if self.flag { //a is using, read to b
 		self.dataMap_B[id] = pData
 	} else {
 		self.dataMap_A[id] = pData
 	}
-
 }
 
 func (self *BaseDataRes) GetBaseData(id int) interface{} {
-	if self.flag {
+	if self.flag { //a is using, return a
 		pData, exist := self.dataMap_A[id]
 		if exist {
 			return pData
@@ -56,9 +66,13 @@ func (self *BaseDataRes) GetBaseData(id int) interface{} {
 }
 
 func (self *BaseDataRes) Init() {
+	if self.dataMap_A != nil {
+		return
+	}
 	self.dataMap_A = make(map[interface{}]interface{})
 	self.dataMap_B = make(map[interface{}]interface{})
 	self.flag = false
+	self.name = "null"
 }
 
 func (self *BaseDataRes) Read() error {
@@ -67,4 +81,8 @@ func (self *BaseDataRes) Read() error {
 
 func (self *BaseDataRes) ReadDone() {
 	self.flag = !self.flag
+}
+
+func (self *BaseDataRes) Name() string {
+	return self.name
 }

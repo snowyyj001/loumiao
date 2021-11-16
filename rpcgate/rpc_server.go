@@ -147,18 +147,22 @@ func (self *RpcGateServer) DoDestory() {
 //net msg handler,this func belong to socket's goroutine
 func packetFunc_rpc(socketid int, buff []byte, nlen int) bool {
 	//llog.Debugf("packetFunc_rpc: socketid=%d, bufferlen=%d", socketid, nlen)
-	err, _, name, pm := message.Decode(config.SERVER_NODE_UID, buff, nlen)
+	target, name, buffbody, err := message.UnPackHead(buff, nlen)
 	//llog.Debugf("packetFunc_rpc  %s %v", name, pm)
 	if nil != err {
 		llog.Errorf("packetFunc_rpc Decode error: %s", err.Error())
 		//This.closeClient(socketid)
 	} else {
-		handler, ok := handler_Map[name]
-		if ok {
-			nm := &gorpc.M{Id: socketid, Name: name, Data: pm}
-			gorpc.MGR.Send(handler, "ServiceHandler", nm)
+		if target == config.SERVER_NODE_UID || target <= 0 { //server使用的是server uid
+			handler, ok := handler_Map[name]
+			if ok {
+				nm := &gorpc.M{Id: socketid, Name: name, Data: buffbody}
+				gorpc.MGR.Send(handler, "ServiceHandler", nm)
+			} else {
+				llog.Errorf("packetFunc_rpc handler is nil, drop it[%s]", name)
+			}
 		} else {
-			llog.Errorf("packetFunc_rpc handler is nil, drop it[%s]", name)
+			llog.Errorf("packetFunc_rpc target may be error: targetuid=%d, myuid=%d, name=%s", target, config.SERVER_NODE_UID, name)
 		}
 	}
 	return true
