@@ -55,6 +55,11 @@ func TimeStrFormat(mat string) string {
 	return time.Now().Format(mat)
 }
 
+//当前时间
+func NowTime() time.Time {
+	return time.Now()
+}
+
 //时间戳秒
 func TimeStampSec() int64 {
 	return time.Now().Unix()

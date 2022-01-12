@@ -21,7 +21,7 @@ const (
 	CALL_TIMEOUT         = 3         //call超时时间,秒
 	CHAN_LIMIT_TIMES     = 2         //异步协程上限倍数
 	CHAN_OVERLOW         = 30        //chan可能溢出，告警CD，秒
-	CHAN_CALL_LONG		 = 1000		//call警告，执行超过一秒
+	CHAN_CALL_LONG       = 1000      //call警告，执行超过一秒
 	CHAN_Statistics_Time = 60 * 1000 //每60s统计一次actor的未读数量
 )
 
@@ -72,6 +72,7 @@ type RoutineTimer struct {
 	timer        *timer.Timer
 	lastCallTime int64
 	timerCall    func(dt int64)
+	param        interface{}
 }
 
 type GoRoutineLogic struct {
@@ -92,6 +93,10 @@ type GoRoutineLogic struct {
 
 	timerChan  chan int //定时器chan
 	timerFuncs map[int]*RoutineTimer
+
+	tikerChan   chan int64 //定时器chan
+	delayJobs   map[int64]*RoutineTimer
+	tickerIndex int64
 
 	started         bool //是否已启动
 	inited          bool //是否初始化失败
@@ -165,11 +170,37 @@ func (self *GoRoutineLogic) CallNetFunc(m *M) {
 	self.NetHandler[m.Name](self, m.Id, m.Data.([]byte))
 }
 
-//同步定时任务，必须在DoStart中调用，不是协程安全的
+//一次性定时任务，不是协程安全的
+//@delat: 延迟时间，单位毫秒
+//@f: 回调函数，在GoRoutineLogic中调用，协程安全
+//@param: 回调参数
+func (self *GoRoutineLogic) RunTicker(delat int, f func(param interface{}), param interface{}) {
+	caller := new(RoutineTimer)
+	caller.param = param
+	self.tickerIndex++
+	caller.lastCallTime = self.tickerIndex
+	caller.timerCall = func(dt int64) { //try catch errors here, do not effect woker
+		defer func() {
+			if r := recover(); r != nil {
+				buf := make([]byte, 2048)
+				l := runtime.Stack(buf, false)
+				llog.Errorf("GoRoutineLogic.RunTicker[%s] %v: %s", self.Name, r, buf[:l])
+			}
+		}()
+		f(caller.param)
+	}
+	caller.timer = timer.NewTimer(delat, func(dt int64) bool {
+		self.tikerChan <- caller.lastCallTime
+		return true
+	}, false)
+
+	self.delayJobs[caller.lastCallTime] = caller
+}
+
+//同步定时任务，不是协程安全的
 //@delat: 时间间隔，单位毫秒
 //@f: 回调函数，在GoRoutineLogic中调用，协程安全
-//@ticker: 使用ticker方式的timer
-func (self *GoRoutineLogic) RunTimer(delat int, f func(int64), ticker bool) {
+func (self *GoRoutineLogic) RunTimer(delat int, f func(int64)) {
 	_, ok := self.timerFuncs[delat]
 	if ok {
 		llog.Errorf("GoRoutineLogic.RunTimer[%s]: timer duation[%d] already has one", self.Name, delat)
@@ -187,17 +218,10 @@ func (self *GoRoutineLogic) RunTimer(delat int, f func(int64), ticker bool) {
 		}()
 		f(dt)
 	}
-	if ticker {
-		caller.timer = timer.NewTicker(delat, func(dt int64) bool {
-			self.timerChan <- delat
-			return true
-		})
-	} else {
-		caller.timer = timer.NewTimer(delat, func(dt int64) bool {
-			self.timerChan <- delat
-			return true
-		}, true)
-	}
+	caller.timer = timer.NewTimer(delat, func(dt int64) bool {
+		self.timerChan <- delat
+		return true
+	}, true)
 
 	self.timerFuncs[delat] = caller
 }
@@ -252,6 +276,12 @@ func (self *GoRoutineLogic) woker() {
 				caller.timerCall(nt - caller.lastCallTime)
 				caller.lastCallTime = nt
 			}
+		case index := <-self.tikerChan:
+			caller, ok := self.delayJobs[index]
+			if ok {
+				caller.timerCall(0)
+				delete(self.delayJobs, index)
+			}
 		}
 	}
 
@@ -268,10 +298,6 @@ func (self *GoRoutineLogic) Run() {
 //关闭任务
 func (self *GoRoutineLogic) stop() {
 	self.started = false
-	/*if self.timer != nil {
-		self.timer.Stop()
-		self.timer = nil
-	}*/
 	for _, caller := range self.timerFuncs {
 		caller.timer.Stop()
 	}
@@ -385,8 +411,8 @@ func (self *GoRoutineLogic) Call(server IGoRoutine, handler_name string, sdata *
 	select {
 	case rdata := <-self.readChan:
 		after := util.TimeStamp()
-		if after - before > CHAN_CALL_LONG {
-			llog.Noticef("GoRoutineLogic.Call:[src=%s,target=%s (use too long[time=%d])] func=%s", self.Name, server.GetName(), after - before, handler_name)
+		if after-before > CHAN_CALL_LONG {
+			llog.Noticef("GoRoutineLogic.Call:[src=%s,target=%s (use too long[time=%d])] func=%s", self.Name, server.GetName(), after-before, handler_name)
 		}
 		return rdata.Data.Data, true
 	case <-time.After(CALL_TIMEOUT * time.Second):
@@ -483,17 +509,19 @@ func (self *GoRoutineLogic) init(name string) {
 
 	self.timerChan = make(chan int, 1)
 	self.timerFuncs = make(map[int]*RoutineTimer)
+	self.tikerChan = make(chan int64, 1)
+	self.delayJobs = make(map[int64]*RoutineTimer)
 }
 
 //wait for another gorpc resp
 func (self *GoRoutineLogic) WaitResp(name string) interface{} {
-	ch , ok := self.rpcWaitchan[name]
+	ch, ok := self.rpcWaitchan[name]
 	if ok == false {
 		ch = make(chan interface{})
 		self.rpcWaitchan[name] = ch
 	}
 	select {
-	case r := <- ch:
+	case r := <-ch:
 		return r
 	case <-time.After(WAIT_TIMEOUT * time.Second):
 		llog.Errorf("GoRoutineLogic.WaitResp: read timeout [%s], data = %v", name)
@@ -503,7 +531,7 @@ func (self *GoRoutineLogic) WaitResp(name string) interface{} {
 
 //signal the resp is ok
 func (self *GoRoutineLogic) SignalResp(name string, data interface{}) {
-	ch , ok := self.rpcWaitchan[name]
+	ch, ok := self.rpcWaitchan[name]
 	if ok == false {
 		llog.Errorf("GoRoutineLogic.SignalResp: no read, name = %s, data = %v", name, data)
 		return

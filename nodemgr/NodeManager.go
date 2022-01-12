@@ -181,21 +181,25 @@ func GetBalanceServer(widthgate bool, widthworld bool) (string, int) {
 	return retsaddr, retuid
 }
 
-//pick a zone server
-func GetBalanceZone(group string) int {
-	var uid int
-
-	var minNum int = 0x7fffffff
+//pick a zone server by random
+func GetBalanceZone() *NodeInfo  {
 	defer nodeLock.RUnlock()
 	nodeLock.RLock()
+
+	nodes := make([]*NodeInfo, 0)		//这里不要利用map访问的随机性，因为map每次的访问虽然是随机的但并不均匀
 	for _, node := range node_Map {
-		if node.SocketActive /* && node.Group == group */ && node.Number < minNum && node.Type == config.ServerType_Zone {
-			uid = node.Uid
-			minNum = node.Number
+		if node.SocketActive && node.Type == config.ServerType_Zone {
+			nodes = append(nodes, node)
 		}
 	}
+	sz := len(nodes)
+	if sz > 0 {
+		node := nodes[util.Random(1000)%sz]
+		return node
 
-	return uid
+	} else {
+		return nil
+	}
 }
 
 func GetNode(uid int) (ret *NodeInfo) {

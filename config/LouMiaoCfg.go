@@ -22,6 +22,7 @@ const (
 	ServerType_WEB_GM           //8 web gm
 	ServerType_WEB_LOGIN        //9 web login
 	ServerType_RPCGate          //10 rpc gate
+	ServerType_ETCF             // 11 配置中心
 )
 
 var (
@@ -37,6 +38,7 @@ var (
 		ServerType_WEB_GM:    "webserver",
 		ServerType_WEB_LOGIN: "weblogin",
 		ServerType_RPCGate:   "rpcserver",
+		ServerType_ETCF:      "etcfserver",
 	}
 )
 
@@ -76,7 +78,7 @@ type NetNode struct {
 	MaxNum    int    `json:"maxnum"`
 	Group     string `json:"group"`
 	LogFile   int    `json:"logfile"` //如果-1，代表输出到控制台
-	
+
 }
 
 type DBNode struct {

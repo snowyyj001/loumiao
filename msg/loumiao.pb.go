@@ -551,6 +551,336 @@ func (x *TestEncodeMsg) GetBuffer() string {
 	return ""
 }
 
+type LouMiaoWatchKey struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Prefix string `protobuf:"bytes,1,opt,name=Prefix,proto3" json:"Prefix,omitempty"`
+	Opcode int32  `protobuf:"varint,2,opt,name=opcode,proto3" json:"opcode,omitempty"` //1： 添加， 2：删除
+}
+
+func (x *LouMiaoWatchKey) Reset() {
+	*x = LouMiaoWatchKey{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_loumiao_proto_msgTypes[9]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *LouMiaoWatchKey) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LouMiaoWatchKey) ProtoMessage() {}
+
+func (x *LouMiaoWatchKey) ProtoReflect() protoreflect.Message {
+	mi := &file_loumiao_proto_msgTypes[9]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LouMiaoWatchKey.ProtoReflect.Descriptor instead.
+func (*LouMiaoWatchKey) Descriptor() ([]byte, []int) {
+	return file_loumiao_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *LouMiaoWatchKey) GetPrefix() string {
+	if x != nil {
+		return x.Prefix
+	}
+	return ""
+}
+
+func (x *LouMiaoWatchKey) GetOpcode() int32 {
+	if x != nil {
+		return x.Opcode
+	}
+	return 0
+}
+
+type LouMiaoPutValue struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Prefix string `protobuf:"bytes,1,opt,name=Prefix,proto3" json:"Prefix,omitempty"`
+	Value  string `protobuf:"bytes,2,opt,name=Value,proto3" json:"Value,omitempty"` //value为空，代表删除
+}
+
+func (x *LouMiaoPutValue) Reset() {
+	*x = LouMiaoPutValue{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_loumiao_proto_msgTypes[10]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *LouMiaoPutValue) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LouMiaoPutValue) ProtoMessage() {}
+
+func (x *LouMiaoPutValue) ProtoReflect() protoreflect.Message {
+	mi := &file_loumiao_proto_msgTypes[10]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LouMiaoPutValue.ProtoReflect.Descriptor instead.
+func (*LouMiaoPutValue) Descriptor() ([]byte, []int) {
+	return file_loumiao_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *LouMiaoPutValue) GetPrefix() string {
+	if x != nil {
+		return x.Prefix
+	}
+	return ""
+}
+
+func (x *LouMiaoPutValue) GetValue() string {
+	if x != nil {
+		return x.Value
+	}
+	return ""
+}
+
+type LouMiaoNoticeValue struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Prefix string `protobuf:"bytes,1,opt,name=Prefix,proto3" json:"Prefix,omitempty"`
+	Value  string `protobuf:"bytes,2,opt,name=Value,proto3" json:"Value,omitempty"` //value为空，代表删除
+}
+
+func (x *LouMiaoNoticeValue) Reset() {
+	*x = LouMiaoNoticeValue{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_loumiao_proto_msgTypes[11]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *LouMiaoNoticeValue) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LouMiaoNoticeValue) ProtoMessage() {}
+
+func (x *LouMiaoNoticeValue) ProtoReflect() protoreflect.Message {
+	mi := &file_loumiao_proto_msgTypes[11]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LouMiaoNoticeValue.ProtoReflect.Descriptor instead.
+func (*LouMiaoNoticeValue) Descriptor() ([]byte, []int) {
+	return file_loumiao_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *LouMiaoNoticeValue) GetPrefix() string {
+	if x != nil {
+		return x.Prefix
+	}
+	return ""
+}
+
+func (x *LouMiaoNoticeValue) GetValue() string {
+	if x != nil {
+		return x.Value
+	}
+	return ""
+}
+
+type LouMiaoGetValue struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Prefix  string   `protobuf:"bytes,1,opt,name=Prefix,proto3" json:"Prefix,omitempty"`
+	Prefixs []string `protobuf:"bytes,2,rep,name=Prefixs,proto3" json:"Prefixs,omitempty"` //返回prefix
+	Values  []string `protobuf:"bytes,3,rep,name=Values,proto3" json:"Values,omitempty"`   //返回值
+}
+
+func (x *LouMiaoGetValue) Reset() {
+	*x = LouMiaoGetValue{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_loumiao_proto_msgTypes[12]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *LouMiaoGetValue) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LouMiaoGetValue) ProtoMessage() {}
+
+func (x *LouMiaoGetValue) ProtoReflect() protoreflect.Message {
+	mi := &file_loumiao_proto_msgTypes[12]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LouMiaoGetValue.ProtoReflect.Descriptor instead.
+func (*LouMiaoGetValue) Descriptor() ([]byte, []int) {
+	return file_loumiao_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *LouMiaoGetValue) GetPrefix() string {
+	if x != nil {
+		return x.Prefix
+	}
+	return ""
+}
+
+func (x *LouMiaoGetValue) GetPrefixs() []string {
+	if x != nil {
+		return x.Prefixs
+	}
+	return nil
+}
+
+func (x *LouMiaoGetValue) GetValues() []string {
+	if x != nil {
+		return x.Values
+	}
+	return nil
+}
+
+type LouMiaoAquireLock struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Prefix  string `protobuf:"bytes,1,opt,name=Prefix,proto3" json:"Prefix,omitempty"`
+	TimeOut int32  `protobuf:"varint,2,opt,name=TimeOut,proto3" json:"TimeOut,omitempty"` //超时时间，毫秒；返回时，0代表锁超时
+}
+
+func (x *LouMiaoAquireLock) Reset() {
+	*x = LouMiaoAquireLock{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_loumiao_proto_msgTypes[13]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *LouMiaoAquireLock) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LouMiaoAquireLock) ProtoMessage() {}
+
+func (x *LouMiaoAquireLock) ProtoReflect() protoreflect.Message {
+	mi := &file_loumiao_proto_msgTypes[13]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LouMiaoAquireLock.ProtoReflect.Descriptor instead.
+func (*LouMiaoAquireLock) Descriptor() ([]byte, []int) {
+	return file_loumiao_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *LouMiaoAquireLock) GetPrefix() string {
+	if x != nil {
+		return x.Prefix
+	}
+	return ""
+}
+
+func (x *LouMiaoAquireLock) GetTimeOut() int32 {
+	if x != nil {
+		return x.TimeOut
+	}
+	return 0
+}
+
+type LouMiaoReleaseLock struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Prefix string `protobuf:"bytes,1,opt,name=Prefix,proto3" json:"Prefix,omitempty"`
+}
+
+func (x *LouMiaoReleaseLock) Reset() {
+	*x = LouMiaoReleaseLock{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_loumiao_proto_msgTypes[14]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *LouMiaoReleaseLock) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LouMiaoReleaseLock) ProtoMessage() {}
+
+func (x *LouMiaoReleaseLock) ProtoReflect() protoreflect.Message {
+	mi := &file_loumiao_proto_msgTypes[14]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LouMiaoReleaseLock.ProtoReflect.Descriptor instead.
+func (*LouMiaoReleaseLock) Descriptor() ([]byte, []int) {
+	return file_loumiao_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *LouMiaoReleaseLock) GetPrefix() string {
+	if x != nil {
+		return x.Prefix
+	}
+	return ""
+}
+
 var File_loumiao_proto protoreflect.FileDescriptor
 
 var file_loumiao_proto_rawDesc = []byte{
@@ -599,10 +929,36 @@ var file_loumiao_proto_rawDesc = []byte{
 	0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x54, 0x79, 0x70, 0x65, 0x12, 0x1a, 0x0a, 0x08, 0x46, 0x75,
 	0x6e, 0x63, 0x4e, 0x61, 0x6d, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x46, 0x75,
 	0x6e, 0x63, 0x4e, 0x61, 0x6d, 0x65, 0x12, 0x16, 0x0a, 0x06, 0x42, 0x75, 0x66, 0x66, 0x65, 0x72,
-	0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x06, 0x42, 0x75, 0x66, 0x66, 0x65, 0x72, 0x42, 0x23,
-	0x5a, 0x21, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x73, 0x6e, 0x6f,
-	0x77, 0x79, 0x79, 0x6a, 0x30, 0x30, 0x31, 0x2f, 0x6c, 0x6f, 0x75, 0x6d, 0x69, 0x61, 0x6f, 0x2f,
-	0x6d, 0x73, 0x67, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x06, 0x42, 0x75, 0x66, 0x66, 0x65, 0x72, 0x22, 0x41,
+	0x0a, 0x0f, 0x4c, 0x6f, 0x75, 0x4d, 0x69, 0x61, 0x6f, 0x57, 0x61, 0x74, 0x63, 0x68, 0x4b, 0x65,
+	0x79, 0x12, 0x16, 0x0a, 0x06, 0x50, 0x72, 0x65, 0x66, 0x69, 0x78, 0x18, 0x01, 0x20, 0x01, 0x28,
+	0x09, 0x52, 0x06, 0x50, 0x72, 0x65, 0x66, 0x69, 0x78, 0x12, 0x16, 0x0a, 0x06, 0x6f, 0x70, 0x63,
+	0x6f, 0x64, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x05, 0x52, 0x06, 0x6f, 0x70, 0x63, 0x6f, 0x64,
+	0x65, 0x22, 0x3f, 0x0a, 0x0f, 0x4c, 0x6f, 0x75, 0x4d, 0x69, 0x61, 0x6f, 0x50, 0x75, 0x74, 0x56,
+	0x61, 0x6c, 0x75, 0x65, 0x12, 0x16, 0x0a, 0x06, 0x50, 0x72, 0x65, 0x66, 0x69, 0x78, 0x18, 0x01,
+	0x20, 0x01, 0x28, 0x09, 0x52, 0x06, 0x50, 0x72, 0x65, 0x66, 0x69, 0x78, 0x12, 0x14, 0x0a, 0x05,
+	0x56, 0x61, 0x6c, 0x75, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x56, 0x61, 0x6c,
+	0x75, 0x65, 0x22, 0x42, 0x0a, 0x12, 0x4c, 0x6f, 0x75, 0x4d, 0x69, 0x61, 0x6f, 0x4e, 0x6f, 0x74,
+	0x69, 0x63, 0x65, 0x56, 0x61, 0x6c, 0x75, 0x65, 0x12, 0x16, 0x0a, 0x06, 0x50, 0x72, 0x65, 0x66,
+	0x69, 0x78, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x06, 0x50, 0x72, 0x65, 0x66, 0x69, 0x78,
+	0x12, 0x14, 0x0a, 0x05, 0x56, 0x61, 0x6c, 0x75, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52,
+	0x05, 0x56, 0x61, 0x6c, 0x75, 0x65, 0x22, 0x5b, 0x0a, 0x0f, 0x4c, 0x6f, 0x75, 0x4d, 0x69, 0x61,
+	0x6f, 0x47, 0x65, 0x74, 0x56, 0x61, 0x6c, 0x75, 0x65, 0x12, 0x16, 0x0a, 0x06, 0x50, 0x72, 0x65,
+	0x66, 0x69, 0x78, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x06, 0x50, 0x72, 0x65, 0x66, 0x69,
+	0x78, 0x12, 0x18, 0x0a, 0x07, 0x50, 0x72, 0x65, 0x66, 0x69, 0x78, 0x73, 0x18, 0x02, 0x20, 0x03,
+	0x28, 0x09, 0x52, 0x07, 0x50, 0x72, 0x65, 0x66, 0x69, 0x78, 0x73, 0x12, 0x16, 0x0a, 0x06, 0x56,
+	0x61, 0x6c, 0x75, 0x65, 0x73, 0x18, 0x03, 0x20, 0x03, 0x28, 0x09, 0x52, 0x06, 0x56, 0x61, 0x6c,
+	0x75, 0x65, 0x73, 0x22, 0x45, 0x0a, 0x11, 0x4c, 0x6f, 0x75, 0x4d, 0x69, 0x61, 0x6f, 0x41, 0x71,
+	0x75, 0x69, 0x72, 0x65, 0x4c, 0x6f, 0x63, 0x6b, 0x12, 0x16, 0x0a, 0x06, 0x50, 0x72, 0x65, 0x66,
+	0x69, 0x78, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x06, 0x50, 0x72, 0x65, 0x66, 0x69, 0x78,
+	0x12, 0x18, 0x0a, 0x07, 0x54, 0x69, 0x6d, 0x65, 0x4f, 0x75, 0x74, 0x18, 0x02, 0x20, 0x01, 0x28,
+	0x05, 0x52, 0x07, 0x54, 0x69, 0x6d, 0x65, 0x4f, 0x75, 0x74, 0x22, 0x2c, 0x0a, 0x12, 0x4c, 0x6f,
+	0x75, 0x4d, 0x69, 0x61, 0x6f, 0x52, 0x65, 0x6c, 0x65, 0x61, 0x73, 0x65, 0x4c, 0x6f, 0x63, 0x6b,
+	0x12, 0x16, 0x0a, 0x06, 0x50, 0x72, 0x65, 0x66, 0x69, 0x78, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09,
+	0x52, 0x06, 0x50, 0x72, 0x65, 0x66, 0x69, 0x78, 0x42, 0x23, 0x5a, 0x21, 0x67, 0x69, 0x74, 0x68,
+	0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x73, 0x6e, 0x6f, 0x77, 0x79, 0x79, 0x6a, 0x30, 0x30,
+	0x31, 0x2f, 0x6c, 0x6f, 0x75, 0x6d, 0x69, 0x61, 0x6f, 0x2f, 0x6d, 0x73, 0x67, 0x62, 0x06, 0x70,
+	0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -617,7 +973,7 @@ func file_loumiao_proto_rawDescGZIP() []byte {
 	return file_loumiao_proto_rawDescData
 }
 
-var file_loumiao_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_loumiao_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
 var file_loumiao_proto_goTypes = []interface{}{
 	(*LouMiaoLoginGate)(nil),     // 0: msg.LouMiaoLoginGate
 	(*LouMiaoRpcRegister)(nil),   // 1: msg.LouMiaoRpcRegister
@@ -628,6 +984,12 @@ var file_loumiao_proto_goTypes = []interface{}{
 	(*LouMiaoBindGate)(nil),      // 6: msg.LouMiaoBindGate
 	(*LouMiaoBroadCastMsg)(nil),  // 7: msg.LouMiaoBroadCastMsg
 	(*TestEncodeMsg)(nil),        // 8: msg.TestEncodeMsg
+	(*LouMiaoWatchKey)(nil),      // 9: msg.LouMiaoWatchKey
+	(*LouMiaoPutValue)(nil),      // 10: msg.LouMiaoPutValue
+	(*LouMiaoNoticeValue)(nil),   // 11: msg.LouMiaoNoticeValue
+	(*LouMiaoGetValue)(nil),      // 12: msg.LouMiaoGetValue
+	(*LouMiaoAquireLock)(nil),    // 13: msg.LouMiaoAquireLock
+	(*LouMiaoReleaseLock)(nil),   // 14: msg.LouMiaoReleaseLock
 }
 var file_loumiao_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for method output_type
@@ -751,6 +1113,78 @@ func file_loumiao_proto_init() {
 				return nil
 			}
 		}
+		file_loumiao_proto_msgTypes[9].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*LouMiaoWatchKey); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_loumiao_proto_msgTypes[10].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*LouMiaoPutValue); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_loumiao_proto_msgTypes[11].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*LouMiaoNoticeValue); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_loumiao_proto_msgTypes[12].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*LouMiaoGetValue); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_loumiao_proto_msgTypes[13].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*LouMiaoAquireLock); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_loumiao_proto_msgTypes[14].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*LouMiaoReleaseLock); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -758,7 +1192,7 @@ func file_loumiao_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_loumiao_proto_rawDesc,
 			NumEnums:      0,
-			NumMessages:   9,
+			NumMessages:   15,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
