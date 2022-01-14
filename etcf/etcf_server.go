@@ -30,7 +30,7 @@ type EtcfServer struct {
 
 	mWatchKeys   map[string]map[int]bool //prefix -> [socket id][true]
 	mStoreValues map[string]string       //prefix -> value
-	mStoreServices map[string]bool       //prefix -> bool
+	//mStoreServices map[string]bool       //prefix -> bool
 	mStoreLocks map[string]int		//prefix -> time
 	mStoreLockWaiters map[string][]int	//prefix -> uids
 }
@@ -51,6 +51,7 @@ func (self *EtcfServer) DoInit() bool {
 	self.mStoreValues = make(map[string]string)
 	self.mStoreLocks = make(map[string]int)
 	self.mStoreLockWaiters = make(map[string][]int)
+	//self.mStoreServices = make(map[string]bool)
 
 	return true
 }
@@ -96,21 +97,23 @@ func (self *EtcfServer) DoDestory() {
 }
 
 func (self *EtcfServer) addWatch(prefix string, sid int) {
-	llog.Infof("EtcfServer addWatch: prefix = %s, sid = %d", prefix, sid)
+	llog.Debugf("EtcfServer addWatch: prefix = %s, sid = %d", prefix, sid)
 	vals, ok := self.mWatchKeys[prefix]
 	if !ok {
 		vals = make(map[int]bool)
 		self.mWatchKeys[prefix] = vals
 	}
 	vals[sid] = true
-	
-	if value, ok := self.mStoreValues[prefix]; ok {
-		self.broadCastValue(prefix, value)
+
+	for key, value := range This.mStoreValues {
+		if strings.HasPrefix(key, prefix) {
+			self.broadCastValue(key, value)
+		}
 	}
 }
 
 func (self *EtcfServer) removeWatch(prefix string, sid int) {
-	llog.Infof("EtcfServer removeWatch: prefix = %s, sid = %d", prefix, sid)
+	llog.Debugf("EtcfServer removeWatch: prefix = %s, sid = %d", prefix, sid)
 	vals, ok := self.mWatchKeys[prefix]
 	if !ok {
 		return
@@ -118,25 +121,30 @@ func (self *EtcfServer) removeWatch(prefix string, sid int) {
 	delete(vals, sid)
 }
 
-func (self *EtcfServer) putValue(prefix string, value string, service bool) {
-	llog.Infof("EtcfServer putValue: prefix = %s, value = %s", prefix, value)
-	if _, ok := self.mStoreValues[prefix]; ok {
-		return
-	}
-	self.mStoreValues[prefix] = value
-	self.broadCastValue(prefix, value)
-
-	if service {
-		self.mStoreServices[prefix] = true
+func (self *EtcfServer) removeAllWatchById(sid int) {
+	llog.Debugf("EtcfServer removeAllWatchById: socketid = %d", sid)
+	for _, vals := range self.mWatchKeys {
+		for k, _ := range vals {
+			if k == sid {
+				delete(vals, k)
+				break
+			}
+		}
 	}
 }
 
+
+func (self *EtcfServer) putValue(prefix string, value string) {
+	llog.Debugf("EtcfServer putValue: prefix = %s, value = %s", prefix, value)
+	self.mStoreValues[prefix] = value
+	self.broadCastValue(prefix, value)
+}
+
 func (self *EtcfServer) removeValue(prefix string) {
-	llog.Infof("EtcfServer removeValue: prefix = %s", prefix)
+	llog.Debugf("EtcfServer removeValue: prefix = %s", prefix)
 	if _, ok := self.mStoreValues[prefix]; ok {
 		delete(self.mStoreValues, prefix)
 		self.broadCastValue(prefix, "")
-		delete(self.mStoreServices, prefix)
 	}
 }
 
@@ -147,7 +155,7 @@ func (self *EtcfServer) broadCastValue(prefix string, value string) {
 	buff, _ := message.Encode(0, "LouMiaoNoticeValue", req)
 
 	for key, vals := range self.mWatchKeys {
-		if strings.HasPrefix(key, prefix) {
+		if strings.HasPrefix(prefix, key) {
 			for sid, _ := range vals {
 				This.pInnerService.SendById(sid, buff)
 			}
@@ -180,7 +188,7 @@ func (self *EtcfServer) lockTimeout(param interface{}) {
 func packetFunc(socketid int, buff []byte, nlen int) bool {
 	//llog.Debugf("packetFunc: socketid=%d, bufferlen=%d", socketid, nlen)
 	_, name, buffbody, err := message.UnPackHead(buff, nlen)
-	//llog.Debugf("packetFunc  %s %v", name, pm)
+	//llog.Debugf("packetFunc  %s", name)
 	if nil != err {
 		llog.Errorf("packetFunc Decode error: %s", err.Error())
 		//This.closeClient(socketid)

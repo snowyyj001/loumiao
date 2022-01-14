@@ -18,7 +18,7 @@ func innerConnect(igo gorpc.IGoRoutine, socketId int, data []byte) {
 //client disconnect
 func innerDisConnect(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	llog.Debugf("etcf server innerDisConnect: %d", socketId)
-
+	This.removeAllWatchById(socketId)
 }
 
 //watch/remove key
@@ -41,9 +41,9 @@ func innerLouMiaoPutValue(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	if message.UnPack(req, data) != nil {
 		return
 	}
-	llog.Debugf("innerLouMiaoPutValue: %v", req)
+	//llog.Debugf("innerLouMiaoPutValue: %v", req)
 	if len(req.Value) > 0 {
-		This.putValue(req.Prefix, req.Value, req.Service)
+		This.putValue(req.Prefix, req.Value)
 	} else {
 		This.removeValue(req.Prefix)
 	}
@@ -129,11 +129,14 @@ func innerLouMiaoReleaseLock(igo gorpc.IGoRoutine, socketId int, data []byte) {
 
 //lease
 func innerLouMiaoLease(igo gorpc.IGoRoutine, socketId int, data []byte) {
-	/*req := &msg.LouMiaoLease{}
+	req := &msg.LouMiaoLease{}
 	if message.UnPack(req, data) != nil {
 		return
 	}
-	llog.Debugf("innerLouMiaoLease: %v", req)*/
-	llog.Debugf("innerLouMiaoLease: socketId = %d", socketId)
-	This.pInnerService.SendById(socketId, data)
+	//llog.Debugf("innerLouMiaoLease: %v", req)
+
+	resp := &msg.LouMiaoLease{}
+	resp.Uid = req.Uid
+	buff, _ := message.Encode(0, "LouMiaoLease", resp)
+	This.pInnerService.SendById(socketId, buff)
 }
