@@ -3,6 +3,7 @@ package gate
 
 import (
 	"fmt"
+	"github.com/snowyyj001/loumiao/etcf"
 	"sync"
 
 	"github.com/snowyyj001/loumiao/base/maps"
@@ -13,7 +14,6 @@ import (
 
 	"github.com/snowyyj001/loumiao/config"
 	"github.com/snowyyj001/loumiao/define"
-	"github.com/snowyyj001/loumiao/etcd"
 	"github.com/snowyyj001/loumiao/gorpc"
 	"github.com/snowyyj001/loumiao/llog"
 	"github.com/snowyyj001/loumiao/network"
@@ -169,27 +169,22 @@ func (self *GateServer) DoRegsiter() {
 
 //begin communicate with other nodes
 func (self *GateServer) DoStart() {
-	llog.Info("GateServer DoStart")
+	llog.Info("GateServerDoStart")
 
-	//etcd client
-	err := etcd.NewClientDis(config.Cfg.EtcdAddr)
-	if util.CheckErr(err) {
-		llog.Fatalf("etcd connect failed: %v", config.Cfg.EtcdAddr)
-	}
-	//nodemgr.ServerEnabled = true
-	//etcd.EtcdClient.PutStatus()  //服务如果异常关闭，是没有撤销租约的，在三秒内重启会保留上次状态(可能是关闭状态)，这里强制刷新一下，
-	//nodemgr.ServerEnabled = false
+	//etcf client
+	etcf.NewEtcf()
+
 	timer.DelayJob(100, func() { //delay 100ms, that all RegisterRpcHandler should be compled
 		//server discover
-		//watch all node
-		err = etcd.EtcdClient.WatchCommon(fmt.Sprintf("%s%d", define.ETCD_NODESTATUS, config.NET_NODE_ID), self.serverStatusUpdate)
-		if err != nil {
-			llog.Fatalf("etcd watch ETCD_NODESTATUS error : %s", err.Error())
-		}
 		//watch status
-		err = etcd.EtcdClient.WatchCommon(fmt.Sprintf("%s%d", define.ETCD_NODEINFO, config.NET_NODE_ID), self.newServerDiscover)
-		if err != nil {
-			llog.Fatalf("etcd watch NET_GATE_SADDR error : %s", err.Error())
+		ok := etcf.WatchKey(fmt.Sprintf("%s%d", define.ETCD_NODESTATUS, config.NET_NODE_ID), self.serverStatusUpdate)
+		if !ok {
+			llog.Fatal("etcf watch ETCD_NODESTATUS error")
+		}
+		//watch all node
+		ok = etcf.WatchKey(fmt.Sprintf("%s%d", define.ETCD_NODEINFO, config.NET_NODE_ID), self.newServerDiscover)
+		if !ok {
+			llog.Fatal("etcf watch NET_GATE_SADDR error")
 		}
 	}, false)
 	lnats.SubscribeAsyn(define.TOPIC_SERVER_LOG, llog.Tp_SetLevel)
@@ -206,12 +201,11 @@ func (self *GateServer) DoOpen() {
 	}
 
 	nodemgr.ServerEnabled = true
-	etcd.EtcdClient.PutStatus()  //服务如果异常关闭，是没有撤销租约的，在三秒内重启会保留上次状态(可能是关闭状态)，这里强制刷新一下，
+	etcf.PutStatus()  //服务如果异常关闭，是没有撤销租约的，在三秒内重启会保留上次状态(可能是关闭状态)，这里强制刷新一下，
 
-	//register to etcd when the socket is ok
-	if err := etcd.EtcdClient.PutNode(); err != nil {
-		llog.Fatalf("etcd PutService error %v", err)
-	}
+	//register to etcf when the socket is ok
+	etcf.PutNode()
+
 
 	nodemgr.ServerEnabled = true
 	llog.Infof("GateServer DoOpen success: name=%s,saddr=%s,uid=%d", self.Name, config.NET_GATE_SADDR, config.SERVER_NODE_UID)
@@ -284,7 +278,7 @@ func (self *GateServer) newServerDiscover(key, val string, dis bool) {
 
 	if node.Type == config.ServerType_RPCGate {
 		rpcClient := self.GetRpcClient(node.Uid)
-		if rpcClient == nil { //this conditation can be etcd reconnect
+		if rpcClient == nil { //this conditation can be etcf reconnect
 			client := self.buildClient(node.Uid, node.SAddr)
 			if self.enableClient(client) {
 				m := &gorpc.M{Id: node.Uid, Data: client, Param: 0} //rpc client
@@ -294,7 +288,7 @@ func (self *GateServer) newServerDiscover(key, val string, dis bool) {
 	} else if node.Type != config.ServerType_Gate && node.Type != config.ServerType_Account {
 		if config.NET_NODE_TYPE == config.ServerType_Gate { //网关直连其他server转发来客户端和其他server的网络消息，不使用rpc方式
 			rpcClient := self.GetRpcClient(node.Uid)
-			if rpcClient == nil { //this conditation can be etcd reconnect
+			if rpcClient == nil { //this conditation can be etcf reconnect
 				client := self.buildClient(node.Uid, node.SAddr)
 				if self.enableClient(client) {
 					m := &gorpc.M{Id: node.Uid, Data: client, Param: 1} //client client
@@ -319,7 +313,6 @@ func (self *GateServer) enableClient(client *network.ClientSocket) bool {
 func (self *GateServer) DoDestory() {
 	llog.Info("GateServer DoDestory")
 	nodemgr.ServerEnabled = false
-	etcd.EtcdClient.RevokeLease()
 }
 
 //goroutine unsafe

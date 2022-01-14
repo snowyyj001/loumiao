@@ -3,13 +3,13 @@ package rpcgate
 
 import (
 	"fmt"
+	"github.com/snowyyj001/loumiao/etcf"
 	"sync"
 
 	"github.com/snowyyj001/loumiao/message"
 
 	"github.com/snowyyj001/loumiao/config"
 	"github.com/snowyyj001/loumiao/define"
-	"github.com/snowyyj001/loumiao/etcd"
 	"github.com/snowyyj001/loumiao/gorpc"
 	"github.com/snowyyj001/loumiao/llog"
 	"github.com/snowyyj001/loumiao/network"
@@ -82,24 +82,21 @@ func (self *RpcGateServer) DoRegsiter() {
 func (self *RpcGateServer) DoStart() {
 	llog.Info("RpcGateServer DoStart")
 
-	//etcd client
-	err := etcd.NewClientDis(config.Cfg.EtcdAddr)
-	if util.CheckErr(err) {
-		llog.Fatalf("etcd connect failed: %v", config.Cfg.EtcdAddr)
-	}
+	//etcf client
+	etcf.NewEtcf()
 	nodemgr.ServerEnabled = true
-	etcd.EtcdClient.PutStatus() //服务如果异常关闭，是没有撤销租约的，在三秒内重启会保留上次状态，这里强制刷新一下
+	etcf.PutStatus() //服务如果异常关闭，是没有撤销租约的，在三秒内重启会保留上次状态，这里强制刷新一下
 
 	//server discover
 	//watch status, for balance
-	err = etcd.EtcdClient.WatchCommon(fmt.Sprintf("%s%d", define.ETCD_NODESTATUS, config.NET_NODE_ID), self.serverStatusUpdate)
-	if err != nil {
-		llog.Fatalf("etcd watch ETCD_NODESTATUS error : %s", err.Error())
+	ok := etcf.WatchKey(fmt.Sprintf("%s%d", define.ETCD_NODESTATUS, config.NET_NODE_ID), self.serverStatusUpdate)
+	if !ok {
+		llog.Fatal("etcf watch ETCD_NODESTATUS error",)
 	}
 	//watch all node, just for account, to gate balance
-	err = etcd.EtcdClient.WatchCommon(fmt.Sprintf("%s%d", define.ETCD_NODEINFO, config.NET_NODE_ID), self.newServerDiscover)
-	if err != nil {
-		llog.Fatalf("etcd watch NET_GATE_SADDR error : %s", err.Error())
+	ok = etcf.WatchKey(fmt.Sprintf("%s%d", define.ETCD_NODEINFO, config.NET_NODE_ID), self.newServerDiscover)
+	if !ok {
+		llog.Fatal("etcf watch NET_GATE_SADDR error")
 	}
 	llog.Infof("RpcGateServer DoStart success: name=%s,saddr=%s,uid=%d", self.Name, config.NET_GATE_SADDR, config.SERVER_NODE_UID)
 }
@@ -108,8 +105,8 @@ func (self *RpcGateServer) DoStart() {
 func (self *RpcGateServer) DoOpen() {
 	util.Assert(self.pInnerService.Start(), fmt.Sprintf("GateServer listen failed: saddr=%s", self.pInnerService.GetSAddr()))
 
-	//register to etcd when the socket is ok
-	etcd.EtcdClient.PutNode()
+	//register to etcf when the socket is ok
+	etcf.PutNode()
 
 	llog.Infof("RpcGateServer DoOpen success: name=%s,saddr=%s,uid=%d", self.Name, config.NET_GATE_SADDR, config.SERVER_NODE_UID)
 

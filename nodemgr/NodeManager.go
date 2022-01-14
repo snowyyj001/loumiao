@@ -76,6 +76,10 @@ func NodeStatusUpdate(key string, val string, dis bool) *NodeInfo {
 	if areaid != config.NET_NODE_ID { //不关心其他服的情况
 		return
 	}*/
+	if len(arrStr) < 3 {
+		llog.Errorf("NodeStatusUpdate illegal status prefix: %s", key)
+		return nil
+	}
 
 	saddr := arrStr[3]
 	//llog.Debugf("NodeStatusUpdate: key=%s,val=%s,dis=%t,saddr=%s", key, val, dis, saddr)
@@ -118,7 +122,7 @@ func NodeDiscover(key string, val string, dis bool) *NodeInfo {
 	llog.Debugf("NodeDiscover: key=%s,val=%s,dis=%t,saddr=%s", key, val, dis, saddr)
 	if dis == true {
 		node := GetNodeByAddr(saddr)
-		if node == nil { //maybe, etcd still have older data, etcd has a huge delay
+		if node == nil { //maybe, etcf still have older data, etcf has a huge delay
 			node = new(NodeInfo)
 			node.SocketActive = true
 		}
