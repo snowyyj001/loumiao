@@ -14,6 +14,10 @@ import (
 	"github.com/snowyyj001/loumiao/util"
 )
 
+/*
+* 纯内存的etcd
+ */
+
 var (
 	This        *EtcfServer
 	handler_Map map[string]string
@@ -26,6 +30,7 @@ type EtcfServer struct {
 
 	mWatchKeys   map[string]map[int]bool //prefix -> [socket id][true]
 	mStoreValues map[string]string       //prefix -> value
+	mStoreServices map[string]bool       //prefix -> bool
 	mStoreLocks map[string]int		//prefix -> time
 	mStoreLockWaiters map[string][]int	//prefix -> uids
 }
@@ -74,6 +79,9 @@ func (self *EtcfServer) DoRegsiter() {
 	handler_Map["LouMiaoReleaseLock"] = "EtcfServer"
 	self.RegisterGate("LouMiaoReleaseLock", innerLouMiaoReleaseLock)
 
+	handler_Map["LouMiaoLease"] = "EtcfServer"
+	self.RegisterGate("LouMiaoLease", innerLouMiaoLease)
+
 }
 
 func (self *EtcfServer) DoStart() {
@@ -110,13 +118,17 @@ func (self *EtcfServer) removeWatch(prefix string, sid int) {
 	delete(vals, sid)
 }
 
-func (self *EtcfServer) putValue(prefix string, value string) {
+func (self *EtcfServer) putValue(prefix string, value string, service bool) {
 	llog.Infof("EtcfServer putValue: prefix = %s, value = %s", prefix, value)
 	if _, ok := self.mStoreValues[prefix]; ok {
 		return
 	}
 	self.mStoreValues[prefix] = value
 	self.broadCastValue(prefix, value)
+
+	if service {
+		self.mStoreServices[prefix] = true
+	}
 }
 
 func (self *EtcfServer) removeValue(prefix string) {
@@ -124,9 +136,9 @@ func (self *EtcfServer) removeValue(prefix string) {
 	if _, ok := self.mStoreValues[prefix]; ok {
 		delete(self.mStoreValues, prefix)
 		self.broadCastValue(prefix, "")
+		delete(self.mStoreServices, prefix)
 	}
 }
-
 
 func (self *EtcfServer) broadCastValue(prefix string, value string) {
 	req := new(msg.LouMiaoNoticeValue)

@@ -28,7 +28,7 @@ func innerLouMiaoWatchKey(igo gorpc.IGoRoutine, socketId int, data []byte) {
 		return
 	}
 	llog.Debugf("innerLouMiaoWatchKey: %v", req)
-	if req.Opcode == 1 {
+	if req.Opcode == msg.LouMiaoWatchKey_ADD {
 		This.addWatch(req.Prefix, socketId)
 	} else {
 		This.removeWatch(req.Prefix, socketId)
@@ -43,7 +43,7 @@ func innerLouMiaoPutValue(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	}
 	llog.Debugf("innerLouMiaoPutValue: %v", req)
 	if len(req.Value) > 0 {
-		This.putValue(req.Prefix, req.Value)
+		This.putValue(req.Prefix, req.Value, req.Service)
 	} else {
 		This.removeValue(req.Prefix)
 	}
@@ -125,4 +125,15 @@ func innerLouMiaoReleaseLock(igo gorpc.IGoRoutine, socketId int, data []byte) {
 			This.mStoreLockWaiters[req.Prefix] = arr
 		}
 	}
+}
+
+//lease
+func innerLouMiaoLease(igo gorpc.IGoRoutine, socketId int, data []byte) {
+	/*req := &msg.LouMiaoLease{}
+	if message.UnPack(req, data) != nil {
+		return
+	}
+	llog.Debugf("innerLouMiaoLease: %v", req)*/
+	llog.Debugf("innerLouMiaoLease: socketId = %d", socketId)
+	This.pInnerService.SendById(socketId, data)
 }
