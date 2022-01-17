@@ -3,12 +3,11 @@ package gate
 
 import (
 	"fmt"
-	"github.com/snowyyj001/loumiao/etcf"
-	"sync"
-
 	"github.com/snowyyj001/loumiao/base/maps"
+	"github.com/snowyyj001/loumiao/etcf"
 	"github.com/snowyyj001/loumiao/message"
 	"github.com/snowyyj001/loumiao/timer"
+	"sync"
 
 	"github.com/snowyyj001/loumiao/lnats"
 
@@ -169,7 +168,7 @@ func (self *GateServer) DoRegsiter() {
 
 //begin communicate with other nodes
 func (self *GateServer) DoStart() {
-	llog.Info("GateServerDoStart")
+	llog.Info("GateServer.DoStart")
 
 	//etcf client
 	etcf.NewEtcf()
