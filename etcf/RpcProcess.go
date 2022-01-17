@@ -1,6 +1,7 @@
 package etcf
 
 import (
+	"github.com/snowyyj001/loumiao/timer"
 	"github.com/snowyyj001/loumiao/util"
 	"github.com/snowyyj001/loumiao/gorpc"
 	"github.com/snowyyj001/loumiao/llog"
@@ -78,18 +79,35 @@ func innerLouMiaoAquireLock(igo gorpc.IGoRoutine, socketId int, data []byte) {
 		req.TimeOut = 1000
 	}
 	llog.Debugf("innerLouMiaoAquireLock: %v", req)
-	nt := util.TimeStamp()
-	stam, ok := This.mStoreLocks[req.Prefix]
-	if !ok {
-		stam = int(nt) + int(req.TimeOut)
-		This.mStoreLocks[req.Prefix] = stam		//直接拿到锁，先到先得
+	if len(req.Value) > 0 {			//选举leader
+		key := "leader:" + req.Prefix + ":" + req.Value
+		_ , ok := This.mStoreLeaderValues.LoadOrStore(key, true)
+		if ok {
+			req.TimeOut = 0		//slave
+			buff, _ := message.Encode(0, "LouMiaoAquireLock", req)
+			This.pInnerService.SendById(socketId, buff)
+		} else {		//master
+			buff, _ := message.Encode(0, "LouMiaoAquireLock", req)
+			This.pInnerService.SendById(socketId, buff)
+			timer.DelayJob(60 * 60 * 1000, func() {		//一小时后删除这个leader key，主要是为了清理内存
+				llog.Warningf("innerLouMiaoAquireLock: %s", key)
+				This.mStoreLeaderValues.Delete(key)
+			}, false)
+		}
+	} else {
+		nt := util.TimeStamp()
+		stam, ok := This.mStoreLocks[req.Prefix]
+		if !ok {
+			stam = int(nt) + int(req.TimeOut)
+			This.mStoreLocks[req.Prefix] = stam		//直接拿到锁，先到先得
 
-		This.RunTicker(int(req.TimeOut), This.lockTimeout, req.Prefix)
+			This.RunTicker(int(req.TimeOut), This.lockTimeout, req.Prefix)
 
-		buff, _ := message.Encode(0, "LouMiaoAquireLock", req)
-		This.pInnerService.SendById(socketId, buff)
-	} else {		//等待锁的释放
-		This.mStoreLockWaiters[req.Prefix] = append(This.mStoreLockWaiters[req.Prefix], socketId)
+			buff, _ := message.Encode(0, "LouMiaoAquireLock", req)
+			This.pInnerService.SendById(socketId, buff)
+		} else {		//等待锁的释放
+			This.mStoreLockWaiters[req.Prefix] = append(This.mStoreLockWaiters[req.Prefix], socketId)
+		}
 	}
 }
 

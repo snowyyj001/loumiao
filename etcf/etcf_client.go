@@ -213,7 +213,7 @@ func AquireLock(key string, expire int) int {
 	case left := <- ch.(chan int):
 		return left
 	case <-time.After(time.Duration(expire) * time.Millisecond):
-		llog.Errorf("EtcfClient.AquireLock timeout: %s",  key)
+		llog.Warningf("EtcfClient.AquireLock timeout: %s",  key)
 		return 0
 	}
 }
@@ -233,6 +233,39 @@ func UnLock(key string) {
 	Client.pInnerService.Send(buff)
 
 	llog.Infof("EtcfClient.UnLock: key = %s", key)
+}
+
+//选举leader，所有参与选举的人使用相同的value和prefix，leader负责设置value
+//同redisdb的AquireLeader
+//@prefix: 选举区分标识
+//@value: 本次选举的值，每次发起选举，value应该和上次选举时的value不同
+//@return: 是否是leader
+func AquireLeader(key string, value string) (isleader bool) {
+	if !Client.netStatus {
+		llog.Errorf("EtcfClient.AquireLeader: key = %s, server not connected", key)
+		return false
+	}
+	req := &msg.LouMiaoAquireLock{}
+	req.Prefix = key
+	req.TimeOut = 1000
+	req.Value = value
+
+	buff, _ := message.Encode(0, "LouMiaoAquireLock", req)
+	Client.pInnerService.Send(buff)
+
+	llog.Infof("EtcfClient.AquireLeader: key = %s, value = %s", key, value)
+	ch, ok := Client.mChanAquireLock.Load(key)
+	if !ok {
+		ch = make(chan int)
+		Client.mChanAquireLock.Store(key, ch)
+	}
+	select {
+	case left := <- ch.(chan int):
+		return left > 0
+	case <-time.After(time.Duration(1000) * time.Millisecond):
+		llog.Warningf("EtcfClient.AquireLeader timeout: %s",  key)
+		return false
+	}
 }
 
 //获取值
@@ -374,7 +407,7 @@ func innerClientLouMiaoAquireLock( socketId int, data []byte) {
 	select {
 	case ch.(chan int) <- int(req.TimeOut):
 	case <-time.After(WRITE_VALUE_TIMEOUT * time.Millisecond):
-		llog.Errorf("innerClientLouMiaoAquireLock timeout: %s",  req.Prefix)
+		llog.Warningf("innerClientLouMiaoAquireLock timeout: %s",  req.Prefix)
 	}
 }
 

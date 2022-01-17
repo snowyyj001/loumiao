@@ -6,6 +6,7 @@ import (
 	"github.com/snowyyj001/loumiao/msg"
 	"strings"
 	"fmt"
+	"sync"
 
 	"github.com/snowyyj001/loumiao/config"
 	"github.com/snowyyj001/loumiao/gorpc"
@@ -30,7 +31,7 @@ type EtcfServer struct {
 
 	mWatchKeys   map[string]map[int]bool //prefix -> [socket id][true]
 	mStoreValues map[string]string       //prefix -> value
-	//mStoreServices map[string]bool       //prefix -> bool
+	mStoreLeaderValues sync.Map       //prefix -> bool
 	mStoreLocks map[string]int		//prefix -> time
 	mStoreLockWaiters map[string][]int	//prefix -> uids
 }
@@ -51,7 +52,7 @@ func (self *EtcfServer) DoInit() bool {
 	self.mStoreValues = make(map[string]string)
 	self.mStoreLocks = make(map[string]int)
 	self.mStoreLockWaiters = make(map[string][]int)
-	//self.mStoreServices = make(map[string]bool)
+	//self.mStoreLeaderValues = make(map[string]string)
 
 	return true
 }
@@ -181,7 +182,6 @@ func (self *EtcfServer) lockTimeout(param interface{}) {
 		delete(self.mStoreLockWaiters, prefix)
 	}
 }
-
 
 //goroutine unsafe
 //net msg handler,this func belong to socket's goroutine

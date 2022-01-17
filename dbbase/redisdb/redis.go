@@ -99,7 +99,7 @@ func AquireLock(key string, expiretime int) int {
 	if ret == nil && expiretime > 0 {
 		nt := util.TimeStamp()
 		for {
-			time.Sleep(50 * time.Millisecond) //等待50ms再次尝试
+			time.Sleep(30 * time.Millisecond) //等待30ms再次尝试
 			ret, err = db.Do("SET", key, val, "NX", "PX", et)
 			if ret != nil {
 				break
@@ -645,12 +645,13 @@ func ZscanSimple(key string, call func(key string, score int) )  {
 //@value: 本次选举的值，每次发起选举，value应该和上次选举时的value不同
 func AquireLeader(prefix string, value int) (isleader bool) {
 	isleader = false
-	val := AquireLock(prefix, 200)
+	val := AquireLock(prefix, 1000)
 	if val > 0 { //拿到锁了
-		key := prefix + "leader"
+		key := "leader:" + prefix + ":" + util.Itoa(value)
 		val, _ = GetInt(key)
 		if val != value { //还未被设置
 			Set(key, value)
+			Expire(key, 60*60)		//一小时后删除这个leader key，主要是为了清理内存
 			isleader = true
 		}
 		UnLock(prefix, val)
