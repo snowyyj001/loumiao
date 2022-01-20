@@ -1,0 +1,26 @@
+热更新so主要用来紧急修复代码bug，功能更新还需要AB切换方式
+操作步奏如下：
+1. 在对应actor的模块下编写修复bug的代码，
+例如fix_gate_server.1.go，一般规则为：
+
+替换GoRoutineLogic.NetHandler函数[网络消息和rpc调用]
+//覆盖gate_server的innerConnect
+igo.RegisterGate("innerConnect", innerConnect_hotfix)
+
+或替换GoRoutineLogic.Cmd函数[actor调用]
+//覆盖gate_server的SendRpc
+igo.Register("SendRpc", sendRpc_hotfix)
+
+基本上通过替换这三种访问就可以实现大部分的bug修复
+
+2.在hotfix.go文件中调用actor的fix代码，例如
+gate.Fix_bug_1()
+
+3.编译so，例如
+go build --buildmode=plugin -o hotfix.1.so hotfix.go
+
+4.通过后台发送热更命令(下载更新的so并执行hotfix)
+
+Notice:
+因为NetHandler和Cmd只涉及现有key的value覆盖操作，不会新增和删除key，所以不会出现map异步crash问题
+plugin.Open对同名的so只会加载一次，需要维护一个版本号，区别每次的更新so
