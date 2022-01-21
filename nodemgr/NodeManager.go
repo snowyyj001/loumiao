@@ -150,7 +150,7 @@ func GetBalanceServer(widthgate bool, widthworld bool) (string, int) {
 		//llog.Debugf("GetBalanceServer %t, %d, %d", node.SocketActive , node.Number, node.Type)
 		if widthgate {
 			if node.SocketActive && node.Number <= minNum && node.Type == config.ServerType_Gate {
-				if node.Number == minNum {
+				if node.Number == minNum {		//最少的可能会有多个，如果只挑选一个，由于延迟问题会导致全部命中第一个
 					saddr = append(saddr, val)
 				} else {
 					saddr = []string{val}
@@ -160,7 +160,7 @@ func GetBalanceServer(widthgate bool, widthworld bool) (string, int) {
 		}
 		if widthworld == true {
 			if node.SocketActive && node.Number <= minNum_2 && node.Type == config.ServerType_World {
-				if node.Number == minNum_2 {
+				if node.Number == minNum_2 {		//最少的可能会有多个，如果只挑选一个，由于延迟问题会导致全部命中第一个
 					worlduid = append(worlduid, node.Uid)
 				} else {
 					worlduid = []int{node.Uid}
