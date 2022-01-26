@@ -22,7 +22,8 @@ const (
 	ServerType_WEB_GM           //8 web gm
 	ServerType_WEB_LOGIN        //9 web login
 	ServerType_RPCGate          //10 rpc gate
-	ServerType_ETCF             // 11 配置中心
+	ServerType_ETCF             //11 配置中心
+	ServerType_LOGINQUEUE		//12 排队
 )
 
 var (
@@ -39,6 +40,7 @@ var (
 		ServerType_WEB_LOGIN: "weblogin",
 		ServerType_RPCGate:   "rpcserver",
 		ServerType_ETCF:      "etcfserver",
+		ServerType_LOGINQUEUE: "queueserver",
 	}
 )
 
