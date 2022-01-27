@@ -76,7 +76,7 @@ func onClientConnected(uid int, tid int) {
 //client/gate disconnected to gate/server
 func onClientDisConnected(uid int, tid int) {
 	llog.Debugf("GateServer onClientDisConnected: uid=%d,tid=%d", uid, tid)
-	if config.NET_NODE_TYPE == config.ServerType_Gate { //gate
+	if config.NET_NODE_TYPE == config.ServerType_Gate { ////tell world that a client has disconnect with this gate
 		req := &msg.LouMiaoClientConnect{ClientId: int64(uid), GateId: int32(config.SERVER_NODE_UID), State: define.CLIENT_DISCONNECT}
 		buff, _ := message.Encode(0, "LouMiaoClientConnect", req)
 		This.SendServer(tid, buff)
@@ -421,11 +421,15 @@ func recvPackMsgClient(igo gorpc.IGoRoutine, data interface{}) interface{} {
 		llog.Warningf("1.recvPackMsgClient msg, but server has lost, target=%d ", target)
 		return nil
 	}
+	//客户端不接受传uid，只接受server type
+	//所以这里做一次转化，根据server type找到对应的uid
 	targetUid := 0
 	if target == config.ServerType_World {
 		targetUid = token.WouldId
 	} else if target == config.ServerType_Zone {
 		targetUid = token.ZoneUid
+	} else if target == config.ServerType_LOGINQUEUE {
+		targetUid = This.queueServerUid
 	}
 
 	rpcClient := This.GetRpcClient(targetUid)

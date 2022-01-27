@@ -69,6 +69,9 @@ type GateServer struct {
 
 	//单个actor内的消息pub/sub
 	msgQueueMap map[string]*maps.Map
+	
+	//排队服uid
+	queueServerUid int
 
 	lock sync.Mutex
 
@@ -281,8 +284,12 @@ func (self *GateServer) newServerDiscover(key, val string, dis bool) {
 		llog.Infof("newServerDiscover: discover a closed node: uid = %d", node.Uid)
 		return
 	}
+	
+	if node.Type == config.ServerType_LOGINQUEUE {
+		self.queueServerUid = node.Uid		//这里记录一下，方便转发client的排队网络消息
+	}
 
-	if node.Type == config.ServerType_RPCGate {
+	if node.Type == config.ServerType_RPCGate {		//发现了一个rpc server，咱作为客户端去连上它，参与rpc的狂欢
 		rpcClient := self.GetRpcClient(node.Uid)
 		if rpcClient == nil { //this conditation can be etcd reconnect
 			client := self.buildClient(node.Uid, node.SAddr)
@@ -291,10 +298,13 @@ func (self *GateServer) newServerDiscover(key, val string, dis bool) {
 				gorpc.MGR.Send("GateServer", "NewClient", m)
 			}
 		}
-	} else if node.Type != config.ServerType_Gate && node.Type != config.ServerType_Account {
-		if config.NET_NODE_TYPE == config.ServerType_Gate { //网关直连其他server转发来客户端和其他server的网络消息，不使用rpc方式
+	} else if config.NET_NODE_TYPE == config.ServerType_Gate {		//网关和其他server建立一条专线，用来直接转发client的消息
+		gateConn := node.Type == config.ServerType_World		//世界服
+		gateConn = gateConn || node.Type == config.ServerType_Zone	//战斗服
+		gateConn = gateConn || node.Type == config.ServerType_LOGINQUEUE	//排队服
+		if gateConn { 		//目前只有这三个需要直接接受来自client的消息(其实这里没必要过滤，多一条socket连接没有任何影响)
 			rpcClient := self.GetRpcClient(node.Uid)
-			if rpcClient == nil { //this conditation can be etcd reconnect
+			if rpcClient == nil { //this conditation can be etcf reconnect
 				client := self.buildClient(node.Uid, node.SAddr)
 				if self.enableClient(client) {
 					m := &gorpc.M{Id: node.Uid, Data: client, Param: 1} //client client
