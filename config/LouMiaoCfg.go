@@ -154,8 +154,11 @@ func init() {
 		GAME_LOG_LEVEL = Cfg.NetCfg.LogFile
 	}
 
-	SERVER_TYPE_NAME, _ = ServerNames[NET_NODE_TYPE]
+	if typeName, ok := ServerNames[NET_NODE_TYPE]; ok {
+		SERVER_TYPE_NAME = typeName
+	}
 	SERVER_NAME = fmt.Sprintf("%s-%d-%d", SERVER_TYPE_NAME, NET_NODE_TYPE, SERVER_NODE_UID)
+
 
 	arrStr := strings.Split(NET_GATE_SADDR, ":")            //服发现使用正常的ip,例如 192.168.32.15:6789 127.0.0.1:6789
 	NET_LISTEN_SADDR = fmt.Sprintf("0.0.0.0:%s", arrStr[1]) //socket监听,监听所有网卡绑定的ip，格式(0.0.0.0:port)(web监听格式也可以是(:port))

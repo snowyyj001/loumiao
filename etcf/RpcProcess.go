@@ -68,11 +68,15 @@ func innerLouMiaoGetValue(igo gorpc.IGoRoutine, socketId int, data []byte) {
 		return
 	}
 	llog.Debugf("innerLouMiaoGetValue: %v", req)
-	
+	isMul := len(req.Prefixs)
+	req.Prefixs = make([]string, 0)
 	for key, value := range This.mStoreValues {
 		if strings.HasPrefix(key, req.Prefix) {
 			req.Prefixs = append(req.Prefixs, key)
 			req.Values = append(req.Values, value)
+			if isMul == 0 {
+				break
+			}
 		}
 	}
 

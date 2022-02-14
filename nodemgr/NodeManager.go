@@ -136,63 +136,28 @@ func NodeDiscover(key string, val string, dis bool) *NodeInfo {
 	}
 }
 
-//pick a gate and world for client
-func GetBalanceServer(widthgate bool, widthworld bool) (string, int) {
-	//pick the gate and the world
-	var saddr []string
-	var worlduid []int
-
-	var minNum int = 0x7fffffff
-	var minNum_2 int = 0x7fffffff
+// calc world online number
+func CalcWorldServerNumber() int  {
 	defer nodeLock.RUnlock()
 	nodeLock.RLock()
-	for val, node := range node_Map {
-		//llog.Debugf("GetBalanceServer %t, %d, %d", node.SocketActive , node.Number, node.Type)
-		if widthgate {
-			if node.SocketActive && node.Number <= minNum && node.Type == config.ServerType_Gate {
-				if node.Number == minNum {		//最少的可能会有多个，如果只挑选一个，由于延迟问题会导致全部命中第一个
-					saddr = append(saddr, val)
-				} else {
-					saddr = []string{val}
-					minNum = node.Number
-				}
-			}
-		}
-		if widthworld == true {
-			if node.SocketActive && node.Number <= minNum_2 && node.Type == config.ServerType_World {
-				if node.Number == minNum_2 {		//最少的可能会有多个，如果只挑选一个，由于延迟问题会导致全部命中第一个
-					worlduid = append(worlduid, node.Uid)
-				} else {
-					worlduid = []int{node.Uid}
-					minNum_2 = node.Number
-				}
-			}
+	num := 0
+	for _, node := range node_Map {
+		if node.SocketActive && node.Type == config.ServerType_World {
+			num += node.Number
 		}
 	}
-
-	sz := len(saddr)
-	var retsaddr string
-	if sz > 0 {
-		retsaddr = saddr[util.Random(sz)]
-	}
-
-	var retuid int
-	sz = len(worlduid)
-	if sz > 0 {
-		retuid = worlduid[util.Random(sz)]
-	}
-
-	return retsaddr, retuid
+	return num
 }
 
-//pick a zone server by random
-func GetBalanceZone() *NodeInfo  {
+//pick a server by random
+func GetBalanceServer(atype int) *NodeInfo  {
+	//pick the gate
 	defer nodeLock.RUnlock()
 	nodeLock.RLock()
 
 	nodes := make([]*NodeInfo, 0)		//这里不要利用map访问的随机性，因为map每次的访问虽然是随机的但并不均匀
 	for _, node := range node_Map {
-		if node.SocketActive && node.Type == config.ServerType_Zone {
+		if node.SocketActive && node.Number < node.MaxNum && node.Type == atype {
 			nodes = append(nodes, node)
 		}
 	}

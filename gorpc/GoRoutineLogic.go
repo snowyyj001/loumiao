@@ -273,14 +273,22 @@ func (self *GoRoutineLogic) woker() {
 			caller, ok := self.timerFuncs[index]
 			if ok {
 				nt := util.TimeStamp()
-				caller.timerCall(nt - caller.lastCallTime)
+				if self.goFun {
+					go caller.timerCall(nt - caller.lastCallTime)
+				} else {
+					caller.timerCall(nt - caller.lastCallTime)
+				}
 				caller.lastCallTime = nt
 			}
 		case index := <-self.tikerChan:
 			caller, ok := self.delayJobs[index]
 			if ok {
-				caller.timerCall(0)
 				delete(self.delayJobs, index)
+				if self.goFun {
+					go caller.timerCall(0)
+				} else {
+					caller.timerCall(0)
+				}
 			}
 		}
 	}

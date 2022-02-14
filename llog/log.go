@@ -8,7 +8,6 @@ import (
 	go_logger "github.com/phachon/go-logger"
 	"github.com/snowyyj001/loumiao/config"
 	"github.com/snowyyj001/loumiao/define"
-	"github.com/snowyyj001/loumiao/lnats"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -27,6 +26,8 @@ var (
 	sugarLogger *zap.SugaredLogger
 	logLevel    int
 	//remoteLog   *LogRemoteWrite
+
+	ReportMailHanlder func (tag int, str string)
 )
 
 /*
@@ -141,7 +142,7 @@ func init() {
 
 //llog Panic level
 func Panic(msg string) {
-	ReportMail(define.MAIL_TYPE_ERR, msg)
+	ReportMailHanlder(define.MAIL_TYPE_ERR, msg)
 	logger.Panic(msg)
 }
 
@@ -153,7 +154,7 @@ func Panicf(format string, a ...interface{}) {
 
 //llog error level
 func Error(msg string) {
-	go ReportMail(define.MAIL_TYPE_ERR, msg)
+	go ReportMailHanlder(define.MAIL_TYPE_ERR, msg)
 	logger.Error(msg)
 	if clogger != nil {
 		clogger.Error(msg)
@@ -168,7 +169,7 @@ func Errorf(format string, a ...interface{}) {
 
 //llog notice level
 func Notice(msg string) {
-	go ReportMail(define.MAIL_TYPE_WARING, msg)
+	go ReportMailHanlder(define.MAIL_TYPE_WARING, msg)
 	logger.Warn(msg)
 	if clogger != nil {
 		clogger.Notice(msg)
@@ -234,7 +235,7 @@ func Debugf(format string, a ...interface{}) {
 
 //llog Fatal
 func Fatal(msg string) {
-	ReportMail(define.MAIL_TYPE_ERR, msg)
+	ReportMailHanlder(define.MAIL_TYPE_ERR, msg)
 	logger.Fatal(msg)
 }
 
@@ -258,21 +259,5 @@ func Tp_SetLevel(data []byte) {
 			Infof("Tp_SetLevel: oldlevel=%d, newlevel=%d", logLevel, reqParam.Level)
 			SetLevel(reqParam.Level)
 		}
-	}
-}
-
-//上报服务器关键信息
-func ReportMail(tag int, str string) {
-	reqParam := &struct {
-		Tag     int    `json:"tag"`     //邮件类型
-		Id      int    `json:"id"`      //区服id
-		Content string `json:"content"` //邮件内容
-	}{}
-	reqParam.Tag = tag
-	reqParam.Id = config.NET_NODE_ID
-	reqParam.Content = fmt.Sprintf("uid: %d \nname: %s\nhost: %s\r\ncontent: %s", config.SERVER_NODE_UID, config.SERVER_NAME, config.NET_GATE_SADDR, str)
-	buffer, err := json.Marshal(&reqParam)
-	if err == nil {
-		lnats.Publish(define.TOPIC_SERVER_MAIL, buffer)
 	}
 }

@@ -19,7 +19,7 @@ type(
 		Init(size int)
 		Set(index int)//设置位
 		Test(index int) bool//位是否被设置
-		Clear(index int)//清楚位
+		Clear(index int)//清除位
 		ClearAll()
 	}
 )

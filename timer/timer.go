@@ -1,6 +1,7 @@
 package timer
 
 import (
+	"github.com/snowyyj001/loumiao/util"
 	"time"
 )
 
@@ -111,10 +112,12 @@ func (self *Timer) Stop() {
 func DelayJob(dt int64, cb func(), sync bool) {
 	if sync {
 		<-time.After(time.Duration(dt) * time.Millisecond)
+		defer util.Recover()
 		cb()
 	} else {
 		go func() {
 			<-time.After(time.Duration(dt) * time.Millisecond)
+			defer util.Recover()
 			cb()
 		}()
 	}

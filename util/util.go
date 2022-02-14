@@ -3,6 +3,7 @@ package util
 import (
 	"crypto/md5"
 	"fmt"
+	"github.com/snowyyj001/loumiao/llog"
 	"math"
 	rand2 "math/rand"
 	"reflect"
@@ -10,12 +11,20 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/snowyyj001/loumiao/llog"
 )
 
 func init() {
 	rand2.Seed(time.Now().UnixNano())
+}
+
+
+
+func Recover() {
+	if r := recover(); r != nil {
+		buf := make([]byte, 2048)
+		l := runtime.Stack(buf, false)
+		llog.Errorf("Recover %v: %s", r, buf[:l])
+	}
 }
 
 // 获得rpc注册名

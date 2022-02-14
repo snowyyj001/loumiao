@@ -33,7 +33,7 @@ const(
 	GET_VALUE_TIMEOUT         	= 3         //GetValue超时时间,秒
 	WRITE_VALUE_TIMEOUT         = 30         //写操作超时时间,毫秒
 	LEASE_TIME         			= 1000        //租约心跳时间,毫秒
-	PUT_STATUS_TIME				= 3			//刷新服务状态时间
+	PUT_STATUS_TIME				= 1			//刷新服务状态时间
 )
 
 type hanlderFunc func(string, string, bool)
@@ -280,8 +280,7 @@ func AquireLeader(key string, value string) (isleader bool) {
 }
 
 //获取值
-//@prefix: 监听key值
-//@hanlder: key值变化回调
+//@prefix: key值
 func GetOne(prefix string) string {
 	if !Client.netStatus {
 		llog.Errorf("EtcfClient.GetOne: prefix = %s, server not connected", prefix)
@@ -316,8 +315,7 @@ func GetOne(prefix string) string {
 }
 
 //获取值
-//@prefix: 监听key值
-//@hanlder: key值变化回调
+//@prefix: key值
 func GetAll(prefix string) []string {
 	if !Client.netStatus {
 		llog.Errorf("EtcfClient.GetAll: prefix = %s, server not connected", prefix)
@@ -326,6 +324,7 @@ func GetAll(prefix string) []string {
 
 	req := &msg.LouMiaoGetValue{}
 	req.Prefix = prefix
+	req.Prefixs = append(req.Prefixs, "m")
 
 	buff, _ := message.Encode(0, "LouMiaoGetValue", req)
 	Client.pInnerService.Send(buff)

@@ -23,7 +23,7 @@ var (
 //url：数据库地址
 ///例如： Redis.Dial("127.0.0.1:6379")
 func Dial(url string) error {
-	llog.Debugf("redis Dial: %s", config.Cfg.RedisUri)
+	llog.Debugf("redis Dial: %s", url)
 	cpuNum := runtime.NumCPU()
 	pool = &redis.Pool{
 		MaxIdle: cpuNum,
@@ -483,7 +483,7 @@ func SAdd(key string, args ...interface{}) (int, error) {
 func SRem(key string, args ...interface{}) (int, error) {
 	db := pool.Get()
 	defer db.Close()
-	v, err := Int(db.Do("SREM ", redis.Args{}.Add(key).AddFlat(args)...))
+	v, err := Int(db.Do("SREM", redis.Args{}.Add(key).AddFlat(args)...))
 	if err != nil {
 		llog.Errorf("SRem: key = %s, args = %v, err = %s", key, args, err.Error())
 	}
@@ -505,7 +505,7 @@ func ScardInt(key string) (int, error) {
 func SisMember(key string, member interface{}) (int, error) {
 	db := pool.Get()
 	defer db.Close()
-	v, err := Int(db.Do("SISMEMBER ", key, member))
+	v, err := Int(db.Do("SISMEMBER", key, member))
 	if err != nil {
 		llog.Errorf("SisMember: key = %s, member = %v, err = %s", key, member, err.Error())
 	}
@@ -517,7 +517,7 @@ func Sscan(key string, cursor int) ([]string, int) {
 	db := pool.Get()
 	defer db.Close()
 	results := make([]string, 0)
-	v, err := redis.Values(db.Do("SSCAN ", key, cursor, "COUNT", 100))
+	v, err := redis.Values(db.Do("SSCAN", key, cursor, "COUNT", 100))
 	if err != nil {
 		llog.Errorf("Sscan: key = %s, SSCAN %s", key, err.Error())
 		return results, 0
@@ -596,6 +596,17 @@ func Zscore(key string, member interface{}) (int, error) {
 	return v, err
 }
 
+// 返回有序集中，成员的排名
+func Zrank(key string, member interface{}) (int, error) {
+	db := pool.Get()
+	defer db.Close()
+	v, err := Int(db.Do("ZRANK", key, member))
+	if err != nil {
+		llog.Errorf("Zrank: key = %s, member = %v, err = %s", key, member, err.Error())
+	}
+	return v, err
+}
+
 type ZSetUnit struct {
 	Key string
 	Score int
@@ -637,6 +648,17 @@ func ZscanSimple(key string, call func(key string, score int) )  {
 			break
 		}
 	}
+}
+
+// list长度
+func Llen(key string) (int, error) {
+	db := pool.Get()
+	defer db.Close()
+	v, err := Int(db.Do("LLEN", key))
+	if err != nil {
+		llog.Errorf("Llen: key = %s, v = %v, err = %s", key, v, err.Error())
+	}
+	return v, err
 }
 
 

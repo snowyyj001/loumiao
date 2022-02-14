@@ -36,6 +36,10 @@ var (
 )
 
 /*
+NOTE TableName doesn’t allow dynamic name, its result will be cached for future
+*/
+
+/*
 GORM provides First, Take, Last methods to retrieve a single object from the database,
 it adds LIMIT 1 condition when querying the database,
 and it will return the error ErrRecordNotFound if no record is found.
