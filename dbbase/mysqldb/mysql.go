@@ -2,11 +2,14 @@
 package mysqldb
 
 import (
+	"bytes"
+	"encoding/gob"
 	"fmt"
+	"gorm.io/gorm/clause"
+	"hash/crc32"
+	"reflect"
 	"sync"
 	"time"
-
-	"gorm.io/gorm/clause"
 
 	"github.com/snowyyj001/loumiao/util"
 
@@ -31,6 +34,10 @@ var (
 	mLock    sync.Mutex
 	logLevel logger.LogLevel = logger.Info
 )
+
+/*
+NOTE TableName doesn’t allow dynamic name, its result will be cached for future
+*/
 
 /*
 GORM provides First, Take, Last methods to retrieve a single object from the database,
@@ -293,3 +300,26 @@ func MDuplicate(st schema.Tabler, coloms []string) bool {
 	}
 	return true
 }
+
+//计算orm结构的CRC32值
+func MGetCRCCode(st schema.Tabler) uint32 {
+	v := reflect.ValueOf(st)
+	tv :=  v.FieldByName("TFlag")
+	record := tv.Int()
+	tv.SetInt(0)
+
+	var buf bytes.Buffer
+	encoder := gob.NewEncoder(&buf) // will read from buf
+	err := encoder.Encode(st)
+	if err != nil {
+		llog.Errorf("MGetCRCCode： st = %v", st)
+		return 0
+	}
+	b := buf.Bytes()
+	r := crc32.ChecksumIEEE(b)
+
+	tv.SetInt(record)
+
+	return r
+}
+

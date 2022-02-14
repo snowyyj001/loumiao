@@ -3,6 +3,7 @@ package util
 import (
 	"crypto/md5"
 	"fmt"
+	"github.com/snowyyj001/loumiao/llog"
 	"math"
 	rand2 "math/rand"
 	"reflect"
@@ -10,12 +11,20 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/snowyyj001/loumiao/llog"
 )
 
 func init() {
 	rand2.Seed(time.Now().UnixNano())
+}
+
+
+
+func Recover() {
+	if r := recover(); r != nil {
+		buf := make([]byte, 2048)
+		l := runtime.Stack(buf, false)
+		llog.Errorf("Recover %v: %s", r, buf[:l])
+	}
 }
 
 // 获得rpc注册名
@@ -88,34 +97,42 @@ func CheckErr(err error) bool {
 	return false
 }
 
-func FloorInt(v int) int {
-	nv := math.Floor(float64(v))
+func FloorInt(v float64) int {
+	nv := math.Floor(v)
 	return int(nv)
 }
 
-func FloorInt64(v int64) int64 {
-	nv := math.Floor(float64(v))
+func FloorInt64(v float64) int64 {
+	nv := math.Floor(v)
 	return int64(nv)
 }
 
-func Max(a, b int) int {
-	m := int(math.Max(float64(a), float64(b)))
-	return m
+func Max(a, b int) int {		//官方包里提供了float64的max和min函数，原因就是，golang不支持泛型，非要提供会让代码不够优雅的
+	if a > b {
+		return a
+	}
+	return b
 }
 
 func Max64(a, b int64) int64 {
-	m := int64(math.Max(float64(a), float64(b)))
-	return m
+	if a > b {
+		return a
+	}
+	return b
 }
 
 func Min(a, b int) int {
-	m := int(math.Min(float64(a), float64(b)))
-	return m
+	if a > b {
+		return b
+	}
+	return a
 }
 
 func Min64(a, b int64) int64 {
-	m := int64(math.Min(float64(a), float64(b)))
-	return m
+	if a > b {
+		return b
+	}
+	return a
 }
 
 func CopyArray(dst []int, src []int, size int) {

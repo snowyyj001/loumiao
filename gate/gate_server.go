@@ -69,6 +69,9 @@ type GateServer struct {
 	//单个actor内的消息pub/sub
 	msgQueueMap map[string]*maps.Map
 
+	//排队服uid
+	QueueServerUid int
+
 	lock sync.Mutex
 
 	InitFunc func() //需要额外处理的函数回调
@@ -174,14 +177,19 @@ func (self *GateServer) DoStart() {
 	etcf.NewEtcf()
 
 	timer.DelayJob(100, func() { //delay 100ms, that all RegisterRpcHandler should be compled
-		//server discover
-		//watch status
-		ok := etcf.WatchKey(fmt.Sprintf("%s%d", define.ETCD_NODESTATUS, config.NET_NODE_ID), self.serverStatusUpdate)
-		if !ok {
-			llog.Fatal("etcf watch ETCD_NODESTATUS error")
+		need := config.NET_NODE_TYPE == config.ServerType_Account //挑选网关和world给client需要
+		need = need || config.NET_NODE_TYPE == config.ServerType_Gate		//挑选world给client需要
+		need = need || config.NET_NODE_TYPE == config.ServerType_World		//挑选zone给client需要，其他主逻辑也可能需要
+		need = need || config.NET_NODE_TYPE == config.ServerType_LOGINQUEUE		//统计所有world在线人数需要
+		if need  {		//只让必要的节点参与状态监视，减少消息量
+			//watch status
+			ok := etcf.WatchKey(fmt.Sprintf("%s%d", define.ETCD_NODESTATUS, config.NET_NODE_ID), self.serverStatusUpdate)
+			if !ok {
+				llog.Fatal("etcf watch ETCD_NODESTATUS error")
+			}
 		}
-		//watch all node
-		ok = etcf.WatchKey(fmt.Sprintf("%s%d", define.ETCD_NODEINFO, config.NET_NODE_ID), self.newServerDiscover)
+		//watch all node，所有集群内的节点都需要参与服发现
+		ok := etcf.WatchKey(fmt.Sprintf("%s%d", define.ETCD_NODEINFO, config.NET_NODE_ID), self.newServerDiscover)
 		if !ok {
 			llog.Fatal("etcf watch NET_GATE_SADDR error")
 		}
@@ -209,7 +217,7 @@ func (self *GateServer) DoOpen() {
 	nodemgr.ServerEnabled = true
 	llog.Infof("GateServer DoOpen success: name=%s,saddr=%s,uid=%d", self.Name, config.NET_GATE_SADDR, config.SERVER_NODE_UID)
 
-	llog.ReportMail(define.MAIL_TYPE_START, "服务器完成启动")
+	lnats.ReportMail(define.MAIL_TYPE_START, "服务器完成启动")
 }
 
 //simple register self net hanlder, this func can only be called before igo started
@@ -275,7 +283,11 @@ func (self *GateServer) newServerDiscover(key, val string, dis bool) {
 		return
 	}
 
-	if node.Type == config.ServerType_RPCGate {
+	if node.Type == config.ServerType_LOGINQUEUE {
+		self.QueueServerUid = node.Uid		//这里记录一下，方便转发client的排队网络消息
+	}
+
+	if node.Type == config.ServerType_RPCGate {		//发现了一个rpc server，咱作为客户端去连上它，参与rpc的狂欢
 		rpcClient := self.GetRpcClient(node.Uid)
 		if rpcClient == nil { //this conditation can be etcf reconnect
 			client := self.buildClient(node.Uid, node.SAddr)
@@ -284,8 +296,11 @@ func (self *GateServer) newServerDiscover(key, val string, dis bool) {
 				gorpc.MGR.Send("GateServer", "NewClient", m)
 			}
 		}
-	} else if node.Type != config.ServerType_Gate && node.Type != config.ServerType_Account {
-		if config.NET_NODE_TYPE == config.ServerType_Gate { //网关直连其他server转发来客户端和其他server的网络消息，不使用rpc方式
+	} else if config.NET_NODE_TYPE == config.ServerType_Gate {		//网关和其他server建立一条专线，用来直接转发client的消息
+		gateConn := node.Type == config.ServerType_World		//世界服
+		gateConn = gateConn || node.Type == config.ServerType_Zone	//战斗服
+		gateConn = gateConn || node.Type == config.ServerType_LOGINQUEUE	//排队服
+		if gateConn { 		//目前只有这三个需要直接接受来自client的消息(其实这里没必要过滤，多一条socket连接没有任何影响)
 			rpcClient := self.GetRpcClient(node.Uid)
 			if rpcClient == nil { //this conditation can be etcf reconnect
 				client := self.buildClient(node.Uid, node.SAddr)
@@ -468,7 +483,7 @@ func (self *GateServer) closeClient(clientid int) {
 
 // gate向client发送消息
 func (self *GateServer) SendClient(clientid int, buff []byte) {
-	llog.Debugf("GateServer.SendClient: clientid=%d, bufflen=%d, buff=%v", clientid, len(buff), buff)
+	//llog.Debugf("GateServer.SendClient: clientid=%d, bufflen=%d, buff=%v", clientid, len(buff), buff)
 	self.pService.SendById(clientid, buff)
 }
 

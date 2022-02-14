@@ -20,6 +20,7 @@ func innerConnect(igo gorpc.IGoRoutine, socketId int, data []byte) {
 func innerDisConnect(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	llog.Debugf("etcf server innerDisConnect: %d", socketId)
 	This.removeAllWatchById(socketId)
+	This.removeAllLeaseById(socketId)
 }
 
 //watch/remove key
@@ -44,7 +45,17 @@ func innerLouMiaoPutValue(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	}
 	//llog.Debugf("innerLouMiaoPutValue: %v", req)
 	if len(req.Value) > 0 {
-		This.putValue(req.Prefix, req.Value)
+		if req.Lease > 0 {
+			if _, ok := This.mStoreValuesLease[req.Prefix]; ok {
+				llog.Errorf("innerLouMiaoPutValue: prefix has already been set, %s", req.Prefix)
+			} else {
+				This.putValue(req.Prefix, req.Value)
+				This.mStoreValuesLease[req.Prefix] = ETKeyLease{req.Prefix, socketId}
+				This.mStoreValuesLeaseTime[socketId] = util.TimeStampSec()
+			}
+		} else {
+			This.putValue(req.Prefix, req.Value)
+		}
 	} else {
 		This.removeValue(req.Prefix)
 	}
@@ -57,11 +68,15 @@ func innerLouMiaoGetValue(igo gorpc.IGoRoutine, socketId int, data []byte) {
 		return
 	}
 	llog.Debugf("innerLouMiaoGetValue: %v", req)
-	
+	isMul := len(req.Prefixs)
+	req.Prefixs = make([]string, 0)
 	for key, value := range This.mStoreValues {
 		if strings.HasPrefix(key, req.Prefix) {
 			req.Prefixs = append(req.Prefixs, key)
 			req.Values = append(req.Values, value)
+			if isMul == 0 {
+				break
+			}
 		}
 	}
 
@@ -152,6 +167,8 @@ func innerLouMiaoLease(igo gorpc.IGoRoutine, socketId int, data []byte) {
 		return
 	}
 	//llog.Debugf("innerLouMiaoLease: %v", req)
+
+	This.mStoreValuesLeaseTime[socketId] = util.TimeStampSec()
 
 	resp := &msg.LouMiaoLease{}
 	resp.Uid = req.Uid

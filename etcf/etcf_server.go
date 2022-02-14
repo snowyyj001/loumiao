@@ -24,6 +24,15 @@ var (
 	handler_Map map[string]string
 )
 
+type ETKeyLease struct {
+	Key string
+	SocketId int
+}
+
+const (
+	LEASE_SERVER_TIMEOUT = 2		//租约超时时间，秒
+)
+
 type EtcfServer struct {
 	gorpc.GoRoutineLogic
 
@@ -31,6 +40,8 @@ type EtcfServer struct {
 
 	mWatchKeys   map[string]map[int]bool //prefix -> [socket id][true]
 	mStoreValues map[string]string       //prefix -> value
+	mStoreValuesLease  map[string]ETKeyLease       //prefix -> ETKeyLease
+	mStoreValuesLeaseTime  map[int]int64       //socketid -> stmp
 	mStoreLeaderValues sync.Map       //prefix -> bool
 	mStoreLocks map[string]int		//prefix -> time
 	mStoreLockWaiters map[string][]int	//prefix -> uids
@@ -50,9 +61,10 @@ func (self *EtcfServer) DoInit() bool {
 
 	self.mWatchKeys = make(map[string]map[int]bool)
 	self.mStoreValues = make(map[string]string)
+	self.mStoreValuesLease = make(map[string]ETKeyLease)
+	self.mStoreValuesLeaseTime = make(map[int]int64)
 	self.mStoreLocks = make(map[string]int)
 	self.mStoreLockWaiters = make(map[string][]int)
-	//self.mStoreLeaderValues = make(map[string]string)
 
 	return true
 }
@@ -90,11 +102,26 @@ func (self *EtcfServer) DoStart() {
 	llog.Info("EtcfServer DoStart")
 
 	util.Assert(self.pInnerService.Start(), fmt.Sprintf("EtcfServer listen failed: saddr=%s", self.pInnerService.GetSAddr()))
+
+	self.RunTimer(1000, self.update_1000)
 }
 
 func (self *EtcfServer) DoDestory() {
 	llog.Info("EtcfServer DoDestory")
 
+}
+
+////////////////////////////////////////////////////////////////////////////////
+//每秒钟更新一次
+func (self *EtcfServer) update_1000(dt int64) {
+	//llog.Debugf("%s update_1000: %d", self.Name, dt)
+	for sid, stmp := range self.mStoreValuesLeaseTime {
+		if util.TimeStampSec() - stmp >= LEASE_SERVER_TIMEOUT {		//超时
+			llog.Infof("EtcfServer.update_1000: lease timeout, sid = %d,", sid)
+			self.removeAllLeaseById(sid)
+			delete(self.mStoreValuesLeaseTime, sid)
+		}
+	}
 }
 
 func (self *EtcfServer) addWatch(prefix string, sid int) {
@@ -122,6 +149,18 @@ func (self *EtcfServer) removeWatch(prefix string, sid int) {
 	delete(vals, sid)
 }
 
+func (self *EtcfServer) removeAllLeaseById(sid int) {
+	llog.Debugf("EtcfServer removeAllLeaseById: socketid = %d", sid)
+	for prefix, v := range self.mStoreValuesLease {
+		if v.SocketId == sid {
+			delete(self.mStoreValuesLease, prefix)
+			delete(self.mStoreValuesLeaseTime, sid)
+			self.removeValue(prefix)
+		}
+	}
+	//llog.Debugf("removeAllLeaseById: %v", self.mWatchKeys)
+}
+
 func (self *EtcfServer) removeAllWatchById(sid int) {
 	llog.Debugf("EtcfServer removeAllWatchById: socketid = %d", sid)
 	for _, vals := range self.mWatchKeys {
@@ -132,17 +171,17 @@ func (self *EtcfServer) removeAllWatchById(sid int) {
 			}
 		}
 	}
+	//llog.Debugf("removeAllWatchById: %v", self.mWatchKeys)
 }
 
-
 func (self *EtcfServer) putValue(prefix string, value string) {
-	llog.Debugf("EtcfServer putValue: prefix = %s, value = %s", prefix, value)
+	//llog.Debugf("EtcfServer putValue: prefix = %s, value = %s", prefix, value)
 	self.mStoreValues[prefix] = value
 	self.broadCastValue(prefix, value)
 }
 
 func (self *EtcfServer) removeValue(prefix string) {
-	llog.Debugf("EtcfServer removeValue: prefix = %s", prefix)
+	//llog.Debugf("EtcfServer removeValue: prefix = %s", prefix)
 	if _, ok := self.mStoreValues[prefix]; ok {
 		delete(self.mStoreValues, prefix)
 		self.broadCastValue(prefix, "")

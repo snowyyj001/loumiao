@@ -34,9 +34,9 @@ func init() {
 	DoInit()
 }
 
-//创建一个服务，稍后开启
-//@name: actor名，唯一
-//@sync: 是否异步协程，无状态服务可以是异步协程，有状态服务应该使用同步协程，可以保证协程安全
+// 创建一个服务，稍后开启
+// @name: actor名，唯一
+// @sync: 是否异步协程，无状态服务可以是异步协程，有状态服务应该使用同步协程，可以保证协程安全
 func Prepare(igo gorpc.IGoRoutine, name string, sync bool) {
 	igo.SetSync(sync)
 	gorpc.MGR.Start(igo, name)

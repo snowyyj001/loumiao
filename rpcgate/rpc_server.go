@@ -4,6 +4,7 @@ package rpcgate
 import (
 	"fmt"
 	"github.com/snowyyj001/loumiao/etcf"
+	"github.com/snowyyj001/loumiao/lnats"
 	"sync"
 
 	"github.com/snowyyj001/loumiao/message"
@@ -110,7 +111,7 @@ func (self *RpcGateServer) DoOpen() {
 
 	llog.Infof("RpcGateServer DoOpen success: name=%s,saddr=%s,uid=%d", self.Name, config.NET_GATE_SADDR, config.SERVER_NODE_UID)
 
-	llog.ReportMail(define.MAIL_TYPE_START, "服务器完成启动")
+	lnats.ReportMail(define.MAIL_TYPE_START, "服务器完成启动")
 }
 
 //goroutine unsafe

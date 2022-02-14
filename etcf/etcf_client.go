@@ -32,7 +32,8 @@ type ETKeyValue struct {
 const(
 	GET_VALUE_TIMEOUT         	= 3         //GetValue超时时间,秒
 	WRITE_VALUE_TIMEOUT         = 30         //写操作超时时间,毫秒
-	LEASE_TIME         			= 3000        //租约心跳时间,毫秒
+	LEASE_TIME         			= 1000        //租约心跳时间,毫秒
+	PUT_STATUS_TIME				= 1			//刷新服务状态时间
 )
 
 type hanlderFunc func(string, string, bool)
@@ -56,6 +57,7 @@ type EtcfClient struct {
 
 	leaseTime int64
 	netStatus bool
+	leaseCallBackTimes int
 
 	etcdKey   string
 	statusKey string
@@ -159,12 +161,20 @@ func leaseCallBack(dt int64) bool {
 //设置服务
 //@prefix: key值
 //@val: 设置的value
-func PutService(prefix, val string) {
+func PutService(prefix, val string) bool {
 	if !Client.netStatus {
 		llog.Errorf("EtcfClient.PutService: prefix = %s, server not connected", prefix)
-		return
+		return false
 	}
-	SetValue(prefix, val)
+	req := &msg.LouMiaoPutValue{}
+	req.Prefix = prefix
+	req.Value = val
+	req.Lease = LEASE_TIME
+
+	buff, _ := message.Encode(0, "LouMiaoPutValue", req)
+	Client.pInnerService.Send(buff)
+
+	return true
 }
 
 //设置值
@@ -178,6 +188,7 @@ func SetValue(prefix, val string) bool {
 	req := &msg.LouMiaoPutValue{}
 	req.Prefix = prefix
 	req.Value = val
+	req.Lease = 0
 
 	buff, _ := message.Encode(0, "LouMiaoPutValue", req)
 	Client.pInnerService.Send(buff)
@@ -269,8 +280,7 @@ func AquireLeader(key string, value string) (isleader bool) {
 }
 
 //获取值
-//@prefix: 监听key值
-//@hanlder: key值变化回调
+//@prefix: key值
 func GetOne(prefix string) string {
 	if !Client.netStatus {
 		llog.Errorf("EtcfClient.GetOne: prefix = %s, server not connected", prefix)
@@ -305,8 +315,7 @@ func GetOne(prefix string) string {
 }
 
 //获取值
-//@prefix: 监听key值
-//@hanlder: key值变化回调
+//@prefix: key值
 func GetAll(prefix string) []string {
 	if !Client.netStatus {
 		llog.Errorf("EtcfClient.GetAll: prefix = %s, server not connected", prefix)
@@ -315,6 +324,7 @@ func GetAll(prefix string) []string {
 
 	req := &msg.LouMiaoGetValue{}
 	req.Prefix = prefix
+	req.Prefixs = append(req.Prefixs, "m")
 
 	buff, _ := message.Encode(0, "LouMiaoGetValue", req)
 	Client.pInnerService.Send(buff)
@@ -464,7 +474,11 @@ func innerClientLouMiaoGetValue(socketId int, data []byte) {
 func innerClientLouMiaoLease(socketId int, data []byte) {
 	//llog.Debugf("innerClientLouMiaoLease: socketId = %d",socketId)
 	Client.leaseTime = 0
-	PutStatus()
+	Client.leaseCallBackTimes++
+	if Client.leaseCallBackTimes >= PUT_STATUS_TIME {
+		PutStatus()
+		Client.leaseCallBackTimes = 0
+	}
 }
 
 

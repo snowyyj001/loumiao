@@ -1,7 +1,11 @@
 package lnats
 
 import (
+	"encoding/json"
 	"fmt"
+	"github.com/snowyyj001/loumiao/define"
+	"github.com/snowyyj001/loumiao/llog"
+	"github.com/snowyyj001/loumiao/util"
 	"strings"
 	"time"
 
@@ -92,6 +96,7 @@ func SubscribeTagAsyn(topic string, prefix string, call func([]byte)) error {
 func SubscribeAsyn(topic string, call func([]byte)) error {
 	// Subscribe
 	_, err := lnc.Subscribe(topic, func(m *nats.Msg) {
+		defer util.Recover()
 		call(m.Data)
 	})
 	return err
@@ -130,6 +135,7 @@ func Request(topic string, message []byte, waittime int) []byte {
 //回复消息
 func Response(topic string, call func([]byte) []byte) error {
 	_, err := lnc.Subscribe(topic, func(m *nats.Msg) {
+		defer util.Recover()
 		data := call(m.Data)
 		m.Respond(data)
 	})
@@ -150,6 +156,7 @@ func RequestTag(topic string, prefix string, message []byte, waittime int) []byt
 func ResponseTag(topic string, prefix string, call func([]byte) []byte) error {
 	newtopic := FormatTopic(topic, prefix)
 	_, err := lnc.Subscribe(newtopic, func(m *nats.Msg) {
+		defer util.Recover()
 		data := call(m.Data)
 		m.Respond(data)
 	})
@@ -159,6 +166,7 @@ func ResponseTag(topic string, prefix string, call func([]byte) []byte) error {
 //回复消息带分组
 func QueueResponse(topic string, queue string, call func([]byte) []byte) error {
 	_, err := lnc.QueueSubscribe(topic, queue, func(m *nats.Msg) {
+		defer util.Recover()
 		data := call(m.Data)
 		m.Respond(data)
 	})
@@ -169,77 +177,70 @@ func QueueResponse(topic string, queue string, call func([]byte) []byte) error {
 func QueueResponseTag(topic string, prefix string, queue string, call func([]byte) []byte) error {
 	newtopic := FormatTopic(topic, prefix)
 	_, err := lnc.QueueSubscribe(newtopic, queue, func(m *nats.Msg) {
+		defer util.Recover()
 		data := call(m.Data)
 		m.Respond(data)
 	})
 	return err
 }
 
-func Init(addr []string, caller func(errstr string)) {
-	target := strings.Join(addr, ",")
+func Init() {
+	target := strings.Join(config.Cfg.NatsAddr, ",")
 	name := nats.Name(config.NET_GATE_SADDR)
 
 	nc, err := nats.Connect(target, name,
 		nats.DisconnectErrHandler(func(nc *nats.Conn, err error) {
 			str := fmt.Sprintf("NATS client connection got disconnected: %s %s", nc.LastError(), err.Error())
-			if caller != nil {
-				caller(str)
-			} else {
-				fmt.Println(str)
-			}
+			llog.Error(str)
 		}),
 		nats.ReconnectHandler(func(nc *nats.Conn) {
 			str := fmt.Sprintf("NATS client reconnected after a previous disconnection, connected to %s", nc.ConnectedUrl())
-			if caller != nil {
-				caller(str)
-			} else {
-				fmt.Println(str)
-			}
+			llog.Error(str)
 		}),
 		nats.ClosedHandler(func(nc *nats.Conn) {
 			str := fmt.Sprintf("NATS client connection closed: %s", nc.LastError())
-			if caller != nil {
-				caller(str)
-			} else {
-				fmt.Println(str)
-			}
+			llog.Error(str)
 		}),
 		nats.ErrorHandler(func(nc *nats.Conn, sub *nats.Subscription, err error) {
 			str := fmt.Sprintf("NATS client on %s encountered an error: %s", nc.ConnectedUrl(), err.Error())
 			if err == nats.ErrSlowConsumer {
 				pendingMsgs, _, err := sub.Pending()
 				if err != nil {
-					fmt.Printf("couldn't get pending messages: %v", err)
+					llog.Errorf("couldn't get pending messages: %s", err.Error())
 					return
 				}
 				str = fmt.Sprintf("%s\nFalling behind with %d pending messages on subject %q.\n", str, pendingMsgs, sub.Subject)
 				// Log error, notify operations...
 			}
-			if caller != nil {
-				caller(str)
-			} else {
-				fmt.Println(str)
-			}
+			llog.Error(str)
 		}))
 
 	if err != nil {
 		str := fmt.Sprintf("nats connect failed: %s", target)
-		if caller != nil {
-			caller(str)
-		} else {
-			fmt.Println(str)
-		}
+		llog.Fatal(str)
 	} else {
 		str := fmt.Sprintf("nats connect success: %s", target)
-		if caller != nil {
-			caller(str)
-		} else {
-			fmt.Println(str)
-		}
+		llog.Info(str)
 	}
 	lnc = nc
 }
 
-func init() {
+//上报服务器关键信息
+func ReportMail(tag int, str string) {
+	reqParam := &struct {
+		Tag     int    `json:"tag"`     //邮件类型
+		Id      int    `json:"id"`      //区服id
+		Content string `json:"content"` //邮件内容
+	}{}
+	reqParam.Tag = tag
+	reqParam.Id = config.NET_NODE_ID
+	reqParam.Content = fmt.Sprintf("uid: %d \nname: %s\nhost: %s\r\ncontent: %s", config.SERVER_NODE_UID, config.SERVER_NAME, config.NET_GATE_SADDR, str)
+	buffer, err := json.Marshal(&reqParam)
+	if err == nil {
+		Publish(define.TOPIC_SERVER_MAIL, buffer)
+	}
+}
 
+func init() {
+	llog.ReportMailHanlder = ReportMail
 }
