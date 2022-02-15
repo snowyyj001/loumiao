@@ -1,6 +1,6 @@
 package queue
 
-//无锁RingBuffer，单读单写协程安全
+//无锁RingBuffer，单读单写协程安全，多读多写需要靠CAS保证，暂不需要
 //IsFull和IsEmpty两个函数充分说明了无锁环形队列的核心思想
 
 type RingBuffer struct {
@@ -14,7 +14,7 @@ func NewRing(ringSize int) *RingBuffer {
 		size: ringSize,
 		buf: make([]interface{}, ringSize),
 		head: 0,
-		tail: 1,
+		tail: -1,
 	}
 }
 
@@ -59,14 +59,17 @@ func (q *RingBuffer) Peek() interface{} {
 
 // Pop removes and returns the element from the front of the queue. If the
 // queue is empty, the call do nothing
-func (q *RingBuffer) Pop() interface{} {
+func (q *RingBuffer) Pop() (interface{}, bool) {
 	if q.IsEmpty() {
-		return nil
+		return nil, false
 	}
 
-	elm := q.buf[q.head%q.size]
+	idx := q.head%q.size
+	elm := q.buf[idx]
+	q.buf[idx] = nil
+
 	q.head++
 	q.count--
 
-	return elm
+	return elm, true
 }

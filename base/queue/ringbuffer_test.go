@@ -5,6 +5,7 @@ import (
 	"github.com/snowyyj001/loumiao/base/queue"
 	"sync"
 	"testing"
+	"time"
 )
 
 /*
@@ -23,6 +24,7 @@ func TestRingBuffer(t *testing.T)  {
 		for i:=0; i<2000; i++ {
 			ring.Push(i)
 		}
+		time.Sleep(time.Millisecond)
 		wg.Done()
 	}()
 
@@ -30,8 +32,8 @@ func TestRingBuffer(t *testing.T)  {
 	go func() {
 		lastnum := -1
 		for i:=0; i<2000; i++ {
-			elm := ring.Pop()
-			if elm != nil {
+			elm, ok := ring.Pop()
+			if ok {
 				if elm.(int) != lastnum+1 {
 					t.FailNow()
 				} else {
@@ -39,6 +41,7 @@ func TestRingBuffer(t *testing.T)  {
 				}
 				que.Add(elm)
 			}
+			time.Sleep(time.Millisecond)
 		}
 		wg.Done()
 	}()
