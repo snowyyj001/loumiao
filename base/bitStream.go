@@ -340,6 +340,23 @@ func (self *BitStream) ReadFloat64() float64 {
 	return float64(ret)
 }
 
+func (self *BitStream) WriteBytes(buf []byte) {
+	nLen := len(buf)
+	if self.WriteFlag(nLen > 0) {
+		self.WriteInt(nLen, Bit16)
+		self.WriteBits(buf, nLen<<3)
+	}
+}
+
+func (self *BitStream) ReadBytes() []byte{
+	if self.ReadFlag() {
+		nLen := self.ReadInt(Bit16)
+		buf := self.ReadBits(nLen << 3)
+		return buf
+	}
+	return []byte{}
+}
+
 //根据buff构造一个bitstream，一般用来接收消息
 func NewBitStream(buf []byte, nLen int) *BitStream {
 	var bitstream BitStream
