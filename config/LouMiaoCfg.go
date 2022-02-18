@@ -55,7 +55,7 @@ var (
 	NET_MAX_CONNS           = 65535           //最大连接数
 	NET_MAX_RPC_CONNS       = 1024            //rpc最大连接数
 	NET_BUFFER_SIZE         = 1024 * 32       //最大消息包长度32k(对外)
-	NET_CLUSTER_BUFFER_SIZE = 2 * 1024 * 1024 //最大消息包长度2M(对内)
+	NET_CLUSTER_BUFFER_SIZE = 5 * 1024 * 1024 //最大消息包长度5M(对内)
 	NET_MAX_NUMBER          = 10000           //pcu
 
 	SERVER_GROUP     = "A"            //服务器分组
