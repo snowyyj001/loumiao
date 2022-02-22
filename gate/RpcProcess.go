@@ -120,7 +120,7 @@ func innerLouMiaoRpcMsg(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	if message.UnPack(req, data) != nil {
 		return
 	}
-	llog.Debugf("innerLouMiaoRpcMsg=%s, socurce=%d, target=%d, Flag=%d", req.FuncName, req.SourceId, req.TargetId, req.Flag)
+	//llog.Debugf("innerLouMiaoRpcMsg=%s, socurce=%d, target=%d, Flag=%d", req.FuncName, req.SourceId, req.TargetId, req.Flag)
 	if util.HasBit(int(req.Flag), define.RPCMSG_FLAG_CALL) {
 		if util.HasBit(int(req.Flag), define.RPCMSG_FLAG_RESP) {
 			gorpc.MGR.SendActor("CallRpcServer", "RespRpcCall", req)
@@ -189,7 +189,7 @@ func innerLouMiaoNetMsg(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	if message.UnPack(req, data) != nil {
 		return
 	}
-//	llog.Debugf("innerLouMiaoNetMsg %v", req)
+	//llog.Debugf("innerLouMiaoNetMsg %v", req)
 	userid := int(req.ClientId)
 
 	if config.NET_NODE_TYPE == config.ServerType_Gate { //server -> gate, for msg to client
@@ -219,7 +219,7 @@ func innerLouMiaoNetMsg(igo gorpc.IGoRoutine, socketId int, data []byte) {
 					gorpc.MGR.Send(handler, "ServiceHandler", nm)
 				}
 			} else {
-				llog.Errorf("innerLouMiaoNetMsg handler is nil, drop it[%s][%d][%d]", name, target, config.SERVER_NODE_UID)
+				llog.Warningf("innerLouMiaoNetMsg handler is nil, drop it[%s][%d][%d]", name, target, config.SERVER_NODE_UID)
 			}
 		}
 	}
@@ -278,7 +278,7 @@ func registerNet(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	m := data.(*gorpc.M)
 	sname, ok := handler_Map[m.Name]
 	if ok {
-		llog.Errorf("registerNet %s has already been registered: %s", m.Name, sname)
+		llog.Errorf("registerNet %s has already been registered: has = %s, now = %s", m.Name, sname, m.Data.(string))
 		return nil
 	}
 	handler_Map[m.Name] = m.Data.(string)
@@ -301,7 +301,7 @@ func sendClient(igo gorpc.IGoRoutine, data interface{}) interface{} {
 
 	socketId := This.GetGateClientId(m.Id)
 	if socketId == 0 {
-		llog.Infof("0.sendClient gate has been lost, userid = %d", m.Id)
+		llog.Warningf("0.sendClient gate has been lost, userid = %d", m.Id)
 		return nil
 	}
 	//llog.Debugf("sendClient userid = %d, uid = %d", m.Id, uid)
@@ -418,9 +418,11 @@ func recvPackMsgClient(igo gorpc.IGoRoutine, data interface{}) interface{} {
 
 	token := This.GetClientToken(socketid)
 	if token == nil {
-		llog.Warningf("1.recvPackMsgClient msg, but server has lost, target=%d ", target)
+		llog.Warningf("1.recvPackMsgClient msg, client lost, socketid=%d, target=%d ", socketid, target)
+		This.closeClient(socketid)
 		return nil
 	}
+
 	//客户端不接受传uid，只接受server type
 	//所以这里做一次转化，根据server type找到对应的uid
 	targetUid := 0
@@ -429,7 +431,7 @@ func recvPackMsgClient(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	} else if target == config.ServerType_Zone {
 		targetUid = token.ZoneUid
 	} else if target == config.ServerType_LOGINQUEUE {
-		targetUid = This.queueServerUid
+		targetUid = This.QueueServerUid
 	}
 
 	rpcClient := This.GetRpcClient(targetUid)

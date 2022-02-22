@@ -4,8 +4,6 @@ package MongoDB
 import (
 	"fmt"
 
-	"github.com/snowyyj001/loumiao/config"
-
 	"gopkg.in/mgo.v2"
 	// "gopkg.in/mgo.v2/bson"
 )
@@ -38,7 +36,7 @@ func (self *Mongo) Dial(url string, auth ...string) error {
 //连接数据库
 //url：数据库地址,,使用config-mongo默认参数
 func (self *Mongo) DialDefault() error {
-	session, err := mgo.Dial(config.MONGO_URI) //连接服务器
+	session, err := mgo.Dial("config.SqlUri") //连接服务器
 	self.session = session
 	if err != nil {
 		defer session.Close()

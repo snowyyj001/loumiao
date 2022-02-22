@@ -18,10 +18,10 @@ func callRpc(igo gorpc.IGoRoutine, data interface{}) interface{} {
 
 	ch, ok := This.mRpcWait.Load(session)
 	if ok == false {
-		ch = make(chan interface{})
+		ch = make(chan []byte)
 		This.mRpcWait.Store(session, ch)
 	}
-	resp := <-ch.(chan interface{})
+	resp := <-ch.(chan []byte)
 	return resp
 }
 
@@ -29,9 +29,9 @@ func respRpcCall(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	rpcmsg := data.(*msg.LouMiaoRpcMsg)
 	bitstream := base.NewBitStream(rpcmsg.Buffer, len(rpcmsg.Buffer))
 	session := bitstream.ReadString()
-	respdata := bitstream.GetBytePtr()
+	respdata := bitstream.ReadBytes()
 	if ch, ok := This.mRpcWait.LoadAndDelete(session); ok {
-		ch.(chan interface{}) <- respdata
+		ch.(chan []byte) <- respdata
 	} else {
 		llog.Errorf("respRpcCall session[%s] is nil", session)
 	}
@@ -43,7 +43,7 @@ func reqRpcCall(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	rpcmsg := req.Data.(*msg.LouMiaoRpcMsg)
 	bitstream := base.NewBitStream(rpcmsg.Buffer, len(rpcmsg.Buffer))
 	session := bitstream.ReadString()
-	respdata := bitstream.GetBytePtr()
+	respdata := bitstream.ReadBytes()
 
 	resp, ok := igo.CallActor(req.Id, rpcmsg.FuncName, respdata)
 	if ok == false {
@@ -51,11 +51,16 @@ func reqRpcCall(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	}
 	m := &gorpc.M{Id: int(rpcmsg.SourceId), Name: session}
 	m.Param = util.BitOr(define.RPCMSG_FLAG_RESP, define.RPCMSG_FLAG_CALL)
-	if reflect.TypeOf(resp).Kind() == reflect.Slice { //bitstream
+	if resp == nil {		//rpc调用出错了才会返回nil
+		bitstream := base.NewBitStream_1(base.BitStrLen(session))
+		bitstream.WriteString(session)
+		bitstream.WriteBytes(nil)
+		m.Data = bitstream.GetBuffer()
+	} else if reflect.TypeOf(resp).Kind() == reflect.Slice { //bitstream
 		orgbuff := resp.([]byte)
 		bitstream := base.NewBitStream_1(len(orgbuff) + base.BitStrLen(session))
 		bitstream.WriteString(session)
-		bitstream.WriteBits(orgbuff, base.BytesLen(orgbuff))
+		bitstream.WriteBytes(orgbuff)
 		m.Data = bitstream.GetBuffer()
 	} else {
 		orgbuff, err := message.Pack(resp.(proto.Message))
@@ -64,7 +69,7 @@ func reqRpcCall(igo gorpc.IGoRoutine, data interface{}) interface{} {
 		}
 		bitstream := base.NewBitStream_1(len(orgbuff) + base.BitStrLen(session))
 		bitstream.WriteString(session)
-		bitstream.WriteBits(orgbuff, base.BytesLen(orgbuff))
+		bitstream.WriteBytes(orgbuff)
 		m.Data = bitstream.GetBuffer()
 	}
 	gorpc.MGR.Send("GateServer", "SendRpc", m)

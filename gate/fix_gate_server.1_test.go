@@ -1,6 +1,9 @@
 package gate
 
 import (
+	"github.com/snowyyj001/loumiao/config"
+	"github.com/snowyyj001/loumiao/message"
+	"github.com/snowyyj001/loumiao/msg"
 	"github.com/snowyyj001/loumiao/nodemgr"
 	"github.com/snowyyj001/loumiao/network"
 	"github.com/snowyyj001/loumiao/gorpc"

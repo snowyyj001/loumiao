@@ -183,11 +183,11 @@ func SendRpc(funcName string, data interface{}, target int) {
 }
 
 //远程rpc调用
-//注意：如果使用pb或json结构体传递消息，在rpc远端会使用反射来创建decode的结构体
 //@funcName: rpc函数
 //@data: 一个二进制buff或pb结构体
 //@target: 目标server的uid，如果target==0，则随机指定目标地址, 否则gate会把消息转发给指定的target服务
-func CallRpc(igo gorpc.IGoRoutine, funcName string, data interface{}, target int) (interface{}, bool) {
+//return: 返回的[]byte结果或nil
+func CallRpc(igo gorpc.IGoRoutine, funcName string, data interface{}, target int) ([]byte, bool) {
 	m := &gorpc.M{Id: target, Name: funcName}
 	m.Param = define.RPCMSG_FLAG_CALL
 	session := igo.GetName()
@@ -195,7 +195,7 @@ func CallRpc(igo gorpc.IGoRoutine, funcName string, data interface{}, target int
 		orgbuff := data.([]byte)
 		bitstream := base.NewBitStream_1(len(orgbuff) + base.BitStrLen(session))
 		bitstream.WriteString(session)
-		bitstream.WriteBits(orgbuff, base.BytesLen(orgbuff))
+		bitstream.WriteBytes(orgbuff)
 		m.Data = bitstream.GetBuffer()
 	} else {
 		orgbuff, err := message.Pack(data.(proto.Message))
@@ -204,15 +204,18 @@ func CallRpc(igo gorpc.IGoRoutine, funcName string, data interface{}, target int
 		}
 		bitstream := base.NewBitStream_1(len(orgbuff) + base.BitStrLen(session))
 		bitstream.WriteString(session)
-		bitstream.WriteBits(orgbuff, base.BytesLen(orgbuff))
+		bitstream.WriteBytes(orgbuff)
 		m.Data = bitstream.GetBuffer()
 	}
-	llog.Infof("CallRpc: session=%s, funcName=%s, target=%d", session, funcName, target)
+	//llog.Debugf("CallRpc: session=%s, funcName=%s, target=%d", session, funcName, target)
 	//base64str := base64.StdEncoding.EncodeToString([]byte(funcName))
 	gorpc.MGR.Send("GateServer", "SendRpc", m)
 
 	resp, ok := igo.CallActor("CallRpcServer", "CallRpc", session)
-	return resp, ok
+	if resp == nil || !ok {
+		return nil, false
+	}
+	return resp.([]byte), ok
 }
 
 //发送给gate的消息

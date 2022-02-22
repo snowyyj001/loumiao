@@ -135,7 +135,7 @@ func (self *EtcfServer) addWatch(prefix string, sid int) {
 
 	for key, value := range This.mStoreValues {
 		if strings.HasPrefix(key, prefix) {
-			self.broadCastValue(key, value)
+			self.noticeValue(sid, key, value)		//将已经存在的值发送给目标server
 		}
 	}
 }
@@ -201,6 +201,14 @@ func (self *EtcfServer) broadCastValue(prefix string, value string) {
 			}
 		}
 	}
+}
+
+func (self *EtcfServer) noticeValue(sid int, prefix string, value string) {
+	req := new(msg.LouMiaoNoticeValue)
+	req.Prefix = prefix
+	req.Value = value
+	buff, _ := message.Encode(0, "LouMiaoNoticeValue", req)
+	This.pInnerService.SendById(sid, buff)
 }
 
 func (self *EtcfServer) lockTimeout(param interface{}) {

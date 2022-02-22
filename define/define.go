@@ -51,6 +51,7 @@ var (
 		32380: true, //etcd
 		4222:  true, //nats
 		6222:  true, //nats
+		8222:  true, //nats
 		5044:  true, //logstash
 		8000:  true, //web
 		80:    true, //web

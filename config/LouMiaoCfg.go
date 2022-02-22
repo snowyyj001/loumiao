@@ -133,7 +133,7 @@ func init() {
 		Cfg.SqlCfg = scfg.SqlCfg
 	}
 	if Cfg.NetCfg.Uid == 0 {
-		log.Fatalf("cfg content error: %v", Cfg)
+		log.Fatalf("cfg content uid error: %d", Cfg.NetCfg.Uid)
 	}
 
 	NET_NODE_ID = Cfg.NetCfg.Id      //区服id，0代表可跨服

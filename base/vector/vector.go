@@ -6,6 +6,8 @@ import (
 	"github.com/snowyyj001/loumiao/base/containers"
 )
 
+type PVector *Vector
+
 func assert(x bool, y string) {
 	if bool(x) == false {
 		log.Fatalf("Assert: %s", y)
