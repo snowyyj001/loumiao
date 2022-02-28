@@ -212,7 +212,8 @@ func CallRpc(igo gorpc.IGoRoutine, funcName string, data interface{}, target int
 	gorpc.MGR.Send("GateServer", "SendRpc", m)
 
 	resp, ok := igo.CallActor("CallRpcServer", "CallRpc", session)
-	if resp == nil || !ok {
+	if resp == nil || !ok {		//既然调用call了就是为了返回数据，nil是不能接受的
+		llog.Warningf("loumiao.CallRpc: src = %s, func = %s, target = %d, data = %v", session, funcName, target, data)
 		return nil, false
 	}
 	return resp.([]byte), ok

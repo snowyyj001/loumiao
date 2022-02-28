@@ -46,7 +46,7 @@ type (
 )
 
 func (self *Vector) insert(index int) {
-	assert(index <= self.mElementCount, "Vector<T>::insert - out of bounds index.")
+	//assert(index <= self.mElementCount, "Vector<T>::insert - out of bounds index.")
 
 	if self.mElementCount == self.mArraySize {
 		self.resize(self.mElementCount + 1)
@@ -68,7 +68,7 @@ func (self *Vector) increment() {
 }
 
 func (self *Vector) decrement() {
-	assert(self.mElementCount != 0, "Vector<T>::decrement - cannot decrement zero-length vector.")
+	//assert(self.mElementCount != 0, "Vector<T>::decrement - cannot decrement zero-length vector.")
 	self.mElementCount--
 }
 
@@ -87,7 +87,7 @@ func (self *Vector) resize(newCount int) bool {
 }
 
 func (self *Vector) Erase(index int) {
-	assert(index < self.mElementCount, "Vector<T>::erase - out of bounds index.")
+	//assert(index < self.mElementCount, "Vector<T>::erase - out of bounds index.")
 	if index < self.mElementCount-1 {
 		for i := index; i < self.mElementCount-1; i++ {
 			self.mArray[i] = self.mArray[i+1]
@@ -108,12 +108,12 @@ func (self *Vector) PushBack(value interface{}) {
 }
 
 func (self *Vector) PopFront() {
-	assert(self.mElementCount != 0, "Vector<T>::pop_front - cannot pop the front of a zero-length vector.")
+	//assert(self.mElementCount != 0, "Vector<T>::pop_front - cannot pop the front of a zero-length vector.")
 	self.Erase(0)
 }
 
 func (self *Vector) PopBack() {
-	assert(self.mElementCount != 0, "Vector<T>::pop_back - cannot pop the back of a zero-length vector.")
+	//assert(self.mElementCount != 0, "Vector<T>::pop_back - cannot pop the back of a zero-length vector.")
 	self.decrement()
 }
 
@@ -123,12 +123,12 @@ func (self *Vector) withinRange(index int) bool {
 }
 
 func (self *Vector) Front() interface{} {
-	assert(self.mElementCount != 0, "Vector<T>::first - Error, no first element of a zero sized array! (const)")
+	//assert(self.mElementCount != 0, "Vector<T>::first - Error, no first element of a zero sized array! (const)")
 	return self.mArray[0]
 }
 
 func (self *Vector) Back() interface{} {
-	assert(self.mElementCount != 0, "Vector<T>::last - Error, no last element of a zero sized array! (const)")
+	//assert(self.mElementCount != 0, "Vector<T>::last - Error, no last element of a zero sized array! (const)")
 	return self.mArray[self.mElementCount-1]
 }
 
@@ -168,7 +168,7 @@ func (self *Vector) Len() int {
 }
 
 func (self *Vector) Get(index int) interface{} {
-	assert(index < self.mElementCount, "Vector<T>::operator[] - out of bounds array access!")
+	//assert(index < self.mElementCount, "Vector<T>::operator[] - out of bounds array access!")
 	return self.mArray[index]
 }
 

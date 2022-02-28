@@ -19,9 +19,10 @@ const (
 	CHAN_BUFFER_LEN      = 20000     //channel缓冲数量
 	WAIT_TIMEOUT         = 3         //wait超时时间,秒
 	CALL_TIMEOUT         = 3         //call超时时间,秒
+	CALL_RESP_TIMEOUT    = 1         //call回复超时时间,秒
 	CHAN_LIMIT_TIMES     = 2         //异步协程上限倍数
 	CHAN_OVERLOW         = 30        //chan可能溢出，告警CD，秒
-	CHAN_CALL_LONG       = 1000      //call警告，执行超过一秒
+	CHAN_CALL_LONG       = 1000      //call警告，执行超过1秒
 	CHAN_Statistics_Time = 60 * 1000 //每60s统计一次actor的未读数量
 )
 
@@ -41,8 +42,6 @@ type IGoRoutine interface {
 	GetName() string
 	SetName(str string)
 	GetJobChan() chan ChannelContext
-	WriteSync(ct *ChannelContext)
-	ReadSync() interface{}
 	Send(handler_name string, sdata *M)
 	SendActor(handler_name string, sdata interface{})
 	SendBack(target IGoRoutine, handler_name string, sdata *M, Cb HanlderFunc)
@@ -79,15 +78,11 @@ type GoRoutineLogic struct {
 	Name         string                    //队列名字
 	Cmd          Cmdtype                   //处理函数集合
 	jobChan      chan ChannelContext       //投递任务chan
-	readChan     chan ChannelContext       //读取chan
 	actionChan   chan int                  //命令控制chan
 	chanNum      int                       //协程数量
 	NetHandler   map[string]HanlderNetFunc //net hanlder
 	goFun        bool                      //true:使用go执行Cmd,GoRoutineLogic非协程安全;false:协程安全
 	cRoLimitChan chan struct{}             //异步协程上限控制
-	/*timer        *time.Timer
-	timerCall    func(dt int64)
-	timerDuation time.Duration*/
 
 	rpcWaitchan map[string]chan interface{}
 
@@ -243,7 +238,7 @@ func (self *GoRoutineLogic) woker() {
 		select {
 		case ct := <-self.jobChan:
 			//llog.Debugf("jobchan single: %s %s", self.Name, ct.Handler)
-			if ct.Cb != nil && ct.ReadChan == nil { //callback, for remote actor return back, remote actor should set ReadChan = nil, look line:172
+			if ct.Cb != nil && ct.ReadChan == nil { //callback, for remote actor return back, remote actor should set ReadChan = nil
 				self.CallFunc(ct.Cb, &ct.Data)
 			} else { //
 				var hd = self.Cmd[ct.Handler]
@@ -259,7 +254,12 @@ func (self *GoRoutineLogic) woker() {
 							retctx := ChannelContext{Cb: ct.Cb}
 							retctx.Data.Flag = true
 							retctx.Data.Data = ret
-							ct.ReadChan <- retctx
+							//ct.ReadChan <- retctx
+							select {
+							case ct.ReadChan <- retctx:
+							case <-time.After(CALL_RESP_TIMEOUT * time.Second):
+								llog.Errorf("GoRoutineLogic[%s]woker resp timeout: name = %s, hanlder = %s", self.Name, ct.Handler)
+							}
 						}
 					}
 				}
@@ -409,15 +409,16 @@ func (self *GoRoutineLogic) Call(server IGoRoutine, handler_name string, sdata *
 	if left > server.GetChanLen() {
 		llog.Noticef("GoRoutineLogic.Call:[src=%s,target=%s (chan overlow[now=%d, max=%d])] func=%s", self.Name, server.GetName(), server.LeftJobNumber(), server.GetChanLen(), handler_name)
 	}
-
-	job := ChannelContext{Handler: handler_name, ReadChan: self.readChan}
+	readChan := make(chan ChannelContext)
+	job := ChannelContext{Handler: handler_name, ReadChan: readChan}
 	if sdata != nil {
 		job.Data = *sdata
 	}
+
 	before := util.TimeStamp()
 	server.GetJobChan() <- job
 	select {
-	case rdata := <-self.readChan:
+	case rdata := <-readChan:
 		after := util.TimeStamp()
 		if after-before > CHAN_CALL_LONG {
 			llog.Noticef("GoRoutineLogic.Call:[src=%s,target=%s (use too long[time=%d])] func=%s", self.Name, server.GetName(), after-before, handler_name)
@@ -461,24 +462,13 @@ func (self *GoRoutineLogic) CallGoFunc(hd HanlderFunc, ct *ChannelContext) {
 		retctx := ChannelContext{Cb: ct.Cb}
 		retctx.Data.Flag = true
 		retctx.Data.Data = ret
-		ct.ReadChan <- retctx
+		select {
+		case ct.ReadChan <- retctx:
+		case <-time.After(CALL_RESP_TIMEOUT * time.Second):
+			llog.Errorf("GoRoutineLogic[%s]CallGoFunc resp timeout: hanlder = %s", self.Name, ct.Handler)
+		}
 	}
 	<-self.cRoLimitChan
-}
-
-func (self *GoRoutineLogic) WriteSync(ct *ChannelContext) {
-	if self.started == false {
-		return
-	}
-	self.readChan <- *ct
-}
-
-func (self *GoRoutineLogic) ReadSync() interface{} {
-	if self.started == false {
-		return nil
-	}
-	ct := <-self.readChan
-	return ct.Data
 }
 
 func (self *GoRoutineLogic) Register(name string, fun HanlderFunc) {
@@ -506,7 +496,7 @@ func (self *GoRoutineLogic) init(name string) {
 	self.ChanSize = n
 	self.chanWarningSize = n * 2 / 3
 	self.jobChan = make(chan ChannelContext, n)
-	self.readChan = make(chan ChannelContext)
+	//self.readChan = make(chan ChannelContext)
 	self.actionChan = make(chan int, 1)
 	self.cRoLimitChan = make(chan struct{}, n*CHAN_LIMIT_TIMES)
 	self.Cmd = make(Cmdtype)
