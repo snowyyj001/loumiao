@@ -17,7 +17,6 @@ import (
 	"github.com/snowyyj001/loumiao/gorpc"
 	"github.com/snowyyj001/loumiao/llog"
 	"github.com/snowyyj001/loumiao/message"
-	"github.com/snowyyj001/loumiao/msg"
 	"github.com/snowyyj001/loumiao/timer"
 	"github.com/snowyyj001/loumiao/util"
 )
@@ -235,16 +234,6 @@ func SendGate(uid int, data interface{}) {
 func SendAcotr(actorName string, actorHandler string, data interface{}) {
 	m := &gorpc.M{Data: data, Flag: true}
 	gorpc.MGR.Send(actorName, actorHandler, m)
-}
-
-//主动绑定关于client的gate信息，例如，world通知zone绑定client和gate的信息
-//world通知其他server关于client的gate信息,其他server只有知道了client属于哪个gate才能发送消息给client
-//@userid: client的userid
-//@gateuid: client所属的gate uid
-//@targetuid: 目标服务器uid
-func BindGate(userid int64, gateuid int, targetuid int) {
-	req := &msg.LouMiaoBindGate{Uid: int32(gateuid), UserId: userid}
-	SendRpc("LouMiaoBindGate", req, targetuid)
 }
 
 //sub/pub系统，只在本节点服务内生效

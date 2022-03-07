@@ -18,7 +18,7 @@ const (
 	ServerType_Zone             //4 地图
 	ServerType_DB               //5 数据库
 	ServerType_Log              //6 日志
-	ServerType_IM               //7 聊天-跨服-公共服
+	ServerType_Public           //7 唯一公共服
 	ServerType_WEB_GM           //8 web gm
 	ServerType_WEB_LOGIN        //9 web login
 	ServerType_RPCGate          //10 rpc gate
@@ -35,7 +35,7 @@ var (
 		ServerType_Zone:      "zone",
 		ServerType_DB:        "db",
 		ServerType_Log:       "logserver",
-		ServerType_IM:        "publicserver",
+		ServerType_Public:    "publicserver",
 		ServerType_WEB_GM:    "webserver",
 		ServerType_WEB_LOGIN: "weblogin",
 		ServerType_RPCGate:   "rpcserver",

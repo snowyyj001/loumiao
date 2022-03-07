@@ -264,16 +264,6 @@ func innerLouMiaoClientConnect(igo gorpc.IGoRoutine, socketId int, data []byte) 
 	}
 }
 
-//info about client with the gate
-func innerLouMiaoLouMiaoBindGate(igo gorpc.IGoRoutine, socketId int, data []byte) {
-	llog.Debugf("innerLouMiaoLouMiaoBindGate %v", data)
-	req := &msg.LouMiaoBindGate{}
-	if message.UnPack(req, data) != nil {
-		return
-	}
-	This.BindGate(int(req.UserId), int(req.Uid))
-}
-
 func registerNet(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	m := data.(*gorpc.M)
 	sname, ok := handler_Map[m.Name]
@@ -460,12 +450,6 @@ func closeServer(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	return nil
 }
 
-func bindGate(igo gorpc.IGoRoutine, data interface{}) interface{} {
-	req := data.(*msg.LouMiaoBindGate)
-	This.users_u[int(req.UserId)] = int(req.Uid)
-	return nil
-}
-
 //gate send msg to all clients or
 //server send msg to all gates
 func broadCastClients(buff []byte) {
@@ -508,5 +492,15 @@ func subscribe(igo gorpc.IGoRoutine, data interface{}) interface{} {
 		}
 		vec.Put(name, hanlder)
 	}
+	return nil
+}
+
+func bindGate(igo gorpc.IGoRoutine, data interface{}) interface{} {
+	m := data.(*gorpc.MA)
+	userid := m.Id
+	gateuid := m.Param
+
+	This.BindGate(userid, gateuid)
+
 	return nil
 }

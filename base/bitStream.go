@@ -43,6 +43,7 @@ type (
 		GetPosition() int
 		GetStreamSize() int
 		SetPosition(int) bool
+		Reset()
 		clear()
 		resize() bool
 
@@ -87,6 +88,11 @@ func (self *BitStream) setBuffer(bufPtr []byte, size int, maxSize int) {
 	self.maxWriteBitNum = maxSize << 3
 	self.bitsLimite = size
 	self.error = false
+}
+
+func (self *BitStream) Reset() {
+	self.setBuffer(self.dataPtr, self.bufSize, -1)
+	self.SetPosition(0)
 }
 
 func (self *BitStream) GetBuffer() []byte {
