@@ -36,7 +36,20 @@ func Dial(url string) error {
 			}
 			_, err := c.Do("PING")
 			if err != nil {
-				llog.Fatalf("redis[%s] ping error: %s", url, err.Error())
+				llog.Errorf("redis[%s] ping error: %s", url, err.Error())
+				//这里重连
+				llog.Infof("redis begin reconnected")
+				go func() {
+					for {
+						err = DialDefault()
+						if err != nil {
+							time.Sleep(time.Second)
+						} else {
+							llog.Infof("redis begin reconnected success")
+							break
+						}
+					}
+				}()
 			}
 			return err
 		},

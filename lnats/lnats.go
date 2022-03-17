@@ -6,6 +6,7 @@ import (
 	"github.com/snowyyj001/loumiao/define"
 	"github.com/snowyyj001/loumiao/llog"
 	"github.com/snowyyj001/loumiao/util"
+	"github.com/snowyyj001/loumiao/util/ratelimiter"
 	"strings"
 	"time"
 
@@ -16,10 +17,14 @@ import (
 
 var (
 	lnc *nats.Conn
+	errorLimiter *ratelimiter.RateLimiter			//上报error信息限流
 )
 
 const (
 	TIMEOUT_NATS = 3
+
+	PermitsPerSecond = 10		//100ms 一个
+	MaxPermits = 1024
 )
 
 func FormatTopic(topic, prefix string) string {
@@ -223,10 +228,13 @@ func Init() {
 		llog.Info(str)
 	}
 	lnc = nc
+
+	errorLimiter = ratelimiter.Create(PermitsPerSecond, MaxPermits)
 }
 
 //上报服务器关键信息
 func ReportMail(tag int, str string) {
+	errorLimiter.Acquire()
 	reqParam := &struct {
 		Tag     int    `json:"tag"`     //邮件类型
 		Id      int    `json:"id"`      //区服id

@@ -64,6 +64,7 @@ var (
 	SERVER_NODE_UID  = 0              //服务器uid
 	NET_LISTEN_SADDR = "0.0.0.0:6789" //内网tcp监听地址
 	SERVER_PARAM     = ""             //启动参数
+	SERVER_RELEASE	 = false		  //配置上区分一下release和debug，方便开发期间的一些coding
 
 )
 
@@ -80,6 +81,7 @@ type NetNode struct {
 	MaxNum    int    `json:"maxnum"`
 	Group     string `json:"group"`
 	LogFile   int    `json:"logfile"` //如果-1，代表输出到控制台
+	Release   bool   `json:"release"`
 
 }
 
@@ -129,6 +131,7 @@ func init() {
 		Cfg.NetCfg.SAddr = scfg.NetCfg.SAddr
 		Cfg.NetCfg.LogFile = scfg.NetCfg.LogFile
 		Cfg.NetCfg.Param = scfg.NetCfg.Param
+		Cfg.NetCfg.Release = scfg.NetCfg.Release
 		Cfg.RedisUri = scfg.RedisUri
 		Cfg.SqlCfg = scfg.SqlCfg
 	}
@@ -136,7 +139,7 @@ func init() {
 		log.Fatalf("cfg content uid error: %d", Cfg.NetCfg.Uid)
 	}
 
-	NET_NODE_ID = Cfg.NetCfg.Id      //区服id，0代表可跨服
+	NET_NODE_ID = Cfg.NetCfg.Id      //区服id
 	SERVER_NODE_UID = Cfg.NetCfg.Uid //server uid
 	NET_NODE_TYPE = Cfg.NetCfg.Type
 	NET_PROTOCOL = Cfg.NetCfg.Protocol
@@ -146,6 +149,7 @@ func init() {
 	NET_GATE_SADDR = Cfg.NetCfg.SAddr
 	NET_LISTEN_SADDR = NET_GATE_SADDR
 	SERVER_PARAM = Cfg.NetCfg.Param
+	SERVER_RELEASE = Cfg.NetCfg.Release
 
 	GAME_LOG_CONLOSE = Cfg.NetCfg.LogFile == -1 //-1log也输出到控制台，外网不需要输出到控制台
 	if GAME_LOG_CONLOSE {

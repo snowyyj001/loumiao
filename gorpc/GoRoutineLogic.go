@@ -23,7 +23,6 @@ const (
 	CHAN_LIMIT_TIMES     = 2         //异步协程上限倍数
 	CHAN_OVERLOW         = 30        //chan可能溢出，告警CD，秒
 	CHAN_CALL_LONG       = 1000      //call警告，执行超过1秒
-	CHAN_Statistics_Time = 60 * 1000 //每60s统计一次actor的未读数量
 )
 
 type Cmdtype map[string]HanlderFunc
@@ -55,6 +54,7 @@ type IGoRoutine interface {
 	SetSync(sync bool)
 	IsSync() bool
 	IsRunning() bool
+	IsCoExited() bool
 	GetChanLen() int
 	GetWarnChanLen() int
 	IsInited() bool
@@ -94,6 +94,7 @@ type GoRoutineLogic struct {
 	tickerIndex int64
 
 	started         bool //是否已启动
+	closed          bool //协程是否退出
 	inited          bool //是否初始化失败
 	ChanSize        int  //job chan size
 	chanWarningSize int  //
@@ -133,6 +134,9 @@ func (self *GoRoutineLogic) IsSync() bool {
 }
 func (self *GoRoutineLogic) IsRunning() bool {
 	return self.started
+}
+func (self *GoRoutineLogic) IsCoExited() bool {
+	return self.closed
 }
 func (self *GoRoutineLogic) GetChanLen() int {
 	return self.ChanSize
@@ -270,6 +274,9 @@ func (self *GoRoutineLogic) woker() {
 				goto LabelEnd
 			}
 		case index := <-self.timerChan:
+			if !self.started {
+				break
+			}
 			caller, ok := self.timerFuncs[index]
 			if ok {
 				nt := util.TimeStamp()
@@ -281,6 +288,9 @@ func (self *GoRoutineLogic) woker() {
 				caller.lastCallTime = nt
 			}
 		case index := <-self.tikerChan:
+			if !self.started {
+				break
+			}
 			caller, ok := self.delayJobs[index]
 			if ok {
 				delete(self.delayJobs, index)
@@ -306,13 +316,16 @@ func (self *GoRoutineLogic) Run() {
 //关闭任务
 func (self *GoRoutineLogic) stop() {
 	self.started = false
+	self.closed = true
 	for _, caller := range self.timerFuncs {
+		caller.timer.Stop()
+	}
+	for _, caller := range self.delayJobs {
 		caller.timer.Stop()
 	}
 	//当一个通道不再被任何协程所使用后，它将逐渐被垃圾回收掉，无论它是否已经被关闭
 	//这里不关闭jobChan和readChan，让gc处理他们
 	close(self.actionChan)
-
 }
 
 //关闭任务
@@ -327,6 +340,9 @@ func (self *GoRoutineLogic) CloseCleanly() {
 	self.started = false //先标记关闭
 	//把定时器给关了
 	for _, caller := range self.timerFuncs {
+		caller.timer.Stop()
+	}
+	for _, caller := range self.delayJobs {
 		caller.timer.Stop()
 	}
 	timer.NewTicker(1000, func(dt int64) bool {

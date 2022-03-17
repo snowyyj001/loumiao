@@ -2,15 +2,15 @@
 package etcf
 
 import (
-	"github.com/snowyyj001/loumiao/message"
-	"github.com/snowyyj001/loumiao/msg"
-	"strings"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/snowyyj001/loumiao/config"
 	"github.com/snowyyj001/loumiao/gorpc"
 	"github.com/snowyyj001/loumiao/llog"
+	"github.com/snowyyj001/loumiao/message"
+	"github.com/snowyyj001/loumiao/msg"
 	"github.com/snowyyj001/loumiao/network"
 	"github.com/snowyyj001/loumiao/util"
 )

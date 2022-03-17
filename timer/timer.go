@@ -9,7 +9,7 @@ const (
 	DAY_SECONDS  int64  = 86400        //每日秒数
 	SECOND_MILLI int64  = 1000         //1秒钟,毫秒
 	MINITE_MILLI int64  = 1000 * 60    //1分钟,毫秒
-	RFC3339Day   string = "2006-01-02" //RFC3339格式，精确到天
+	RFC3339Day   string = "2006_01_02" //RFC3339格式，精确到天
 )
 
 type Timer struct {
@@ -29,7 +29,7 @@ func NewTimer(dt int, cb func(dt int64) bool, repeat bool) *Timer {
 
 	t := new(Timer)
 	t.t2 = time.NewTimer(delat)
-	t.done = make(chan bool)
+	t.done = make(chan bool, 1)
 	t.loop = repeat
 	t.over = true
 
@@ -70,7 +70,7 @@ func NewTicker(dt int, cb func(dt int64) bool) *Timer {
 	t := new(Timer)
 	ticker := time.NewTicker(time.Duration(dt) * time.Millisecond)
 
-	t.done = make(chan bool)
+	t.done = make(chan bool, 1)
 	t.t1 = ticker
 	t.loop = true
 	t.over = true

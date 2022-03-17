@@ -55,7 +55,7 @@ func innerLouMiaoRpcMsg(igo gorpc.IGoRoutine, socketId int, data []byte) {
 		rpcClientId = This.getClientId(int(req.TargetId))
 	}
 	if rpcClientId == 0 {
-		llog.Errorf("1.innerLouMiaoRpcMsg no target error funcName=%s,sourceid=%d,target=%d, buffer=%v", req.FuncName, req.SourceId, req.TargetId, req.Buffer)
+		llog.Errorf("1.innerLouMiaoRpcMsg no target error funcName=%s,sourceid=%d,target=%d", req.FuncName, req.SourceId, req.TargetId)
 		return
 	}
 	buff, _ := message.Encode(0, "LouMiaoRpcMsg", req)

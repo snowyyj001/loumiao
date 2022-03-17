@@ -1,22 +1,31 @@
 package gorpc
 
 import (
+	"github.com/snowyyj001/loumiao/timer"
 	"sync"
 
 	"github.com/snowyyj001/loumiao/llog"
 	"github.com/snowyyj001/loumiao/util"
 )
 
+const (
+	Pool_Statistics_Time = 30 * 1000 //每30s统计一次actor的未读数量
+)
+
 //协程池，主要用来管理临时开启关闭的协程
 type GoRoutinePool struct {
 	go_name_Tmp map[int64]IGoRoutine
+	mPoolName string
+	mMinitor sync.Map
 
 	actorLock *sync.RWMutex
 }
 
-func (self *GoRoutinePool) Init() {
+func (self *GoRoutinePool) Init(name string) {
 	self.go_name_Tmp = make(map[int64]IGoRoutine)
 	self.actorLock = &sync.RWMutex{}
+	self.mPoolName = name
+	self.Statistics()
 }
 
 //添加一个actor
@@ -29,6 +38,7 @@ func (self *GoRoutinePool) AddRoutine(rou IGoRoutine, name int64) bool {
 	}
 	self.go_name_Tmp[name] = rou
 	self.actorLock.Unlock()
+	self.mMinitor.Store(name, rou)
 	return true
 }
 
@@ -180,4 +190,27 @@ func (self *GoRoutinePool) GetPoolSize() (sz int) {
 	sz = len(self.go_name_Tmp)
 	self.actorLock.RUnlock()
 	return
+}
+
+//统计当前actor数量
+func (self *GoRoutinePool) Statistics() {
+	timer.NewTimer(Pool_Statistics_Time, func(dt int64) bool {
+		dele := make([]interface{}, 0)
+		cnt := 0
+		self.mMinitor.Range(func(key, value interface{}) bool {
+			igo := value.(IGoRoutine)
+			if igo.IsCoExited() {
+				dele = append(dele, key)
+			} else {
+				cnt++
+			}
+			return true
+		})
+		for _, v := range dele {
+			self.mMinitor.Delete(v)
+		}
+		llog.Debugf("GoRoutinePool.Statistics: name=%s, poolsize=%d, minitortsize=%d",self.mPoolName, self.GetPoolSize(), cnt)
+		return true
+	}, true)
+
 }

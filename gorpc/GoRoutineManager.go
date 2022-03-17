@@ -14,6 +14,10 @@ type GoRoutineMgr struct {
 	has_started bool
 }
 
+const (
+	CHAN_Statistics_Time = 60 * 1000 //每60s统计一次actor的未读数量
+)
+
 var (
 	MGR *GoRoutineMgr
 )

@@ -145,6 +145,7 @@ func BroadCastMsg(data interface{}) {
 func RegisterRpcHandler(igo gorpc.IGoRoutine, call gorpc.HanlderNetFunc) {
 	util.Assert(nodemgr.ServerEnabled == false, "RegisterRpcHandler can not register after server started")
 	funcName := util.RpcFuncName(call)
+	//llog.Debugf("funcName = %s", funcName)
 	//base64str := base64.StdEncoding.EncodeToString([]byte(funcName))
 	gorpc.MGR.Send("GateServer", "RegisterNet", &gorpc.M{Id: -1, Name: funcName, Data: igo.GetName()})
 	igo.RegisterGate(funcName, call)
@@ -215,6 +216,7 @@ func CallRpc(igo gorpc.IGoRoutine, funcName string, data interface{}, target int
 		llog.Warningf("loumiao.CallRpc: src = %s, func = %s, target = %d, data = %v", session, funcName, target, data)
 		return nil, false
 	}
+
 	return resp.([]byte), ok
 }
 

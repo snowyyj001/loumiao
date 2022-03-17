@@ -93,7 +93,6 @@ func (self *RateLimiter) resync(nowMicros int64) {
 func (self *RateLimiter) Acquire() {
 	microsToWait := self.reserve(1)
 	if microsToWait > 0 {
-		//llog.Debugf("Acquire %d %d",microsToWait,self.storedPermits)
 		time.Sleep(time.Duration(microsToWait) * time.Microsecond)
 	}
 }

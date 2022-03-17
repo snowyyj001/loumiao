@@ -36,13 +36,27 @@ func DialDefault() error {
 			return err
 		}
 		if err := client.Ping(ctx, readpref.Primary()); err != nil {
-			llog.Fatalf("mongo ping error: %s", err.Error())
+			llog.Errorf("mongo ping error: %s", err.Error())
 		} else {
 			llog.Debugf("mongo connet successed!")
 		}
 		mClient = client
 		break
 	}
+	go func() { //每秒钟检测一次数据库连接状态
+		for {
+			if err := mClient.Ping(ctx, readpref.Primary()); err != nil {
+				llog.Errorf("mongo test ping error: %s", err.Error())
+				llog.Info("begin reconnect mongo")
+				err = DialDefault()
+				llog.Info("end reconnect mongo")
+				if err == nil {
+					break
+				}
+			}
+			time.Sleep(time.Second * 3)
+		}
+	}()
 	return nil
 }
 

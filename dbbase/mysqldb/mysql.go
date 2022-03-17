@@ -141,11 +141,17 @@ func Dial(tbs []interface{}) error {
 		create(Master, tbs)
 	}
 
-	go func() { //每秒钟检测一次数据库连接状态，主库连接失败直接退出程序
+	go func() { //每秒钟检测一次数据库连接状态
 		for {
 			sqlDB, _ := Master.DB()
 			if err := sqlDB.Ping(); err != nil {
-				llog.Fatalf("mysql master db ping error: %s", err.Error())
+				llog.Errorf("mysql master db ping error: %s", err.Error())
+				llog.Info("begin reconnect mysql")
+				err = DialDefault()
+				llog.Info("end reconnect mysql")
+				if err == nil {		//重连成功就退出，否则就不停重试
+					break
+				}
 			}
 			for i := 0; i < SLen; i++ {
 				sqlDB, _ := Slaves[i].DB()
@@ -154,7 +160,7 @@ func Dial(tbs []interface{}) error {
 					Slaves[i] = Master
 				}
 			}
-			time.Sleep(time.Second * 1)
+			time.Sleep(time.Second * 3)
 		}
 	}()
 
@@ -166,35 +172,6 @@ func Dial(tbs []interface{}) error {
 //连接数据库,使用config-mysql参数,不创建修改表
 func DialDefault() error {
 	return Dial(nil)
-}
-
-func DialDB(uri string, idle int, maxconn int) *gorm.DB {
-	engine, err := gorm.Open(mysql.Open(uri), &gorm.Config{
-		NamingStrategy: schema.NamingStrategy{
-			SingularTable: true, // 使用单数表名，启用该选项，此时，`User` 的表名应该是 `user`
-		},
-		Logger:                                   newloger().LogMode(logLevel),
-		SkipDefaultTransaction:                   true, //创建、更新、删除，禁用事务提交的方式
-		DisableForeignKeyConstraintWhenMigrating: true, //不自动创建外键约束
-	})
-	if err != nil {
-
-		return nil
-	}
-	sqlDB, _ := engine.DB()
-	sqlDB.SetMaxIdleConns(idle)
-	sqlDB.SetMaxOpenConns(maxconn)
-
-	return engine
-}
-
-func DialOrm(uri string, idle int, maxconn int, tbs []interface{}) *ORMDB {
-	var orm *ORMDB = new(ORMDB)
-	orm.m_Db = DialDB(uri, idle, maxconn)
-	if tbs != nil {
-		create(orm.m_Db, tbs)
-	}
-	return orm
 }
 
 //创建数据表

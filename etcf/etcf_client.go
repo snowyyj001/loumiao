@@ -143,7 +143,7 @@ func PutNode() {
 func leaseCallBack(dt int64) bool {
 	Client.leaseTime++
 	//llog.Debugf("leaseCallBack: %d", Client.leaseTime)
-	if Client.leaseTime > 2 {
+	if Client.leaseTime > 5 {
 		llog.Errorf("etcf lease 续租失败: leaseTime = %d", Client.leaseTime)
 		Client.Start(true)
 	}
