@@ -2,6 +2,7 @@ package loumiao
 
 import (
 	"github.com/golang/protobuf/proto"
+	"github.com/snowyyj001/loumiao/msg"
 	"os"
 	"os/signal"
 	"reflect"
@@ -278,4 +279,16 @@ func Subscribe(igo gorpc.IGoRoutine, key string, call gorpc.HanlderFunc) { //订
 	bitstream.WriteString(key)
 	bitstream.WriteString(hanlder)
 	SendAcotr("GateServer", "Subscribe", bitstream.GetBuffer())
+}
+
+
+//节点间传递player服务绑定基础信息
+func SyncServerPlayer(userid, gateuid, worlduid, zoneuid, taigerid int) {
+	req := &msg.LoumiaoPlayerBase{
+		UserId: int64(userid),
+		WorldUid: int32(worlduid),
+		GateUid: int32(gateuid),
+		ZoneUid: int32(zoneuid),
+	}
+	SendRpc("LoumiaoPlayerBase", req, taigerid)
 }

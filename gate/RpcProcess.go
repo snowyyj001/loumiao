@@ -111,7 +111,7 @@ func innerLouMiaoLoginGate(igo gorpc.IGoRoutine, socketId int, data []byte) {
 		innerDisConnect(igo, old_socketid, nil) //时序异步问题，这里直接关闭，不等socket的DISCONNECT消息
 		This.pInnerService.(*network.ServerSocket).StopClient(old_socketid)
 	}
-	This.BindServerGate(socketId, userid, int(req.TokenId))
+	This.BindServerGate(socketId, userid, req.TokenId)
 }
 
 //recv rpc msg
@@ -219,7 +219,7 @@ func innerLouMiaoNetMsg(igo gorpc.IGoRoutine, socketId int, data []byte) {
 					gorpc.MGR.Send(handler, "ServiceHandler", nm)
 				}
 			} else {
-				llog.Warningf("innerLouMiaoNetMsg handler is nil, drop it[%s][%d][%d]", name, target, config.SERVER_NODE_UID)
+				llog.Warningf("innerLouMiaoNetMsg handler is nil, drop it,userid = %d, msgname = %s, target = %d", userid, name, target)
 			}
 		}
 	}
@@ -271,6 +271,7 @@ func registerNet(igo gorpc.IGoRoutine, data interface{}) interface{} {
 		llog.Errorf("registerNet %s has already been registered: has = %s, now = %s", m.Name, sname, m.Data.(string))
 		return nil
 	}
+	//llog.Debugf("registerNet: name = %s, id = %d", m.Name, m.Id)
 	handler_Map[m.Name] = m.Data.(string)
 	if m.Id < 0 { //rpc register
 		This.rpcMap[m.Name] = m.Data.(string)
@@ -344,7 +345,7 @@ func newClient(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	}
 	This.clients[uid] = client
 	if m.Param == 1 { //login server
-		req := &msg.LouMiaoLoginGate{TokenId: int64(uid), UserId: int64(config.SERVER_NODE_UID)}
+		req := &msg.LouMiaoLoginGate{TokenId: util.Itoa(uid), UserId: int64(config.SERVER_NODE_UID)}
 		buff, _ := message.Encode(uid, "LouMiaoLoginGate", req)
 		client.Send(buff)
 	} else { //register rpc
@@ -415,6 +416,8 @@ func recvPackMsgClient(igo gorpc.IGoRoutine, data interface{}) interface{} {
 
 	//客户端不接受传uid，只接受server type
 	//所以这里做一次转化，根据server type找到对应的uid
+	//目前只支持client到lobby和loginqueuq的直接消息发送，因为我不想让gate维护其他更多信息
+	//如果客户端哪天接受传uid了，就可以支持直接发送对应的消息到目标server
 	targetUid := 0
 	if target == config.ServerType_World {
 		targetUid = token.WouldId

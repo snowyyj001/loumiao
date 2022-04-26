@@ -234,6 +234,10 @@ func Init() {
 
 //上报服务器关键信息
 func ReportMail(tag int, str string) {
+	//这里说一下golang有意思的事情，errorLimiter为nil的话，是不会在241行报错的，会在RateLimiter的Acquire内部使用self时报错，这和其他语言例如cpp是不一样的
+	if errorLimiter == nil {
+		return
+	}
 	errorLimiter.Acquire()
 	reqParam := &struct {
 		Tag     int    `json:"tag"`     //邮件类型

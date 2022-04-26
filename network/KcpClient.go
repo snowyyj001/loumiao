@@ -21,6 +21,7 @@ func (self *KcpClient) Init(saddr string) bool {
 	if self.m_sAddr == saddr {
 		return false
 	}
+	self.mHeartDone = make(chan bool, 1)
 	self.Socket.Init(saddr)
 	return true
 }
@@ -107,6 +108,7 @@ func (self *KcpClient) OnNetConn() {
 	self.HandlePacket(self.m_ClientId, buff, nLen)
 
 	delat := time.Duration(KCPTIMEOUT) * time.Second
+	self.mHeartTimer = time.NewTimer(delat)
 	go func() {
 		for {
 			select {

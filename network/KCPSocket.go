@@ -33,7 +33,7 @@ const (
 	KCPWriteDelay   = false
 	KCPDSCP         = 0
 	KCPAckNodelay   = true
-	KCPTIMEOUT      = 3
+	KCPTIMEOUT      = 6
 )
 
 type KcpSocket struct {

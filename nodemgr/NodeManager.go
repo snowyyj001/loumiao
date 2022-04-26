@@ -3,6 +3,7 @@ package nodemgr
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"strings"
 	"sync"
 
@@ -159,6 +160,36 @@ func GetBalanceServer(atype int) *NodeInfo  {
 	for _, node := range node_Map {
 		if node.SocketActive && node.Number < node.MaxNum && node.Type == atype {
 			nodes = append(nodes, node)
+		}
+	}
+	sz := len(nodes)
+	if sz > 0 {
+		node := nodes[util.Random(1000)%sz]
+		return node
+
+	} else {
+		return nil
+	}
+}
+
+//挑选一个人数最少的server
+func GetBalanceServerByNum(atype int) *NodeInfo  {
+	//pick the gate
+	defer nodeLock.RUnlock()
+	nodeLock.RLock()
+	var minnum = math.MaxInt32
+
+	var nodes []*NodeInfo
+	for _, node := range node_Map {
+		if node.SocketActive && node.Type == atype {
+			if node.Number < minnum {
+				nodes = make([]*NodeInfo, 0)
+				nodes = append(nodes, node)
+				minnum = node.Number
+			} else if node.Number == minnum {
+				nodes = append(nodes, node)
+			}
+
 		}
 	}
 	sz := len(nodes)

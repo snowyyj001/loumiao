@@ -24,6 +24,7 @@ const (
 	ServerType_RPCGate          //10 rpc gate
 	ServerType_ETCF             //11 配置中心
 	ServerType_LOGINQUEUE		//12 排队
+	ServerType_Robot			//13 机器人
 )
 
 var (
@@ -41,6 +42,7 @@ var (
 		ServerType_RPCGate:   "rpcserver",
 		ServerType_ETCF:      "etcfserver",
 		ServerType_LOGINQUEUE: "queueserver",
+		ServerType_Robot: "robot",
 	}
 )
 

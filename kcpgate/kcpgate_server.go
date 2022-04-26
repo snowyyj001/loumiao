@@ -83,8 +83,8 @@ func packetFunc(socketid int, buff []byte, nlen int) bool {
 		This.closeClient(socketid)
 		return false
 	}
-	if target == config.SERVER_NODE_UID || target <= 0 { //server使用的是server uid
-		llog.Errorf("KcpGateServer packetFunc target error: target = %d, my = %d, name = %s", target, config.SERVER_NODE_UID, name)
+	if target != config.NET_NODE_TYPE && target > 0 {
+		llog.Errorf("KcpGateServer packetFunc target error: target = %d, my = %d, name = %s", target, config.NET_NODE_TYPE, name)
 		This.closeClient(socketid)
 		return false
 	}

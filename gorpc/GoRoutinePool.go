@@ -36,6 +36,7 @@ func (self *GoRoutinePool) AddRoutine(rou IGoRoutine, name int64) bool {
 		llog.Errorf("GoRoutinePool AddRoutine error: %d has already been added", name)
 		return false
 	}
+	rou.SetName(util.Itoa64(name))
 	self.go_name_Tmp[name] = rou
 	self.actorLock.Unlock()
 	self.mMinitor.Store(name, rou)
