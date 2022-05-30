@@ -52,13 +52,13 @@ func reqRpcCall(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	m := &gorpc.M{Id: int(rpcmsg.SourceId), Name: session}
 	m.Param = util.BitOr(define.RPCMSG_FLAG_RESP, define.RPCMSG_FLAG_CALL)
 	if resp == nil {		//rpc调用出错了才会返回nil
-		bitstream := base.NewBitStream_1(base.BitStrLen(session))
+		bitstream := base.NewBitStreamS(base.BitStrLen(session))
 		bitstream.WriteString(session)
 		bitstream.WriteBytes(nil)
 		m.Data = bitstream.GetBuffer()
 	} else if reflect.TypeOf(resp).Kind() == reflect.Slice { //bitstream
 		orgbuff := resp.([]byte)
-		bitstream := base.NewBitStream_1(len(orgbuff) + base.BitStrLen(session))
+		bitstream := base.NewBitStreamS(len(orgbuff) + base.BitStrLen(session))
 		bitstream.WriteString(session)
 		bitstream.WriteBytes(orgbuff)
 		m.Data = bitstream.GetBuffer()
@@ -67,7 +67,7 @@ func reqRpcCall(igo gorpc.IGoRoutine, data interface{}) interface{} {
 		if err != nil {
 			llog.Errorf("reqRpcCall: func = %s, session = %s", rpcmsg.FuncName, session)
 		}
-		bitstream := base.NewBitStream_1(len(orgbuff) + base.BitStrLen(session))
+		bitstream := base.NewBitStreamS(len(orgbuff) + base.BitStrLen(session))
 		bitstream.WriteString(session)
 		bitstream.WriteBytes(orgbuff)
 		m.Data = bitstream.GetBuffer()

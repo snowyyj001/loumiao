@@ -2,7 +2,6 @@ package loumiao
 
 import (
 	"github.com/golang/protobuf/proto"
-	"github.com/snowyyj001/loumiao/msg"
 	"os"
 	"os/signal"
 	"reflect"
@@ -174,6 +173,7 @@ func SendRpc(funcName string, data interface{}, target int) {
 	} else {
 		buff, err := message.Pack(data.(proto.Message))
 		if err != nil {
+			llog.Errorf("SendRpc: %s", err.Error())
 			return
 		}
 		m.Data = buff
@@ -194,16 +194,17 @@ func CallRpc(igo gorpc.IGoRoutine, funcName string, data interface{}, target int
 	session := igo.GetName()
 	if reflect.TypeOf(data).Kind() == reflect.Slice { //bitstream
 		orgbuff := data.([]byte)
-		bitstream := base.NewBitStream_1(len(orgbuff) + base.BitStrLen(session))
+		bitstream := base.NewBitStreamS(len(orgbuff) + base.BitStrLen(session))
 		bitstream.WriteString(session)
 		bitstream.WriteBytes(orgbuff)
 		m.Data = bitstream.GetBuffer()
 	} else {
 		orgbuff, err := message.Pack(data.(proto.Message))
 		if err != nil {
+			llog.Errorf("CallRpc: %s", err.Error())
 			return nil, false
 		}
-		bitstream := base.NewBitStream_1(len(orgbuff) + base.BitStrLen(session))
+		bitstream := base.NewBitStreamS(len(orgbuff) + base.BitStrLen(session))
 		bitstream.WriteString(session)
 		bitstream.WriteBytes(orgbuff)
 		m.Data = bitstream.GetBuffer()
@@ -219,6 +220,27 @@ func CallRpc(igo gorpc.IGoRoutine, funcName string, data interface{}, target int
 	}
 
 	return resp.([]byte), ok
+}
+
+//远程rpc广播调用
+//@funcName: rpc函数
+//@data: 函数参数,一个二进制buff或pb结构体
+//@target: 目标server的type，如果target==0，则在发给所有的server
+func BroadCastRpc(funcName string, data interface{}, target int) {
+	m := &gorpc.M{Id: target, Name: funcName}
+	m.Param = define.RPCMSG_FLAG_BROAD
+	if reflect.TypeOf(data).Kind() == reflect.Slice { //bitstream
+		m.Data = data
+	} else {
+		buff, err := message.Pack(data.(proto.Message))
+		if err != nil {
+			return
+		}
+		m.Data = buff
+	}
+	llog.Debugf("BroadCastRpc: %s, %d", funcName, target)
+	//base64str := base64.StdEncoding.EncodeToString([]byte(funcName))
+	gorpc.MGR.Send("GateServer", "SendRpc", m)
 }
 
 //发送给gate的消息
@@ -274,21 +296,9 @@ func Subscribe(igo gorpc.IGoRoutine, key string, call gorpc.HanlderFunc) { //订
 		hanlder = ""
 	}
 
-	bitstream := base.NewBitStream_1(base.BitStrLen(name) + base.BitStrLen(key) + base.BitStrLen(hanlder) + 1)
+	bitstream := base.NewBitStreamS(base.BitStrLen(name) + base.BitStrLen(key) + base.BitStrLen(hanlder) + 1)
 	bitstream.WriteString(name)
 	bitstream.WriteString(key)
 	bitstream.WriteString(hanlder)
 	SendAcotr("GateServer", "Subscribe", bitstream.GetBuffer())
-}
-
-
-//节点间传递player服务绑定基础信息
-func SyncServerPlayer(userid, gateuid, worlduid, zoneuid, taigerid int) {
-	req := &msg.LoumiaoPlayerBase{
-		UserId: int64(userid),
-		WorldUid: int32(worlduid),
-		GateUid: int32(gateuid),
-		ZoneUid: int32(zoneuid),
-	}
-	SendRpc("LoumiaoPlayerBase", req, taigerid)
 }

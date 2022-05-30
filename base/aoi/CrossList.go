@@ -180,7 +180,7 @@ func (self *SkipList) DelNode(node *CrossNode) {
 func (self *SkipList) MoveNode(node *CrossNode) {
 	val := node.GetVal()
 	movenode := ICrossNode(node)
-	var moded bool = false
+	var moded = false
 	for i:=0; i<self.mNowLevel; i++ {		//向后移动
 		next := movenode.GetNext()
 		for val > next.GetVal() {
@@ -287,7 +287,7 @@ func (self *CrossList) RefreshViwer(entity *CrossEntity) {
 	}
 }
 
-func inti()  {
+func init()  {
 	cnodescache.New = func() interface{} {
 		return new(CrossLevelNode)
 	}

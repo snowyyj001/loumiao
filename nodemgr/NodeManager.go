@@ -150,6 +150,22 @@ func CalcWorldServerNumber() int  {
 	return num
 }
 
+//pick the server by type
+func GetTypeServer(atype int) []*NodeInfo  {
+	//pick the gate
+	defer nodeLock.RUnlock()
+	nodeLock.RLock()
+
+	nodes := make([]*NodeInfo, 0)
+	for _, node := range node_Map {
+		if node.SocketActive && node.Type == atype {
+			nodes = append(nodes, node)
+		}
+	}
+
+	return nodes
+}
+
 //pick a server by random
 func GetBalanceServer(atype int) *NodeInfo  {
 	//pick the gate

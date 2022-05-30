@@ -15,9 +15,7 @@ const (
 	Bit16             = 16
 	Bit32             = 32
 	Bit64             = 64
-	Bit128            = 128
-	MAX_PACKET        = 1 * 1024 * 1024 //1MB
-	MAX_CLIENT_PACKET = 10 * 1024       //10KB
+	MAX_PACKET        = 2 * 1024 * 1024 //2MB
 )
 
 type (
@@ -314,12 +312,12 @@ func (self *BitStream) ReadInt64(bitCount int) int64 {
 	buf := self.ReadBits(bitCount)
 	ret = BytesToInt64(buf)
 	if bitCount == Bit64 {
-		return int64(ret)
+		return ret
 	} else {
 		ret &= (1 << uint64(bitCount)) - 1
 	}
 
-	return int64(ret)
+	return ret
 }
 
 func (self *BitStream) WriteFloat(value float32) {
@@ -373,8 +371,17 @@ func NewBitStream(buf []byte, nLen int) *BitStream {
 	return &bitstream
 }
 
+//根据buff构造一个bitstream，一般用来接收消息
+func NewBitStreamR(buf []byte) *BitStream {
+	var bitstream BitStream
+	nLen := len(buf)
+
+	bitstream.BuildPacketStream(buf, nLen)
+	return &bitstream
+}
+
 //构造一个nLen大小的bitstream，一般用来发送消息
-func NewBitStream_1(nLen int) *BitStream { //_1, this is the way
+func NewBitStreamS(nLen int) *BitStream {
 	var bitstream BitStream
 	buf := make([]byte, nLen)
 	bitstream.BuildPacketStream(buf, nLen)
@@ -388,13 +395,4 @@ func BitStrLen(str string) int {
 		return 0
 	}
 	return sz + 2
-}
-
-//一个字符串占用的字节大小
-func BytesLen(buff []byte) int {
-	sz := len(buff)
-	if sz  == 0 {
-		return 0
-	}
-	return sz * 8
 }

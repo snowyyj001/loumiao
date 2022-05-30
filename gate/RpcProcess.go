@@ -416,8 +416,7 @@ func recvPackMsgClient(igo gorpc.IGoRoutine, data interface{}) interface{} {
 
 	//客户端不接受传uid，只接受server type
 	//所以这里做一次转化，根据server type找到对应的uid
-	//目前只支持client到lobby和loginqueuq的直接消息发送，因为我不想让gate维护其他更多信息
-	//如果客户端哪天接受传uid了，就可以支持直接发送对应的消息到目标server
+	//publicserver是单节点的，这里就不对client开放了，有确实需要可以通过lobby来进行rpc转发
 	targetUid := 0
 	if target == config.ServerType_World {
 		targetUid = token.WouldId

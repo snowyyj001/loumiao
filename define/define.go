@@ -34,8 +34,9 @@ const ( //发送真实邮件类型
 )
 
 const (
-	RPCMSG_FLAG_CALL = 1 << 0		//rpc调用是call方式,否则就是异步send
-	RPCMSG_FLAG_RESP= 1 << 1		//rpc调用是远端call返回
+	RPCMSG_FLAG_CALL 	= 1 << 0		//rpc调用是call方式,否则就是异步send
+	RPCMSG_FLAG_RESP 	= 1 << 1		//rpc调用是远端call返回
+	RPCMSG_FLAG_BROAD 	= 1 << 2		//rpc广播
 )
 
 var (
