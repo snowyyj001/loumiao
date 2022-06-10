@@ -27,7 +27,7 @@ func innerDisConnect(igo gorpc.IGoRoutine, socketId int, data []byte) {
 //rpc register
 func innerLouMiaoRpcRegister(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	req := &msg.LouMiaoRpcRegister{}
-	if message.UnPack(req, data) != nil {
+	if message.UnPackProto(req, data) != nil {
 		return
 	}
 	llog.Debugf("innerLouMiaoRpcRegister: %v", req)
@@ -46,12 +46,11 @@ func innerLouMiaoRpcRegister(igo gorpc.IGoRoutine, socketId int, data []byte) {
 //recv rpc msg
 func innerLouMiaoRpcMsg(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	req := &msg.LouMiaoRpcMsg{}
-	if message.UnPack(req, data) != nil {
+	if message.UnPackProto(req, data) != nil {
 		return
 	}
 	llog.Debugf("0.innerLouMiaoRpcMsg=%s, socurce=%d, target=%d, Flag=%d", req.FuncName, req.SourceId, req.TargetId, req.Flag)
 	if util.HasBit(int(req.Flag), define.RPCMSG_FLAG_BROAD) {
-		//buff, _ := message.Encode(0, "LouMiaoRpcMsg", req)
 		if req.TargetId == 0 {
 			for _, sid := range  This.clients_u {
 				//This.pInnerService.SendById(sid, buff)
@@ -76,9 +75,8 @@ func innerLouMiaoRpcMsg(igo gorpc.IGoRoutine, socketId int, data []byte) {
 		llog.Errorf("1.innerLouMiaoRpcMsg no target error funcName=%s,sourceid=%d,target=%d", req.FuncName, req.SourceId, req.TargetId)
 		return
 	}
-	//buff, _ := message.Encode(0, "LouMiaoRpcMsg", req)
-	//This.pInnerService.SendById(rpcClientId, buff)
-	This.pInnerService.SendById(rpcClientId, data)
+	buff, _ := message.EncodeProBuff(0, "LouMiaoRpcMsg", req)
+	This.pInnerService.SendById(rpcClientId, buff)
 }
 
 func sendRpcMsgToServer(igo gorpc.IGoRoutine, data interface{}) interface{} {

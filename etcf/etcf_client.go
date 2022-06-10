@@ -122,7 +122,7 @@ func ReWatchKey() {
 		req.Prefix = key.(string)
 		req.Opcode = msg.LouMiaoWatchKey_ADD
 
-		buff, _ := message.Encode(0, "LouMiaoWatchKey", req)
+		buff, _ := message.EncodeProBuff(0, "LouMiaoWatchKey", req)
 		Client.pInnerService.Send(buff)
 		return true
 	})
@@ -153,7 +153,7 @@ func leaseCallBack(dt int64) bool {
 	req := &msg.LouMiaoLease{}
 	req.Uid = int32(config.SERVER_NODE_UID)
 
-	buff, _ := message.Encode(0, "LouMiaoLease", req)
+	buff, _ := message.EncodeProBuff(0, "LouMiaoLease", req)
 	Client.pInnerService.Send(buff)
 	return true
 }
@@ -171,7 +171,7 @@ func PutService(prefix, val string) bool {
 	req.Value = val
 	req.Lease = LEASE_TIME
 
-	buff, _ := message.Encode(0, "LouMiaoPutValue", req)
+	buff, _ := message.EncodeProBuff(0, "LouMiaoPutValue", req)
 	Client.pInnerService.Send(buff)
 
 	return true
@@ -190,7 +190,7 @@ func SetValue(prefix, val string) bool {
 	req.Value = val
 	req.Lease = 0
 
-	buff, _ := message.Encode(0, "LouMiaoPutValue", req)
+	buff, _ := message.EncodeProBuff(0, "LouMiaoPutValue", req)
 	Client.pInnerService.Send(buff)
 
 	return true
@@ -209,7 +209,7 @@ func AquireLock(key string, expire int) int {
 	req.Prefix = key
 	req.TimeOut = int32(expire)
 
-	buff, _ := message.Encode(0, "LouMiaoAquireLock", req)
+	buff, _ := message.EncodeProBuff(0, "LouMiaoAquireLock", req)
 	Client.pInnerService.Send(buff)
 
 	llog.Infof("EtcfClient.AquireLock: key = %s, expire = %d", key, expire)
@@ -240,7 +240,7 @@ func UnLock(key string) {
 	req := &msg.LouMiaoReleaseLock{}
 	req.Prefix = key
 
-	buff, _ := message.Encode(0, "LouMiaoReleaseLock", req)
+	buff, _ := message.EncodeProBuff(0, "LouMiaoReleaseLock", req)
 	Client.pInnerService.Send(buff)
 
 	llog.Infof("EtcfClient.UnLock: key = %s", key)
@@ -261,7 +261,7 @@ func AquireLeader(key string, value string) (isleader bool) {
 	req.TimeOut = 1000
 	req.Value = value
 
-	buff, _ := message.Encode(0, "LouMiaoAquireLock", req)
+	buff, _ := message.EncodeProBuff(0, "LouMiaoAquireLock", req)
 	Client.pInnerService.Send(buff)
 
 	llog.Infof("EtcfClient.AquireLeader: key = %s, value = %s", key, value)
@@ -289,7 +289,7 @@ func GetOne(prefix string) string {
 
 	req := &msg.LouMiaoGetValue{}
 	req.Prefix = prefix
-	buff, _ := message.Encode(0, "LouMiaoGetValue", req)
+	buff, _ := message.EncodeProBuff(0, "LouMiaoGetValue", req)
 	ch, ok := Client.mChanGetValue.Load(prefix)
 	if !ok {
 		ch = make(chan []ETKeyValue)
@@ -326,7 +326,7 @@ func GetAll(prefix string) []string {
 	req.Prefix = prefix
 	req.Prefixs = append(req.Prefixs, "m")
 
-	buff, _ := message.Encode(0, "LouMiaoGetValue", req)
+	buff, _ := message.EncodeProBuff(0, "LouMiaoGetValue", req)
 	Client.pInnerService.Send(buff)
 
 	ch, ok := Client.mChanGetValue.Load(prefix)
@@ -367,7 +367,7 @@ func WatchKey(prefix string, hanlder hanlderFunc) bool {
 	req.Prefix = prefix
 	req.Opcode = msg.LouMiaoWatchKey_ADD
 
-	buff, _ := message.Encode(0, "LouMiaoWatchKey", req)
+	buff, _ := message.EncodeProBuff(0, "LouMiaoWatchKey", req)
 	Client.pInnerService.Send(buff)
 	return true
 }
@@ -385,7 +385,7 @@ func RemoveKey(prefix string) {
 	req.Prefix = prefix
 	req.Opcode = msg.LouMiaoWatchKey_DEL
 
-	buff, _ := message.Encode(0, "LouMiaoWatchKey", req)
+	buff, _ := message.EncodeProBuff(0, "LouMiaoWatchKey", req)
 	Client.pInnerService.Send(buff)
 }
 
@@ -403,7 +403,7 @@ func innerClientDisConnect( socketId int, data []byte) {
 //aquire lock
 func innerClientLouMiaoAquireLock( socketId int, data []byte) {
 	req := &msg.LouMiaoAquireLock{}
-	if message.UnPack(req, data) != nil {
+	if message.UnPackProto(req, data) != nil {
 		return
 	}
 	llog.Debugf("innerClientLouMiaoAquireLock: req = %v", req)
@@ -424,7 +424,7 @@ func innerClientLouMiaoAquireLock( socketId int, data []byte) {
 //value changed
 func innerClientLouMiaoNoticeValue(socketId int, data []byte) {
 	req := new(msg.LouMiaoNoticeValue)
-	if message.UnPack(req, data) != nil {
+	if message.UnPackProto(req, data) != nil {
 		return
 	}
 
@@ -445,7 +445,7 @@ func innerClientLouMiaoNoticeValue(socketId int, data []byte) {
 //get value
 func innerClientLouMiaoGetValue(socketId int, data []byte) {
 	req := new(msg.LouMiaoGetValue)
-	if message.UnPack(req, data) != nil {
+	if message.UnPackProto(req, data) != nil {
 		return
 	}
 

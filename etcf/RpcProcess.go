@@ -26,7 +26,7 @@ func innerDisConnect(igo gorpc.IGoRoutine, socketId int, data []byte) {
 //watch/remove key
 func innerLouMiaoWatchKey(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	req := &msg.LouMiaoWatchKey{}
-	if message.UnPack(req, data) != nil {
+	if message.UnPackProto(req, data) != nil {
 		return
 	}
 	llog.Debugf("innerLouMiaoWatchKey: %v", req)
@@ -40,7 +40,7 @@ func innerLouMiaoWatchKey(igo gorpc.IGoRoutine, socketId int, data []byte) {
 //put/remove value
 func innerLouMiaoPutValue(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	req := &msg.LouMiaoPutValue{}
-	if message.UnPack(req, data) != nil {
+	if message.UnPackProto(req, data) != nil {
 		return
 	}
 	//llog.Debugf("innerLouMiaoPutValue: %v", req)
@@ -64,7 +64,7 @@ func innerLouMiaoPutValue(igo gorpc.IGoRoutine, socketId int, data []byte) {
 //get value
 func innerLouMiaoGetValue(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	req := &msg.LouMiaoGetValue{}
-	if message.UnPack(req, data) != nil {
+	if message.UnPackProto(req, data) != nil {
 		return
 	}
 	llog.Debugf("innerLouMiaoGetValue: %v", req)
@@ -80,14 +80,14 @@ func innerLouMiaoGetValue(igo gorpc.IGoRoutine, socketId int, data []byte) {
 		}
 	}
 
-	buff, _ := message.Encode(0, "LouMiaoGetValue", req)
+	buff, _ := message.EncodeProBuff(0, "LouMiaoGetValue", req)
 	This.pInnerService.SendById(socketId, buff)
 }
 
 //aquire lock
 func innerLouMiaoAquireLock(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	req := &msg.LouMiaoAquireLock{}
-	if message.UnPack(req, data) != nil {
+	if message.UnPackProto(req, data) != nil {
 		return
 	}
 	if req.TimeOut < 1000 {		//加个时间精度控制
@@ -99,10 +99,10 @@ func innerLouMiaoAquireLock(igo gorpc.IGoRoutine, socketId int, data []byte) {
 		_ , ok := This.mStoreLeaderValues.LoadOrStore(key, true)
 		if ok {
 			req.TimeOut = 0		//slave
-			buff, _ := message.Encode(0, "LouMiaoAquireLock", req)
+			buff, _ := message.EncodeProBuff(0, "LouMiaoAquireLock", req)
 			This.pInnerService.SendById(socketId, buff)
 		} else {		//master
-			buff, _ := message.Encode(0, "LouMiaoAquireLock", req)
+			buff, _ := message.EncodeProBuff(0, "LouMiaoAquireLock", req)
 			This.pInnerService.SendById(socketId, buff)
 			timer.DelayJob(60 * 60 * 1000, func() {		//一小时后删除这个leader key，主要是为了清理内存
 				llog.Warningf("innerLouMiaoAquireLock: %s", key)
@@ -118,7 +118,7 @@ func innerLouMiaoAquireLock(igo gorpc.IGoRoutine, socketId int, data []byte) {
 
 			This.RunTicker(int(req.TimeOut), This.lockTimeout, req.Prefix)
 
-			buff, _ := message.Encode(0, "LouMiaoAquireLock", req)
+			buff, _ := message.EncodeProBuff(0, "LouMiaoAquireLock", req)
 			This.pInnerService.SendById(socketId, buff)
 		} else {		//等待锁的释放
 			This.mStoreLockWaiters[req.Prefix] = append(This.mStoreLockWaiters[req.Prefix], socketId)
@@ -129,7 +129,7 @@ func innerLouMiaoAquireLock(igo gorpc.IGoRoutine, socketId int, data []byte) {
 //release lock
 func innerLouMiaoReleaseLock(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	req := &msg.LouMiaoReleaseLock{}
-	if message.UnPack(req, data) != nil {
+	if message.UnPackProto(req, data) != nil {
 		return
 	}
 	llog.Debugf("LouMiaoReleaseLock: %v", req)
@@ -146,7 +146,7 @@ func innerLouMiaoReleaseLock(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	if ok {
 		//通知还在等待的最后一个对象锁可用(这样数组移除最后一个元素就行了)
 		req := &msg.LouMiaoAquireLock{Prefix: req.Prefix, TimeOut: int32(stam-nt)}
-		buff, _ := message.Encode(0, "LouMiaoAquireLock", req)
+		buff, _ := message.EncodeProBuff(0, "LouMiaoAquireLock", req)
 		i := len(arr) - 1
 		socketId := arr[i]
 		This.pInnerService.SendById(socketId, buff)
@@ -163,7 +163,7 @@ func innerLouMiaoReleaseLock(igo gorpc.IGoRoutine, socketId int, data []byte) {
 //lease
 func innerLouMiaoLease(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	req := &msg.LouMiaoLease{}
-	if message.UnPack(req, data) != nil {
+	if message.UnPackProto(req, data) != nil {
 		return
 	}
 	//llog.Debugf("innerLouMiaoLease: %v", req)
@@ -172,6 +172,6 @@ func innerLouMiaoLease(igo gorpc.IGoRoutine, socketId int, data []byte) {
 
 	resp := &msg.LouMiaoLease{}
 	resp.Uid = req.Uid
-	buff, _ := message.Encode(0, "LouMiaoLease", resp)
+	buff, _ := message.EncodeProBuff(0, "LouMiaoLease", resp)
 	This.pInnerService.SendById(socketId, buff)
 }

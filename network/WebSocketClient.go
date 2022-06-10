@@ -75,24 +75,26 @@ func wserverclientRoutine(pClient *WebSocketClient) bool {
 
 	for {
 		if pClient.m_bShuttingDown {
-			llog.Debugf("远程链接：%s已经被关闭！", pClient.GetSAddr())
+			llog.Infof("远程链接：%s已经被关闭！", pClient.GetSAddr())
 			pClient.OnNetFail(0)
 			break
 		}
 
 		mt, message, err := pClient.m_WsConn.ReadMessage()
 		if err != nil {
-			llog.Debugf("远程链接：%s已经关闭！%v\n", pClient.GetSAddr(), err)
+			llog.Infof("远程链接：%s已经关闭！%v\n", pClient.GetSAddr(), err)
 			pClient.OnNetFail(1)
 			break
 		}
 		if mt != websocket.BinaryMessage {
+			llog.Infof("远程read错误: %s！ %s", pClient.GetSAddr(), err.Error())
 			pClient.OnNetFail(2)
 			break
 		}
 
 		ok := pClient.ReceivePacket(pClient.m_ClientId, message)
 		if !ok {
+			llog.Errorf("远程ReceivePacket错误: %s！", pClient.GetSAddr())
 			pClient.OnNetFail(3)
 			break
 		}

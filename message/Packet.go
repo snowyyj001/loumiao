@@ -5,10 +5,10 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"github.com/snowyyj001/loumiao/config"
 
 	"github.com/snowyyj001/loumiao/base"
 
-	"github.com/snowyyj001/loumiao/config"
 	"github.com/snowyyj001/loumiao/llog"
 	"github.com/snowyyj001/loumiao/util"
 
@@ -169,7 +169,13 @@ func DecodeJson(uid int, buff []byte, length int) (error, int, string, interface
 	}
 	return nil, target, msgName, packet
 }
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//
 
+//对一个json或pb结构体序列化
+var Pack func(packet interface{}) ([]byte, error)
+//对buff反序列化为一个json或pb结构体
+var UnPack func(packet interface{}, buff []byte) error
 
 //解析包头
 //@ret: targetid, 消息名, 包体, error
@@ -186,14 +192,26 @@ func UnPackHead(buff []byte, length int) (int, string, []byte, error) {
 	return target, msgName, buff[8+nameLen:length], nil
 }
 
-func Pack(packet proto.Message) ([]byte, error) {
-	return proto.Marshal(packet)
+func PackJson(packet interface{}) ([]byte, error) {
+	return json.Marshal(packet)
 }
 
-func UnPack(packet proto.Message, buff []byte) error {
-	err := proto.Unmarshal(buff, packet)
+func UnPackJson(packet interface{}, buff []byte) error {
+	err := json.Unmarshal(buff, packet)
 	if err != nil {
-		llog.Errorf("message.UnPack: err = %s", err.Error())
+		llog.Errorf("message.UnPackJson: err = %s", err.Error())
+	}
+	return  err
+}
+
+func PackProto(packet interface{}) ([]byte, error) {
+	return proto.Marshal(packet.(proto.Message))
+}
+
+func UnPackProto(packet interface{}, buff []byte) error {
+	err := proto.Unmarshal(buff, packet.(proto.Message))
+	if err != nil {
+		llog.Errorf("message.UnPackProto: err = %s", err.Error())
 	}
 	return  err
 }
@@ -202,8 +220,12 @@ func DoInit() {
 	if config.NET_PROTOCOL == "JSON" {
 		Encode = EncodeJson
 		Decode = DecodeJson
+		Pack = PackJson
+		UnPack = UnPackJson
 	} else {
 		Encode = EncodeProBuff
 		Decode = DecodeProBuff
+		Pack = PackProto
+		UnPack = UnPackProto
 	}
 }

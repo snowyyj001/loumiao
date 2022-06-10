@@ -192,7 +192,7 @@ func (self *EtcfServer) broadCastValue(prefix string, value string) {
 	req := new(msg.LouMiaoNoticeValue)
 	req.Prefix = prefix
 	req.Value = value
-	buff, _ := message.Encode(0, "LouMiaoNoticeValue", req)
+	buff, _ := message.EncodeProBuff(0, "LouMiaoNoticeValue", req)
 
 	for key, vals := range self.mWatchKeys {
 		if strings.HasPrefix(prefix, key) {
@@ -207,7 +207,7 @@ func (self *EtcfServer) noticeValue(sid int, prefix string, value string) {
 	req := new(msg.LouMiaoNoticeValue)
 	req.Prefix = prefix
 	req.Value = value
-	buff, _ := message.Encode(0, "LouMiaoNoticeValue", req)
+	buff, _ := message.EncodeProBuff(0, "LouMiaoNoticeValue", req)
 	This.pInnerService.SendById(sid, buff)
 }
 
@@ -221,7 +221,7 @@ func (self *EtcfServer) lockTimeout(param interface{}) {
 	if ok {
 		//通知还在等待的锁超时
 		req := &msg.LouMiaoAquireLock{Prefix: prefix, TimeOut: 0}
-		buff, _ := message.Encode(0, "LouMiaoAquireLock", req)
+		buff, _ := message.EncodeProBuff(0, "LouMiaoAquireLock", req)
 		for i:=0; i<len(arr); i++ {
 			socketId := arr[i]
 			This.pInnerService.SendById(socketId, buff)

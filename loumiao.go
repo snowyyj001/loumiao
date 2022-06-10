@@ -1,7 +1,10 @@
 package loumiao
 
 import (
+	"fmt"
 	"github.com/golang/protobuf/proto"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"reflect"
@@ -59,6 +62,12 @@ func Run() {
 			llog.Errorf("loumiao run error: name=%s, error=%v, stack=%s", config.SERVER_NAME, r, buf[:l])
 		}
 	}()
+
+	if config.SERVER_DEBUGPORT > 0 {
+		go func() {
+			http.ListenAndServe(fmt.Sprintf("0.0.0.0:%d",config.SERVER_DEBUGPORT), nil)
+		}()
+	}
 
 	gorpc.MGR.DoStart()
 

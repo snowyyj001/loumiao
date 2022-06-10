@@ -1,8 +1,6 @@
 package network
 
 import (
-	"fmt"
-
 	"net/url"
 	"runtime"
 
@@ -23,7 +21,6 @@ func (self *WebClient) Init(saddr string) bool {
 	}
 
 	self.Socket.Init(saddr)
-	fmt.Println("ClientSocket", saddr)
 	return true
 }
 func (self *WebClient) Start() bool {
@@ -44,6 +41,16 @@ func (self *WebClient) Start() bool {
 	//defer ln.Close()
 	return true
 }
+
+func (self *WebClient) Stop() bool {
+	if self.m_bShuttingDown {
+		return true
+	}
+	self.m_bShuttingDown = true
+	self.Close()
+	return true
+}
+
 
 func (self *WebClient) Send(buff []byte) int {
 	if self.m_WsConn == nil {

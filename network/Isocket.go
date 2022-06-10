@@ -243,7 +243,7 @@ func (self *Socket) ReceivePacket(Id int, dat []byte) bool {
 		}
 		mbuff1 := self.m_pInBuffer[0:4]
 		nLen := int(base.BytesToUInt32(mbuff1, binary.BigEndian)) //消息总长度
-		//llog.Debugf("当前消息包长度 %d", nLen1)
+		//llog.Debugf("当前消息包长度 %d", nLen)
 		if nLen > self.m_pInBufferLen {
 			break
 		}

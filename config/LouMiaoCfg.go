@@ -67,6 +67,7 @@ var (
 	NET_LISTEN_SADDR = "0.0.0.0:6789" //内网tcp监听地址
 	SERVER_PARAM     = ""             //启动参数
 	SERVER_RELEASE	 = false		  //配置上区分一下release和debug，方便开发期间的一些coding
+	SERVER_DEBUGPORT	 = 0			  //pprof的监听端口,0不监听
 
 )
 
@@ -84,6 +85,7 @@ type NetNode struct {
 	Group     string `json:"group"`
 	LogFile   int    `json:"logfile"` //如果-1，代表输出到控制台
 	Release   bool   `json:"release"`
+	DebugPort int 	 `json:"debugport"`
 
 }
 
@@ -152,6 +154,7 @@ func init() {
 	NET_LISTEN_SADDR = NET_GATE_SADDR
 	SERVER_PARAM = Cfg.NetCfg.Param
 	SERVER_RELEASE = Cfg.NetCfg.Release
+	SERVER_DEBUGPORT = Cfg.NetCfg.DebugPort
 
 	GAME_LOG_CONLOSE = Cfg.NetCfg.LogFile == -1 //-1log也输出到控制台，外网不需要输出到控制台
 	if GAME_LOG_CONLOSE {

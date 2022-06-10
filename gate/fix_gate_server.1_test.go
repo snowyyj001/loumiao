@@ -34,7 +34,7 @@ func sendRpc_hotfix(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	//llog.Debugf("sendRpc: %d", clientuid)
 	client := This.GetRpcClient(clientuid)
 	outdata := &msg.LouMiaoRpcMsg{TargetId: int32(m.Id), FuncName: m.Name, Buffer: m.Data.([]byte), SourceId: int32(config.SERVER_NODE_UID), Flag: int32(m.Param)}
-	buff, _ := message.Encode(0, "LouMiaoRpcMsg", outdata)
+	buff, _ := message.EncodeProBuff(0, "LouMiaoRpcMsg", outdata)
 	client.Send(buff)
 
 	return nil

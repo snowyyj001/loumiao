@@ -68,7 +68,7 @@ func onClientConnected(uid int, tid int) {
 	}
 	if config.NET_NODE_TYPE == config.ServerType_Gate { //tell world that a client has login to this gate
 		req := &msg.LouMiaoClientConnect{ClientId: int64(uid), GateId: int32(config.SERVER_NODE_UID), State: define.CLIENT_CONNECT}
-		buff, _ := message.Encode(0, "LouMiaoClientConnect", req)
+		buff, _ := message.EncodeProBuff(0, "LouMiaoClientConnect", req)
 		This.SendServer(tid, buff)
 	}
 }
@@ -78,7 +78,7 @@ func onClientDisConnected(uid int, tid int) {
 	llog.Debugf("GateServer onClientDisConnected: uid=%d,tid=%d", uid, tid)
 	if config.NET_NODE_TYPE == config.ServerType_Gate { ////tell world that a client has disconnect with this gate
 		req := &msg.LouMiaoClientConnect{ClientId: int64(uid), GateId: int32(config.SERVER_NODE_UID), State: define.CLIENT_DISCONNECT}
-		buff, _ := message.Encode(0, "LouMiaoClientConnect", req)
+		buff, _ := message.EncodeProBuff(0, "LouMiaoClientConnect", req)
 		This.SendServer(tid, buff)
 	} else {
 		igoTarget := gorpc.MGR.GetRoutine("GameServer")		//告诉GameServer，client断开了，让GameServer决定如何处理，所以GameServer要注册这个actor
@@ -92,7 +92,7 @@ func onClientDisConnected(uid int, tid int) {
 //login gate, gate -> server
 func innerLouMiaoLoginGate(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	req := &msg.LouMiaoLoginGate{}
-	if message.UnPack(req, data) != nil {
+	if message.UnPackProto(req, data) != nil {
 		return
 	}
 	userid := int(req.UserId)
@@ -105,7 +105,7 @@ func innerLouMiaoLoginGate(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	old_socketid, ok := This.tokens_u[userid]
 	if ok { //close the old connection
 		req := &msg.LouMiaoKickOut{}
-		buff, _ := message.Encode(userid, "LouMiaoKickOut", req)
+		buff, _ := message.EncodeProBuff(userid, "LouMiaoKickOut", req)
 		This.pInnerService.SendById(old_socketid, buff)
 		//关闭老的gate的socket
 		innerDisConnect(igo, old_socketid, nil) //时序异步问题，这里直接关闭，不等socket的DISCONNECT消息
@@ -117,10 +117,10 @@ func innerLouMiaoLoginGate(igo gorpc.IGoRoutine, socketId int, data []byte) {
 //recv rpc msg
 func innerLouMiaoRpcMsg(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	req := &msg.LouMiaoRpcMsg{}
-	if message.UnPack(req, data) != nil {
+	if message.UnPackProto(req, data) != nil {
 		return
 	}
-	//llog.Debugf("innerLouMiaoRpcMsg=%s, socurce=%d, target=%d, Flag=%d", req.FuncName, req.SourceId, req.TargetId, req.Flag)
+	llog.Debugf("innerLouMiaoRpcMsg=%s, socurce=%d, target=%d, Flag=%d", req.FuncName, req.SourceId, req.TargetId, req.Flag)
 	if util.HasBit(int(req.Flag), define.RPCMSG_FLAG_CALL) {
 		if util.HasBit(int(req.Flag), define.RPCMSG_FLAG_RESP) {
 			gorpc.MGR.SendActor("CallRpcServer", "RespRpcCall", req)
@@ -154,14 +154,14 @@ func innerLouMiaoRpcMsg(igo gorpc.IGoRoutine, socketId int, data []byte) {
 //recv broad cast msg
 func innerLouMiaoBroadCastMsg(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	req := &msg.LouMiaoBroadCastMsg{}
-	if message.UnPack(req, data) != nil {
+	if message.UnPackProto(req, data) != nil {
 		return
 	}
 	llog.Debugf("innerLouMiaoBroadCastMsg=%s, type=%d", req.FuncName, req.Type)
 	if config.NET_NODE_TYPE == config.ServerType_Gate { //server -> gate
 		serverType := int(req.Type)
 		outdata := &msg.LouMiaoBroadCastMsg{Type: req.Type, FuncName: req.FuncName, Buffer: req.Buffer}
-		buff, _ := message.Encode(0, "LouMiaoBroadCastMsg", outdata)
+		buff, _ := message.EncodeProBuff(0, "LouMiaoBroadCastMsg", outdata)
 		for _, client := range This.clients {
 			node := nodemgr.GetNodeByAddr(client.GetSAddr())
 			if node.Type == serverType {
@@ -186,7 +186,7 @@ func innerLouMiaoBroadCastMsg(igo gorpc.IGoRoutine, socketId int, data []byte) {
 //recv net msg
 func innerLouMiaoNetMsg(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	req := &msg.LouMiaoNetMsg{} //after decode LouMiaoNetMsg msg, post Buffer to next
-	if message.UnPack(req, data) != nil {
+	if message.UnPackProto(req, data) != nil {
 		return
 	}
 	//llog.Debugf("innerLouMiaoNetMsg %v", req)
@@ -240,7 +240,7 @@ func innerLouMiaoKickOut(igo gorpc.IGoRoutine, socketId int, data []byte) {
 //client be in connected or disconnect a gate
 func innerLouMiaoClientConnect(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	req := &msg.LouMiaoClientConnect{}
-	if message.UnPack(req, data) != nil {
+	if message.UnPackProto(req, data) != nil {
 		return
 	}
 	llog.Debugf("innerLouMiaoClientConnect %v", req)
@@ -297,7 +297,7 @@ func sendClient(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	}
 	//llog.Debugf("sendClient userid = %d, uid = %d", m.Id, uid)
 	msg := &msg.LouMiaoNetMsg{ClientId: int64(m.Id), Buffer: m.Data.([]byte)} //m.Id should be client`s userid
-	buff, _ := message.Encode(0, "LouMiaoNetMsg", msg)
+	buff, _ := message.EncodeProBuff(0, "LouMiaoNetMsg", msg)
 
 	This.pInnerService.SendById(socketId, buff)
 
@@ -321,7 +321,7 @@ func sendMulClient(igo gorpc.IGoRoutine, data interface{}) interface{} {
 				return nil
 			}
 			msg := &msg.LouMiaoNetMsg{ClientId: int64(v), Buffer: m.Data.([]byte)} //m.Id should be client`s userid
-			buff, _ := message.Encode(0, "LouMiaoNetMsg", msg)
+			buff, _ := message.EncodeProBuff(0, "LouMiaoNetMsg", msg)
 			This.pInnerService.SendById(socketId, buff)
 		}
 	}
@@ -346,7 +346,7 @@ func newClient(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	This.clients[uid] = client
 	if m.Param == 1 { //login server
 		req := &msg.LouMiaoLoginGate{TokenId: util.Itoa(uid), UserId: int64(config.SERVER_NODE_UID)}
-		buff, _ := message.Encode(uid, "LouMiaoLoginGate", req)
+		buff, _ := message.EncodeProBuff(uid, "LouMiaoLoginGate", req)
 		client.Send(buff)
 	} else { //register rpc
 		This.rpcUids.Store(uid, true)
@@ -357,7 +357,7 @@ func newClient(igo gorpc.IGoRoutine, data interface{}) interface{} {
 			req.FuncName = append(req.FuncName, key)
 		}
 		if len(req.FuncName) > 0 {
-			buff, _ := message.Encode(uid, "LouMiaoRpcRegister", req)
+			buff, _ := message.EncodeProBuff(uid, "LouMiaoRpcRegister", req)
 			client.Send(buff)
 		}
 	}
@@ -375,7 +375,7 @@ func sendRpc(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	//llog.Debugf("sendRpc: %d", clientuid)
 	client := This.GetRpcClient(clientuid)
 	outdata := &msg.LouMiaoRpcMsg{TargetId: int32(m.Id), FuncName: m.Name, Buffer: m.Data.([]byte), SourceId: int32(config.SERVER_NODE_UID), Flag: int32(m.Param)}
-	buff, _ := message.Encode(0, "LouMiaoRpcMsg", outdata)
+	buff, _ := message.EncodeProBuff(0, "LouMiaoRpcMsg", outdata)
 	client.Send(buff)
 
 	return nil
@@ -437,7 +437,7 @@ func recvPackMsgClient(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	}
 	//message.ReplacePakcetTarget(int32(targetUid), rebuff)不替换了，只要目标服务器不校验就行
 	msg := &msg.LouMiaoNetMsg{ClientId: int64(token.UserId), Buffer: rebuff}
-	buff, newlen := message.Encode(targetUid, "LouMiaoNetMsg", msg)
+	buff, newlen := message.EncodeProBuff(targetUid, "LouMiaoNetMsg", msg)
 	rpcClient.Send(buff[0:newlen])
 
 	return nil
