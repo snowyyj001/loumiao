@@ -1,7 +1,6 @@
 package gate
 
 import (
-	"github.com/snowyyj001/loumiao"
 	"github.com/snowyyj001/loumiao/base"
 	"github.com/snowyyj001/loumiao/base/maps"
 	"github.com/snowyyj001/loumiao/config"
@@ -81,7 +80,7 @@ func onClientDisConnected(uid int, tid int) {
 		buff, _ := message.EncodeProBuff(0, "LouMiaoClientConnect", req)
 		This.SendServer(tid, buff)
 	} else {
-		igoTarget := gorpc.MGR.GetRoutine("GameServer")		//告诉GameServer，client断开了，让GameServer决定如何处理，所以GameServer要注册这个actor
+		igoTarget := gorpc.MGR.GetRoutine("GameServer") //告诉GameServer，client断开了，让GameServer决定如何处理，所以GameServer要注册这个actor
 		if igoTarget != nil {
 			mm := gorpc.MA{Id: tid, Param: uid}
 			igoTarget.SendActor("ON_DISCONNECT", mm)
@@ -103,9 +102,9 @@ func innerLouMiaoLoginGate(igo gorpc.IGoRoutine, socketId int, data []byte) {
 		return
 	}
 	old_socketid, ok := This.tokens_u[userid]
-	if ok { //close the old connection
-		req := &msg.LouMiaoKickOut{}
-		buff, _ := message.EncodeProBuff(userid, "LouMiaoKickOut", req)
+	if ok { //close the old connection，这种情况是，相同uid的gate启动了，但占用不同端口，算是人为错误，那么就关闭老的gate
+		pack := &msg.LouMiaoKickOut{}
+		buff, _ := message.EncodeProBuff(userid, "LouMiaoKickOut", pack)
 		This.pInnerService.SendById(old_socketid, buff)
 		//关闭老的gate的socket
 		innerDisConnect(igo, old_socketid, nil) //时序异步问题，这里直接关闭，不等socket的DISCONNECT消息
@@ -233,8 +232,7 @@ func innerLouMiaoKickOut(igo gorpc.IGoRoutine, socketId int, data []byte) {
 		llog.Error("0.innerLouMiaoKickOut wrong msg")
 		return
 	}
-	llog.Infof("innerLouMiaoKickOut: another gate server has already listened the saddr : %s, now close self[%d]", config.NET_GATE_SADDR, config.SERVER_NODE_UID)
-	loumiao.Stop()
+	llog.Fatalf("innerLouMiaoKickOut: another gate server has already listened the saddr : %s, now close self[%d]，we have the same uid", config.NET_GATE_SADDR, config.SERVER_NODE_UID)
 }
 
 //client be in connected or disconnect a gate
@@ -248,20 +246,38 @@ func innerLouMiaoClientConnect(igo gorpc.IGoRoutine, socketId int, data []byte) 
 	clientid := int(req.ClientId)
 	gateId := int(req.GateId)
 	if req.State == define.CLIENT_CONNECT {
-		This.BindGate(clientid, gateId) //绑定client所属的gate
-		igoTarget := gorpc.MGR.GetRoutine("GameServer")		//告诉GameServer，client断开了，让GameServer决定如何处理，所以GameServer要注册这个actor
+		This.BindGate(clientid, gateId)                 //绑定client所属的gate
+		igoTarget := gorpc.MGR.GetRoutine("GameServer") //告诉GameServer，client断开了，让GameServer决定如何处理，所以GameServer要注册这个actor
 		if igoTarget != nil {
 			mm := gorpc.MA{Id: gateId, Param: clientid}
 			igoTarget.SendActor("ON_CONNECT", mm)
 		}
 	} else {
-		This.BindGate(clientid, 0) //解除绑定client所属的gate
-		igoTarget := gorpc.MGR.GetRoutine("GameServer")		//告诉GameServer，client断开了，让GameServer决定如何处理，所以GameServer要注册这个actor
+		This.BindGate(clientid, 0)                      //解除绑定client所属的gate
+		igoTarget := gorpc.MGR.GetRoutine("GameServer") //告诉GameServer，client断开了，让GameServer决定如何处理，所以GameServer要注册这个actor
 		if igoTarget != nil {
 			mm := gorpc.MA{Id: gateId, Param: clientid}
 			igoTarget.SendActor("ON_DISCONNECT", mm)
 		}
 	}
+}
+
+//gate绑定client相关的server信息
+func bindServer(igo gorpc.IGoRoutine, data interface{}) interface{} {
+	buffer := data.([]byte)
+	req := &msg.LouMiaoBindServer{}
+	if message.UnPackProto(req, buffer) != nil {
+		return nil
+	}
+	llog.Debugf("bindServer: %v", req)
+
+	if config.NET_NODE_TYPE == config.ServerType_Gate {
+		This.BindZone(int(req.UserId), int(req.ServerUid)) //关联玩家所属zone
+	} else if config.NET_NODE_TYPE == config.ServerType_Zone {
+		This.BindGate(int(req.UserId), int(req.ServerUid)) //关联玩家所属gate
+	}
+
+	return nil
 }
 
 func registerNet(igo gorpc.IGoRoutine, data interface{}) interface{} {
@@ -285,7 +301,7 @@ func unRegisterNet(igo gorpc.IGoRoutine, data interface{}) interface{} {
 
 func sendClient(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	m := data.(*gorpc.M)
-	if config.NET_NODE_TYPE == config.ServerType_Account || config.NET_NODE_TYPE == config.ServerType_Gate {
+	if config.NET_NODE_TYPE == config.ServerType_Gate {
 		This.pService.SendById(m.Id, m.Data.([]byte)) //set to client
 		return nil
 	}
@@ -311,16 +327,17 @@ func sendMulClient(igo gorpc.IGoRoutine, data interface{}) interface{} {
 		return nil
 	}
 	ms := m.Data.(*gorpc.MS)
-	if len(ms.Ids) == 0 {
+	if len(ms.Ids) == 0 { //全部客户端广播正常情况不因该有
+		llog.Warning("broadCastClients")
 		broadCastClients(m.Data.([]byte))
 	} else {
-		for _, v := range ms.Ids {
+		for _, v := range ms.Ids { //m.Ids should be client`s userid
 			socketId := This.GetGateClientId(v) // get gate's socketid by client's userid
 			if socketId == 0 {
 				llog.Infof("1.sendMulClient gate has been lost, userid = %d", v)
 				return nil
 			}
-			msg := &msg.LouMiaoNetMsg{ClientId: int64(v), Buffer: m.Data.([]byte)} //m.Id should be client`s userid
+			msg := &msg.LouMiaoNetMsg{ClientId: int64(v), Buffer: ms.Data.([]byte)}
 			buff, _ := message.EncodeProBuff(0, "LouMiaoNetMsg", msg)
 			This.pInnerService.SendById(socketId, buff)
 		}
@@ -360,6 +377,7 @@ func newClient(igo gorpc.IGoRoutine, data interface{}) interface{} {
 			buff, _ := message.EncodeProBuff(uid, "LouMiaoRpcRegister", req)
 			client.Send(buff)
 		}
+
 	}
 	return nil
 }
@@ -372,7 +390,7 @@ func sendRpc(igo gorpc.IGoRoutine, data interface{}) interface{} {
 		llog.Errorf("0.sendRpc no rpc gate server founded %s", m.Name)
 		return nil
 	}
-	//llog.Debugf("sendRpc: %d", clientuid)
+	//llog.Debugf("sendRpc: %d %s %d", clientuid, m.Name, m.Param)
 	client := This.GetRpcClient(clientuid)
 	outdata := &msg.LouMiaoRpcMsg{TargetId: int32(m.Id), FuncName: m.Name, Buffer: m.Data.([]byte), SourceId: int32(config.SERVER_NODE_UID), Flag: int32(m.Param)}
 	buff, _ := message.EncodeProBuff(0, "LouMiaoRpcMsg", outdata)
@@ -428,9 +446,8 @@ func recvPackMsgClient(igo gorpc.IGoRoutine, data interface{}) interface{} {
 
 	rpcClient := This.GetRpcClient(targetUid)
 	if rpcClient == nil {
-		llog.Warningf("2.recvPackMsgClient msg, but server has lost, target=%d,targetuid=%d ", target, targetUid)
-		node := nodemgr.GetNode(targetUid)
-		if node == nil || node.Type == config.ServerType_World { //if the world lost,we should let the client relogin
+		llog.Warningf("2.recvPackMsgClient msg, but server has lost, target type = %d,target uid = %d ", target, targetUid)
+		if target == config.ServerType_World { //if the world lost,we should let the client relogin
 			This.closeClient(socketid)
 		}
 		return nil
@@ -471,7 +488,9 @@ func publish(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	}
 	it := vec.Iterator()
 	for it.Next() {
-		loumiao.SendAcotr(it.Key().(string), it.Value().(string), mm.Data)
+		//loumiao.SendActor(it.Key().(string), it.Value().(string), mm.Data)
+		m := &gorpc.M{Data: mm.Data, Flag: true}
+		gorpc.MGR.Send(it.Key().(string), it.Value().(string), m)
 	}
 	return nil
 }

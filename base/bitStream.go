@@ -1,5 +1,7 @@
 package base
 
+import "encoding/binary"
+
 //----------------bitsream---------------
 //for example
 //buf := make([]byte, 256)
@@ -11,11 +13,11 @@ package base
 //----------------------------------------
 
 const (
-	Bit8              = 8
-	Bit16             = 16
-	Bit32             = 32
-	Bit64             = 64
-	MAX_PACKET        = 2 * 1024 * 1024 //2MB
+	Bit8       = 8
+	Bit16      = 16
+	Bit32      = 32
+	Bit64      = 64
+	MAX_PACKET = 5 * 1024 * 1024 //5MB
 )
 
 type (
@@ -211,6 +213,39 @@ func (self *BitStream) ReadBits(bitCount int) []byte {
 	return stPtr
 }
 
+func (self *BitStream) WriteInt8(value int) {
+	self.WriteBits(IntToBytes(value), Bit8)
+}
+
+func (self *BitStream) ReadInt8() int {
+	var ret int
+	buf := self.ReadBits(Bit8)
+	ret = BytesToInt(buf)
+	return ret
+}
+
+func (self *BitStream) WriteInt16(value int) {
+	self.WriteBits(IntToBytes(value), Bit16)
+}
+
+func (self *BitStream) ReadInt16() int {
+	var ret int
+	buf := self.ReadBits(Bit16)
+	ret = BytesToInt(buf)
+	return ret
+}
+
+func (self *BitStream) WriteInt32(value int) {
+	self.WriteBits(IntToBytes(value), Bit32)
+}
+
+func (self *BitStream) ReadInt32() int {
+	var ret int
+	buf := self.ReadBits(Bit32)
+	ret = BytesToInt(buf)
+	return ret
+}
+
 func (self *BitStream) WriteInt(value int, bitCount int) {
 	self.WriteBits(IntToBytes(value), bitCount)
 }
@@ -228,6 +263,22 @@ func (self *BitStream) ReadInt(bitCount int) int {
 	return int(ret)
 }
 
+func (self *BitStream) ReadFlag() bool {
+	buf := self.ReadBits(Bit8)
+	v := int8(buf[0])
+	return v == 1
+}
+
+func (self *BitStream) WriteFlag(value bool) bool {
+	if value {
+		self.WriteBits([]byte{1}, Bit8)
+	} else {
+		self.WriteBits([]byte{0}, Bit8)
+	}
+	return value
+}
+
+/*
 func (self *BitStream) ReadFlag() bool {
 	if ((self.flagNum - (self.flagNum>>3)<<3) == 0) && !self.tailFlag {
 		self.flagNum = self.bitNum
@@ -276,13 +327,14 @@ func (self *BitStream) WriteFlag(value bool) bool {
 	}
 
 	if value {
-		self.dataPtr[(self.flagNum >> 3)] |= (1 << uint32(self.flagNum&0x7))
+		self.dataPtr[(self.flagNum >> 3)] |= 1 << uint32(self.flagNum&0x7)
 	} else {
 		self.dataPtr[(self.flagNum >> 3)] &= ^(1 << uint32(self.flagNum&0x7))
 	}
+
 	self.flagNum++
-	return (value)
-}
+	return value
+}*/
 
 func (self *BitStream) ReadString() string {
 	if self.ReadFlag() {
@@ -296,27 +348,20 @@ func (self *BitStream) ReadString() string {
 func (self *BitStream) WriteString(value string) {
 	buf := []byte(value)
 	nLen := len(buf)
-
 	if self.WriteFlag(nLen > 0) {
 		self.WriteInt(nLen, Bit16)
 		self.WriteBits(buf, nLen<<3)
 	}
 }
 
-func (self *BitStream) WriteInt64(value int64, bitCount int) {
-	self.WriteBits(Int64ToBytes(value), bitCount)
+func (self *BitStream) WriteInt64(value int64) {
+	self.WriteBits(Int64ToBytes(value, binary.LittleEndian), Bit64)
 }
 
-func (self *BitStream) ReadInt64(bitCount int) int64 {
+func (self *BitStream) ReadInt64() int64 {
 	var ret int64
-	buf := self.ReadBits(bitCount)
-	ret = BytesToInt64(buf)
-	if bitCount == Bit64 {
-		return ret
-	} else {
-		ret &= (1 << uint64(bitCount)) - 1
-	}
-
+	buf := self.ReadBits(Bit64)
+	ret = BytesToInt64(buf, binary.LittleEndian)
 	return ret
 }
 
@@ -352,7 +397,7 @@ func (self *BitStream) WriteBytes(buf []byte) {
 	}
 }
 
-func (self *BitStream) ReadBytes() []byte{
+func (self *BitStream) ReadBytes() []byte {
 	if self.ReadFlag() {
 		nLen := self.ReadInt(Bit16)
 		buf := self.ReadBits(nLen << 3)
@@ -391,7 +436,7 @@ func NewBitStreamS(nLen int) *BitStream {
 //一个字符串占用的字节大小
 func BitStrLen(str string) int {
 	sz := len(str)
-	if sz  == 0 {
+	if sz == 0 {
 		return 0
 	}
 	return sz + 2

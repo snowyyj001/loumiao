@@ -19,6 +19,7 @@ import (
 var (
 	node_Map      map[string]*NodeInfo //服务器信息
 	saddr_uid_Map map[int]string       //saddr -> uid
+	SelfNode      *NodeInfo
 	nodeLock      sync.RWMutex
 	ServerEnabled bool
 	OnlineNum     int
@@ -33,8 +34,19 @@ func init() {
 func AddNode(node *NodeInfo) {
 	defer nodeLock.Unlock()
 	nodeLock.Lock()
+	addr, ok := saddr_uid_Map[node.Uid]
+	if ok && addr != node.SAddr {
+		node.Type = 0
+		llog.Errorf("nodemgr AddNode: same uid node founded: %d %s %s", node.Uid, addr, node.SAddr)
+		return
+	}
+
 	node_Map[node.SAddr] = node
 	saddr_uid_Map[node.Uid] = node.SAddr
+
+	if node.Uid == config.SERVER_NODE_UID {
+		SelfNode = node
+	}
 }
 
 func RemoveNodeById(uid int) {
@@ -44,6 +56,9 @@ func RemoveNodeById(uid int) {
 	if ok {
 		delete(node_Map, saddr)
 		delete(saddr_uid_Map, uid)
+	}
+	if uid == config.SERVER_NODE_UID {
+		SelfNode = nil
 	}
 }
 
@@ -123,11 +138,11 @@ func NodeDiscover(key string, val string, dis bool) *NodeInfo {
 	llog.Debugf("NodeDiscover: key=%s,val=%s,dis=%t,saddr=%s", key, val, dis, saddr)
 	if dis == true {
 		node := GetNodeByAddr(saddr)
-		if node == nil { //maybe, etcf still have older data, etcf has a huge delay
+		if node == nil { //maybe, etcd still have older data, etcd has a huge delay
 			node = new(NodeInfo)
-			node.SocketActive = true
 		}
 		json.Unmarshal([]byte(val), node)
+		node.SocketActive = true
 		AddNode(node)
 		return node
 
@@ -138,7 +153,7 @@ func NodeDiscover(key string, val string, dis bool) *NodeInfo {
 }
 
 // calc world online number
-func CalcWorldServerNumber() int  {
+func CalcWorldServerNumber() int {
 	defer nodeLock.RUnlock()
 	nodeLock.RLock()
 	num := 0
@@ -150,8 +165,23 @@ func CalcWorldServerNumber() int  {
 	return num
 }
 
-//pick the server by type
-func GetTypeServer(atype int) []*NodeInfo  {
+// HasTypeServer find the server by type
+func HasTypeServer(atype int) bool {
+	//pick the gate
+	defer nodeLock.RUnlock()
+	nodeLock.RLock()
+
+	for _, node := range node_Map {
+		if node.SocketActive && node.Type == atype {
+			return true
+		}
+	}
+
+	return false
+}
+
+// GetTypeServer pick the server by type
+func GetTypeServer(atype int) []*NodeInfo {
 	//pick the gate
 	defer nodeLock.RUnlock()
 	nodeLock.RLock()
@@ -166,13 +196,35 @@ func GetTypeServer(atype int) []*NodeInfo  {
 	return nodes
 }
 
-//pick a server by random
-func GetBalanceServer(atype int) *NodeInfo  {
+// GetBalanceServerById pick a server by random
+func GetBalanceServerById(atype, areaid int) *NodeInfo {
 	//pick the gate
 	defer nodeLock.RUnlock()
 	nodeLock.RLock()
 
-	nodes := make([]*NodeInfo, 0)		//这里不要利用map访问的随机性，因为map每次的访问虽然是随机的但并不均匀
+	nodes := make([]*NodeInfo, 0) //这里不要利用map访问的随机性，因为map每次的访问虽然是随机的但并不均匀
+	for _, node := range node_Map {
+		if node.SocketActive && node.Number < node.MaxNum && node.Type == atype && node.Id == areaid {
+			nodes = append(nodes, node)
+		}
+	}
+	sz := len(nodes)
+	if sz > 0 {
+		node := nodes[util.Random(1000)%sz]
+		return node
+
+	} else {
+		return nil
+	}
+}
+
+//pick a server by random
+func GetBalanceServer(atype int) *NodeInfo {
+	//pick the gate
+	defer nodeLock.RUnlock()
+	nodeLock.RLock()
+
+	nodes := make([]*NodeInfo, 0) //这里不要利用map访问的随机性，因为map每次的访问虽然是随机的但并不均匀
 	for _, node := range node_Map {
 		if node.SocketActive && node.Number < node.MaxNum && node.Type == atype {
 			nodes = append(nodes, node)
@@ -189,7 +241,7 @@ func GetBalanceServer(atype int) *NodeInfo  {
 }
 
 //挑选一个人数最少的server
-func GetBalanceServerByNum(atype int) *NodeInfo  {
+func GetBalanceServerByNum(atype int) *NodeInfo {
 	//pick the gate
 	defer nodeLock.RUnlock()
 	nodeLock.RLock()

@@ -15,8 +15,8 @@ const (
 //协程池，主要用来管理临时开启关闭的协程
 type GoRoutinePool struct {
 	go_name_Tmp map[int64]IGoRoutine
-	mPoolName string
-	mMinitor sync.Map
+	mPoolName   string
+	mMinitor    sync.Map
 
 	actorLock *sync.RWMutex
 }
@@ -138,6 +138,7 @@ func (self *GoRoutinePool) Start(igo IGoRoutine, name int64) bool {
 	//register handler msg
 	igo.DoRegsiter()
 
+	igo.Register("ServiceHandler", ServiceHandler)
 	return true
 }
 
@@ -148,7 +149,9 @@ func (self *GoRoutinePool) DoStart() {
 	for _, igo := range self.go_name_Tmp {
 		if igo.IsRunning() == false && igo.IsInited() == true {
 			igo.Run()
+			igo.SetRunning()
 			igo.DoStart()
+			igo.SetRunning()
 		}
 	}
 	self.actorLock.RUnlock()
@@ -178,7 +181,9 @@ func (self *GoRoutinePool) DoSingleStart(igo IGoRoutine, name int64, doAdd bool)
 		return
 	}
 	igo.Run()
+	igo.SetRunning()
 	igo.DoStart()
+	igo.SetRunning()
 
 	if igo.IsRunning() == false || igo.IsInited() == false {
 		self.DelRoutine(name)
@@ -210,7 +215,7 @@ func (self *GoRoutinePool) Statistics() {
 		for _, v := range dele {
 			self.mMinitor.Delete(v)
 		}
-		llog.Debugf("GoRoutinePool.Statistics: name=%s, poolsize=%d, minitortsize=%d",self.mPoolName, self.GetPoolSize(), cnt)
+		llog.Debugf("GoRoutinePool.Statistics: name=%s, poolsize=%d, minitortsize=%d", self.mPoolName, self.GetPoolSize(), cnt)
 		return true
 	}, true)
 

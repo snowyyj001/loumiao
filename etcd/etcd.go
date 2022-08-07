@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/snowyyj001/loumiao/etcf"
 	"sync"
 	"time"
 
@@ -18,12 +19,40 @@ import (
 	"github.com/snowyyj001/loumiao/define"
 )
 
-type HanlderFunc func(string, string, bool)
+const (
+	useEtcf = false //使用自己内部的etcf替代方案，不支持集群
+)
 
 var (
-	This       *clientv3.Client
-	EtcdClient *ClientDis
+	This   *clientv3.Client
+	Client IClientDis
 )
+
+func NewClient() error {
+	if useEtcf {
+		cli, err := etcf.NewEtcf()
+		if err == nil {
+			Client = cli
+		}
+		return err
+	} else {
+		cli, err := NewEtcd()
+		if err == nil {
+			Client = cli
+		}
+		return err
+	}
+}
+
+type IClientDis interface {
+	PutStatus() error
+	PutNode() error
+	WatchCommon(prefix string, hanlder func(string, string, bool)) error
+	RevokeLease() error
+	SetValue(prefix, val string) error
+	GetOne(key string) (string, error)
+	GetAll(key string) ([]string, error)
+}
 
 type IEtcdBase interface {
 	Put(key string, val string, withlease bool) error
@@ -240,32 +269,6 @@ func AquireLeader(prefix string, value string) (isleader bool) {
 	return
 }
 
-//创建etcd服务
-//@addr: etcd地址
-//@timeNum: 连接超时时间
-func NewEtcd(addr []string, timeNum int64) (*EtcdBase, error) {
-	conf := clientv3.Config{
-		Endpoints:   addr,
-		DialTimeout: time.Duration(timeNum) * time.Second,
-	}
-
-	var (
-		client *clientv3.Client
-	)
-
-	if clientTem, err := clientv3.New(conf); err == nil {
-		client = clientTem
-	} else {
-		return nil, err
-	}
-
-	ser := &EtcdBase{
-		client: client}
-
-	This = client
-	return ser, nil
-}
-
 ///////////////////////////////////////////////////////////
 //服发现
 type ClientDis struct {
@@ -279,7 +282,7 @@ type ClientDis struct {
 func (self *ClientDis) watchFuc(prefix, key, value string, put bool) {
 	cb, ok := self.otherFunc.Load(prefix)
 	if ok {
-		cb.(HanlderFunc)(key, value, put)
+		cb.(func(string, string, bool))(key, value, put)
 	} else {
 		llog.Errorf("etcd WatchFuc prefix no handler: %s", prefix)
 	}
@@ -303,7 +306,7 @@ func (self *ClientDis) watcher(prefix string) {
 //通用发现
 //@prefix: 监听key值
 //@hanlder: key值变化回调
-func (self *ClientDis) WatchCommon(prefix string, hanlder HanlderFunc) error {
+func (self *ClientDis) WatchCommon(prefix string, hanlder func(string, string, bool)) error {
 	resp, err := self.client.Get(context.Background(), prefix, clientv3.WithPrefix())
 	if err != nil {
 		return err
@@ -315,7 +318,7 @@ func (self *ClientDis) WatchCommon(prefix string, hanlder HanlderFunc) error {
 	return nil
 }
 
-func (self *ClientDis) extractOthers(hanlder HanlderFunc, resp *clientv3.GetResponse) {
+func (self *ClientDis) extractOthers(hanlder func(string, string, bool), resp *clientv3.GetResponse) {
 	if resp == nil || resp.Kvs == nil {
 		return
 	}
@@ -340,8 +343,10 @@ func (self *ClientDis) DelService(key string) {
 
 func (self *ClientDis) leaseCallBack(success bool) {
 	if success { //成功续租
-	//	llog.Debugf("leaseCallBack")
-		self.PutStatus()
+		llog.Debugf("etcd lease 续租成功")
+		if nodemgr.SelfNode != nil {
+			self.PutStatus()
+		}
 	} else {
 		llog.Errorf("etcd lease 续租失败")
 	T:
@@ -372,10 +377,14 @@ func (self *ClientDis) PutNode() error {
 	return self.PutService(self.etcdKey, string(obj))
 }
 
+func (self *ClientDis) SetValue(prefix, val string) error {
+	return self.Put(prefix, val, false)
+}
+
 //创建服务发现
-func NewClientDis(addr []string) error {
+func NewEtcd() (*ClientDis, error) {
 	conf := clientv3.Config{
-		Endpoints:   addr,
+		Endpoints:   config.Cfg.EtcdAddr,
 		DialTimeout: 3 * time.Second,
 	}
 	if client, err := clientv3.New(conf); err == nil {
@@ -385,18 +394,19 @@ func NewClientDis(addr []string) error {
 		_, err = client.Status(timeoutCtx, conf.Endpoints[0])
 		if err != nil {
 			This = nil
-			return err
+			return nil, err
 		}
-		llog.Infof("etcd connect success: %v", addr)
-		EtcdClient = &ClientDis{
+		llog.Infof("etcd connect success: %v", config.Cfg.EtcdAddr)
+		disEtcd := &ClientDis{
 			EtcdBase: EtcdBase{client: client},
 		}
-		EtcdClient.etcdKey = fmt.Sprintf("%s%d/%s", define.ETCD_NODEINFO, config.NET_NODE_ID, config.NET_GATE_SADDR)
-		EtcdClient.statusKey = fmt.Sprintf("%s%d/%s", define.ETCD_NODESTATUS, config.NET_NODE_ID, config.NET_GATE_SADDR)
-		EtcdClient.SetLeasefunc(EtcdClient.leaseCallBack)
-		EtcdClient.SetLease(int64(config.GAME_LEASE_TIME), true)
-		return nil
+		disEtcd.etcdKey = fmt.Sprintf("%s%d/%s", define.ETCD_NODEINFO, config.NET_NODE_ID, config.NET_GATE_SADDR)
+		disEtcd.statusKey = fmt.Sprintf("%s%d/%s", define.ETCD_NODESTATUS, config.NET_NODE_ID, config.NET_GATE_SADDR)
+		disEtcd.SetLeasefunc(disEtcd.leaseCallBack)
+		disEtcd.SetLease(int64(config.GAME_LEASE_TIME), true)
+
+		return disEtcd, nil
 	} else {
-		return err
+		return nil, err
 	}
 }

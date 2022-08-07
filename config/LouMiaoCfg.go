@@ -4,45 +4,45 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"gopkg.in/yaml.v2"
 	"log"
 	"os"
 	"strings"
 )
 
 const (
-	ServerType_None      = iota //0 物理机控制节点
-	ServerType_Gate             //1 网关
-	ServerType_Account          //2 账号
-	ServerType_World            //3 世界
-	ServerType_Zone             //4 地图
-	ServerType_DB               //5 数据库
-	ServerType_Log              //6 日志
-	ServerType_Public           //7 唯一公共服
-	ServerType_WEB_GM           //8 web gm
-	ServerType_WEB_LOGIN        //9 web login
-	ServerType_RPCGate          //10 rpc gate
-	ServerType_ETCF             //11 配置中心
-	ServerType_LOGINQUEUE		//12 排队
-	ServerType_Robot			//13 机器人
+	ServerType_None       = iota //0 物理机控制节点
+	ServerType_Gate              //1 网关
+	ServerType_Match             //2 匹配
+	ServerType_World             //3 世界
+	ServerType_Zone              //4 地图
+	ServerType_DB                //5 数据库
+	ServerType_Log               //6 日志
+	ServerType_Public            //7 唯一公共服
+	ServerType_WEB_GM            //8 web gm
+	ServerType_WEB_LOGIN         //9 web login
+	ServerType_RPCGate           //10 rpc gate
+	ServerType_ETCF              //11 配置中心
+	ServerType_LOGINQUEUE        //12 排队
+	ServerType_Robot             //13 机器人
 )
 
 var (
 	ServerNames = map[int]string{
-		ServerType_None:      "machine",
-		ServerType_Gate:      "gate",
-		ServerType_Account:   "login",
-		ServerType_World:     "lobby",
-		ServerType_Zone:      "zone",
-		ServerType_DB:        "db",
-		ServerType_Log:       "logserver",
-		ServerType_Public:    "publicserver",
-		ServerType_WEB_GM:    "webserver",
-		ServerType_WEB_LOGIN: "weblogin",
-		ServerType_RPCGate:   "rpcserver",
-		ServerType_ETCF:      "etcfserver",
+		ServerType_None:       "machine",
+		ServerType_Gate:       "gate",
+		ServerType_Match:      "match",
+		ServerType_World:      "lobby",
+		ServerType_Zone:       "zone",
+		ServerType_DB:         "db",
+		ServerType_Log:        "logserver",
+		ServerType_Public:     "publicserver",
+		ServerType_WEB_GM:     "webserver",
+		ServerType_WEB_LOGIN:  "weblogin",
+		ServerType_RPCGate:    "rpcserver",
+		ServerType_ETCF:       "etcfserver",
 		ServerType_LOGINQUEUE: "queueserver",
-		ServerType_Robot: "robot",
+		ServerType_Robot:      "robot",
 	}
 )
 
@@ -52,13 +52,13 @@ var (
 	NET_NODE_TYPE   = -1               //节点类型ServerType_*
 	NET_GATE_SADDR  = "127.0.0.1:6789" //网关监听地址
 
-	NET_PROTOCOL            = "PROTOBUF"      //消息协议格式："PROTOBUF" or "JSON"
-	NET_WEBSOCKET           = false           //使用websocket or socket
-	NET_MAX_CONNS           = 65535           //最大连接数
-	NET_MAX_RPC_CONNS       = 1024            //rpc最大连接数
-	NET_BUFFER_SIZE         = 1024 * 32       //最大消息包长度32k(对外)
-	NET_CLUSTER_BUFFER_SIZE = 5 * 1024 * 1024 //最大消息包长度5M(对内)
-	NET_MAX_NUMBER          = 10000           //pcu
+	NET_PROTOCOL            = "PROTOBUF"       //消息协议格式："PROTOBUF" or "JSON"
+	NET_WEBSOCKET           = false            //使用websocket or socket
+	NET_MAX_CONNS           = 65535            //最大连接数
+	NET_MAX_RPC_CONNS       = 1024             //rpc最大连接数
+	NET_BUFFER_SIZE         = 1024 * 32        //最大消息包长度32k(对外)
+	NET_CLUSTER_BUFFER_SIZE = 16 * 1024 * 1024 //最大消息包长度16M(对内)
+	NET_MAX_NUMBER          = 10000            //pcu
 
 	SERVER_GROUP     = "A"            //服务器分组
 	SERVER_NAME      = "server"       //服务器名字
@@ -66,12 +66,12 @@ var (
 	SERVER_NODE_UID  = 0              //服务器uid
 	NET_LISTEN_SADDR = "0.0.0.0:6789" //内网tcp监听地址
 	SERVER_PARAM     = ""             //启动参数
-	SERVER_RELEASE	 = false		  //配置上区分一下release和debug，方便开发期间的一些coding
-	SERVER_DEBUGPORT	 = 0			  //pprof的监听端口,0不监听
-
+	SERVER_RELEASE   = false          //配置上区分一下release和debug，方便开发期间的一些coding
+	SERVER_DEBUGPORT = 0              //pprof的监听端口,0不监听
+	SERVER_PLATFORM  = "2144"         //平台
 )
 
-//uid通过etcd自动分配，一般不要手动分配uid，除非清楚知道自己在做什么,参考GetServerUid
+// NetNode uid通过etcd自动分配，一般不要手动分配uid，除非清楚知道自己在做什么,参考GetServerUid
 //uid和SAddr是一一对应的,可以通过删除ETCD_LOCKUID来重置uid的分配
 type NetNode struct {
 	Id        int    `json:"id"`
@@ -85,36 +85,27 @@ type NetNode struct {
 	Group     string `json:"group"`
 	LogFile   int    `json:"logfile"` //如果-1，代表输出到控制台
 	Release   bool   `json:"release"`
-	DebugPort int 	 `json:"debugport"`
-
-}
-
-type DBNode struct {
-	SqlUri string `json:"sqluri"`
-	Master int    `json:"master"`
+	DebugPort int    `json:"debugport"`
 }
 
 type ServerCfg struct {
-	NetCfg   NetNode  `json:"net"`
-	EtcdAddr []string `json:"etcd"`
-	NatsAddr []string `json:"nats"`
-	RedisUri string   `json:"redisuri"`
-	SqlCfg   []DBNode `json:"db"`
+	Platform string
+	NetCfg   NetNode  `json:"net" yaml:"net"`
+	EtcdAddr []string `json:"etcd" yaml:"etcd"`
+	NatsAddr []string `json:"nats" yaml:"nats"`
+	RedisUri []string `json:"redisuri" yaml:"redisuri"`
+	DBUri    string   `json:"db"yaml:"db"`
 }
 
 var Cfg ServerCfg
 
 func init() {
-	data, err := ioutil.ReadFile("config/cfg.json")
-	if err != nil {
+	if f, err := os.Open("config/cfg.yml"); err != nil {
 		fmt.Println(err)
 		return
-	}
-
-	err = json.Unmarshal(data, &Cfg)
-	if err != nil {
-		fmt.Println(err)
-		return
+	} else {
+		yaml.NewDecoder(f).Decode(&Cfg)
+		fmt.Println(Cfg)
 	}
 
 	argv := len(os.Args)
@@ -126,7 +117,7 @@ func init() {
 		flag.Parse()                                             //parse之后参数才会被解析复制
 
 		var scfg ServerCfg
-		err = json.Unmarshal([]byte(param), &scfg)
+		err := json.Unmarshal([]byte(param), &scfg)
 		if err != nil {
 			log.Fatalf("cfg fromat error: %s", err.Error())
 		}
@@ -137,7 +128,7 @@ func init() {
 		Cfg.NetCfg.Param = scfg.NetCfg.Param
 		Cfg.NetCfg.Release = scfg.NetCfg.Release
 		Cfg.RedisUri = scfg.RedisUri
-		Cfg.SqlCfg = scfg.SqlCfg
+		Cfg.DBUri = scfg.DBUri
 	}
 	if Cfg.NetCfg.Uid == 0 {
 		log.Fatalf("cfg content uid error: %d", Cfg.NetCfg.Uid)
@@ -155,6 +146,7 @@ func init() {
 	SERVER_PARAM = Cfg.NetCfg.Param
 	SERVER_RELEASE = Cfg.NetCfg.Release
 	SERVER_DEBUGPORT = Cfg.NetCfg.DebugPort
+	SERVER_PLATFORM = Cfg.Platform
 
 	GAME_LOG_CONLOSE = Cfg.NetCfg.LogFile == -1 //-1log也输出到控制台，外网不需要输出到控制台
 	if GAME_LOG_CONLOSE {
@@ -167,7 +159,6 @@ func init() {
 		SERVER_TYPE_NAME = typeName
 	}
 	SERVER_NAME = fmt.Sprintf("%s-%d-%d", SERVER_TYPE_NAME, NET_NODE_TYPE, SERVER_NODE_UID)
-
 
 	arrStr := strings.Split(NET_GATE_SADDR, ":")            //服发现使用正常的ip,例如 192.168.32.15:6789 127.0.0.1:6789
 	NET_LISTEN_SADDR = fmt.Sprintf("0.0.0.0:%s", arrStr[1]) //socket监听,监听所有网卡绑定的ip，格式(0.0.0.0:port)(web监听格式也可以是(:port))

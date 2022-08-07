@@ -50,7 +50,7 @@ func RegisterPacket(packet interface{}) {
 	//fmt.Println("RegisterPacket", packetName)
 	pt := reflect.TypeOf(packet).Elem()
 	packetFunc := func() interface{} {
-		packet := reflect.New(pt).Interface()
+		packet = reflect.New(pt).Interface()
 		return packet
 	}
 	Packet_CreateFactorStringMap[packetName] = packetFunc

@@ -42,6 +42,7 @@ func (self *ClientSocket) Start() bool {
 	if self.Connect() {
 		self.m_Conn.(*net.TCPConn).SetNoDelay(true)
 		go clientRoutine(self)
+
 		return true
 	}
 	return false
@@ -120,6 +121,7 @@ func clientRoutine(pClient *ClientSocket) bool {
 		}
 	}()
 	if pClient.m_Conn == nil {
+		llog.Errorf("client has no conn: %s", pClient.m_sAddr)
 		return false
 	}
 	var buff = make([]byte, pClient.m_MaxReceiveBufferSize)
@@ -128,7 +130,9 @@ func clientRoutine(pClient *ClientSocket) bool {
 			pClient.OnNetFail(3)
 			break
 		}
+		//llog.Debugf("clientRoutine begin read 000: %s", pClient.m_sAddr)
 		n, err := pClient.m_Conn.Read(buff)
+		//llog.Debugf("clientRoutine begin read 111: %d", n, pClient.m_sAddr)
 		if err == io.EOF {
 			llog.Debugf("0.远程链接：%s已经关闭: %s", pClient.m_Conn.RemoteAddr().String(), err.Error())
 			pClient.OnNetFail(0)
@@ -148,7 +152,7 @@ func clientRoutine(pClient *ClientSocket) bool {
 			}
 		}
 	}
-
+	//llog.Debugf("clientRoutine exist: %s", pClient.m_sAddr)
 	pClient.Stop()
 	return true
 }

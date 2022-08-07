@@ -35,11 +35,11 @@ func handleError(err error) {
 	if err == nil {
 		return
 	}
-	llog.Errorf("错误：%s\n", err.Error())
+	llog.Warningf("handleError 错误：%s\n", err.Error())
 }
 
 type (
-	HandleFunc func(int, []byte, int) bool //回调函数
+	HandleFunc func(int, []byte, int) error //回调函数
 	Socket     struct {
 		m_Conn                 net.Conn
 		m_WsConn               *websocket.Conn
@@ -89,7 +89,7 @@ type (
 		SetConnectType(int)
 		SetTcpConn(net.Conn)
 		ReceivePacket(int, []byte) bool
-		HandlePacket(int, []byte, int) bool
+		HandlePacket(int, []byte, int) error
 	}
 )
 
@@ -220,7 +220,7 @@ func (self *Socket) BindPacketFunc(callfunc HandleFunc) {
 	self.m_PacketFunc = callfunc
 }
 
-func (self *Socket) HandlePacket(Id int, buff []byte, nlen int) bool {
+func (self *Socket) HandlePacket(Id int, buff []byte, nlen int) error {
 	newbuff := make([]byte, nlen)
 	copy(newbuff, buff[:nlen])
 	return self.m_PacketFunc(Id, newbuff, nlen)
@@ -234,7 +234,7 @@ func (self *Socket) ReceivePacket(Id int, dat []byte) bool {
 			llog.Errorf("Isocket.ReceivePacket %v: %s", r, buf[:l])
 		}
 	}()
-	//llog.Debugf("收到消息包 %v %d", dat, len(dat))
+	//	llog.Debugf("收到消息包 %v %d", dat, len(dat))
 	copy(self.m_pInBuffer[self.m_pInBufferLen:], dat)
 	self.m_pInBufferLen += len(dat)
 	for {
@@ -243,7 +243,9 @@ func (self *Socket) ReceivePacket(Id int, dat []byte) bool {
 		}
 		mbuff1 := self.m_pInBuffer[0:4]
 		nLen := int(base.BytesToUInt32(mbuff1, binary.BigEndian)) //消息总长度
-		//llog.Debugf("当前消息包长度 %d", nLen)
+		//	llog.Debugf("当前消息包长度 %d", nLen, self.m_pInBufferLen)
+		//	t, n, _, e := message.UnPackHead(self.m_pInBuffer, self.m_pInBufferLen)
+		//	llog.Debugf("当前消息包名字 ", t, n, e)
 		if nLen > self.m_pInBufferLen {
 			break
 		}
@@ -253,13 +255,14 @@ func (self *Socket) ReceivePacket(Id int, dat []byte) bool {
 			return false
 		}
 
-		ok := self.HandlePacket(Id, self.m_pInBuffer, nLen)
-		if ok == false {
-			llog.Error("ReceivePacket HandlePacket error")
+		err := self.HandlePacket(Id, self.m_pInBuffer, nLen)
+		if err != nil {
+			llog.Errorf("ReceivePacket HandlePacket error: %s", err.Error())
 			return false
 		}
 		copy(self.m_pInBuffer, self.m_pInBuffer[nLen:self.m_pInBufferLen])
 		self.m_pInBufferLen -= nLen
+		//		llog.Debugf("剩余消息包长度 %d", self.m_pInBufferLen)
 	}
 	return true
 }

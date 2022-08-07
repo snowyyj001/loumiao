@@ -27,7 +27,7 @@ func (self *KcpClient) Init(saddr string) bool {
 }
 func (self *KcpClient) Start() bool {
 	if self.m_nConnectType == 0 {
-		llog.Error("KcpClient.Start error : unkonwen socket type")
+		llog.Error("KcpClient.Start error : unknown socket type")
 		return false
 	}
 	self.m_bShuttingDown = false
@@ -64,7 +64,7 @@ func (self *KcpClient) Connect() bool {
 	if self.m_nState == SSF_CONNECT {
 		return false
 	}
-	kcpConn, err := kcp.DialWithOptions(self.m_sAddr, nil, 0, 0)
+	kcpConn, err := kcp.DialWithOptions(self.m_sAddr, nil, DATASHARD, PARITYSHARD)
 	if err != nil {
 		llog.Errorf("KcpClient DialWithOptions[%s] error: %s", self.m_sAddr, err.Error())
 		return false

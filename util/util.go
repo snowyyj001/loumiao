@@ -2,6 +2,7 @@ package util
 
 import (
 	"crypto/md5"
+	"encoding/base64"
 	"fmt"
 	"github.com/snowyyj001/loumiao/llog"
 	"math"
@@ -16,8 +17,6 @@ import (
 func init() {
 	rand2.Seed(time.Now().UnixNano())
 }
-
-
 
 func Recover() {
 	if r := recover(); r != nil {
@@ -52,6 +51,17 @@ func Random64(n int64) int64 {
 //随机数[n1,n2)
 func Randomd64(n1, n2 int64) int64 {
 	return n1 + rand2.Int63n(n2-n1)
+}
+
+// Clamp 截断
+func Clamp(n, min, max int) int {
+	if n < min {
+		return min
+	}
+	if n > max {
+		return max
+	}
+	return n
 }
 
 //当前格式化时间字符串
@@ -107,7 +117,7 @@ func FloorInt64(v float64) int64 {
 	return int64(nv)
 }
 
-func Max(a, b int) int {		//官方包里提供了float64的max和min函数，原因就是，golang不支持泛型，非要提供会让代码不够优雅的
+func Max(a, b int) int { //官方包里提供了float64的max和min函数，原因就是，golang不支持泛型，非要提供会让代码不够优雅的
 	if a > b {
 		return a
 	}
@@ -135,10 +145,10 @@ func Min64(a, b int64) int64 {
 	return a
 }
 
-func CopyArray(dst []int, src []int, size int) {
-	for i := 0; i < size; i++ {
-		dst[i] = src[i]
-	}
+func CopyArray(src []int, size int) []int {
+	dst := make([]int, size, size)
+	copy(dst, src)
+	return dst
 }
 
 func RemoveSliceString(arr []string, val string) []string {
@@ -148,6 +158,11 @@ func RemoveSliceString(arr []string, val string) []string {
 			return arr
 		}
 	}
+	return arr
+}
+
+func RemoveSliceByIndex(arr []int, index int) []int {
+	arr = append(arr[:index], arr[index+1:]...)
 	return arr
 }
 
@@ -161,6 +176,24 @@ func RemoveSlice(arr []int, val int) []int {
 	return arr
 }
 
+func RemoveSliceArray(dst []int, src []int, size int) []int {
+	for i := 0; i < size; i++ {
+		dst = RemoveSlice(dst, src[i])
+	}
+	return dst
+}
+
+func EncodeBase64(str string) string {
+	return base64.StdEncoding.EncodeToString([]byte(str))
+}
+
+func DecodeBase64(str string) string {
+	if ret, err := base64.StdEncoding.DecodeString(str); err == nil {
+		return string(ret)
+	}
+	return ""
+}
+
 func Md5(str string) string {
 	data := []byte(str)
 	has := md5.Sum(data)
@@ -171,7 +204,7 @@ func Md5(str string) string {
 func Atoi(num string) int {
 	val, err := strconv.Atoi(num)
 	if err != nil {
-		llog.Errorf("Atoi strconv.Atoi failed " + err.Error())
+		llog.Errorf("Atoi strconv.Atoi failed : num = %s, err = %s", num, err.Error())
 	}
 	return val
 }
@@ -179,7 +212,7 @@ func Atoi(num string) int {
 func Atoi64(num string) int64 {
 	val, err := strconv.Atoi(num)
 	if err != nil {
-		llog.Errorf("Atoi strconv.Atoi64 failed " + err.Error())
+		llog.Errorf("Atoi strconv.Atoi64 failed : num = %s, err = %s", num, err.Error())
 	}
 	return int64(val)
 }

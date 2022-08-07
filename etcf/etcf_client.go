@@ -20,50 +20,49 @@ import (
 type hanlderNetFunc func(clientid int, buffer []byte)
 
 var (
-	Client        *EtcfClient
+	Client             *EtcfClient
 	handler_client_Map map[string]hanlderNetFunc
 )
 
 type ETKeyValue struct {
-	Key string
+	Key   string
 	Value string
 }
 
-const(
-	GET_VALUE_TIMEOUT         	= 3         //GetValue超时时间,秒
-	WRITE_VALUE_TIMEOUT         = 30         //写操作超时时间,毫秒
-	LEASE_TIME         			= 1000        //租约心跳时间,毫秒
-	PUT_STATUS_TIME				= 1			//刷新服务状态时间
+const (
+	GET_VALUE_TIMEOUT   = 3    //GetValue超时时间,秒
+	WRITE_VALUE_TIMEOUT = 30   //写操作超时时间,毫秒
+	LEASE_TIME          = 1000 //租约心跳时间,毫秒
+	PUT_STATUS_TIME     = 2    //刷新服务状态时间
+
+	LEASE_SERVER_TIMEOUT = 5 //租约超时时间，秒
 )
 
-type hanlderFunc func(string, string, bool)
-
-func NewEtcf() *EtcfClient {
+func newEtcfClient() (*EtcfClient, error) {
 	if Client == nil {
 		Client = &EtcfClient{}
 	}
 	Client.Init()
-	Client.Start(false)
+	err := Client.Start(false)
 
 	Client.etcdKey = fmt.Sprintf("%s%d/%s", define.ETCD_NODEINFO, config.NET_NODE_ID, config.NET_GATE_SADDR)
 	Client.statusKey = fmt.Sprintf("%s%d/%s", define.ETCD_NODESTATUS, config.NET_NODE_ID, config.NET_GATE_SADDR)
 
-	return Client
+	return Client, err
 }
 
 type EtcfClient struct {
-
 	pInnerService *network.ClientSocket
 
-	leaseTime int64
-	netStatus bool
+	leaseTime          int64
+	netStatus          bool
 	leaseCallBackTimes int
 
 	etcdKey   string
 	statusKey string
 
-	otherFunc sync.Map //[string]HanlderFunc
-	mChanGetValue sync.Map //map[string]chan []KeyValue
+	otherFunc       sync.Map //[string]HanlderFunc
+	mChanGetValue   sync.Map //map[string]chan []KeyValue
 	mChanAquireLock sync.Map //map[string]chan bool
 }
 
@@ -82,12 +81,14 @@ func (self *EtcfClient) Init() {
 }
 
 //连接etcf server
-func (self *EtcfClient) Start(reconnect bool) {
+func (self *EtcfClient) Start(reconnect bool) error {
 	llog.Infof("EtcfClient Start: reconnect = %t", reconnect)
-
+	if reconnect {
+		self.pInnerService.Stop()
+	}
 	client := new(network.ClientSocket)
 	client.SetClientId(config.SERVER_NODE_UID)
-	client.Init(config.Cfg.EtcdAddr[0])		//不支持集群，想要集群使用etcd
+	client.Init(config.Cfg.EtcdAddr[0]) //不支持集群，想要集群使用etcd
 	client.SetConnectType(network.CHILD_CONNECT)
 	client.BindPacketFunc(packetClientFunc)
 	client.Uid = config.SERVER_NODE_UID
@@ -97,22 +98,13 @@ func (self *EtcfClient) Start(reconnect bool) {
 	if client.Start() {
 		llog.Infof("EtcfClient connected successed: %s ", client.GetSAddr())
 	} else {
-		if !reconnect { //首次就失败，不让启动
-			llog.Fatalf("EtcfClient connect failed: %s", client.GetSAddr())
-		}
+		return fmt.Errorf("EtcfClient connect failed: %s", client.GetSAddr())
 	}
 	if !reconnect {
 		timer.NewTimer(LEASE_TIME, leaseCallBack, true)
 	}
 	Client.netStatus = client.GetState() == network.SSF_CONNECT
-	if Client.netStatus {
-		Client.leaseTime = 0
-		if reconnect {
-			llog.Debugf("etcf lease 尝试重新续租成功")
-			PutNode()		//再次写入本服务信息
-			ReWatchKey()		//重新注册要监听的key
-		}
-	}
+	return nil
 }
 
 //重新监听key
@@ -129,23 +121,30 @@ func ReWatchKey() {
 }
 
 //写服务状态
-func PutStatus()  {
+func PutStatus() error {
 	val := fmt.Sprintf("%d:%t", nodemgr.OnlineNum, nodemgr.ServerEnabled)
-	SetValue(Client.statusKey, val)
+	return SetValue(Client.statusKey, val)
 }
 
 //写服务信息
-func PutNode() {
+func PutNode() error {
 	obj, _ := json.Marshal(&config.Cfg.NetCfg)
-	PutService(Client.etcdKey, string(obj))
+	return PutService(Client.etcdKey, string(obj))
 }
 
 func leaseCallBack(dt int64) bool {
 	Client.leaseTime++
 	//llog.Debugf("leaseCallBack: %d", Client.leaseTime)
-	if Client.leaseTime > 5 {
+	if Client.leaseTime > LEASE_SERVER_TIMEOUT {
 		llog.Errorf("etcf lease 续租失败: leaseTime = %d", Client.leaseTime)
+		llog.Debug("尝试重新续租")
 		Client.Start(true)
+		if Client.netStatus {
+			Client.leaseTime = 0
+			llog.Debugf("etcf lease 尝试重新续租成功")
+			PutNode()    //再次写入本服务信息
+			ReWatchKey() //重新注册要监听的key
+		}
 	}
 	if !Client.netStatus {
 		return true
@@ -161,10 +160,9 @@ func leaseCallBack(dt int64) bool {
 //设置服务
 //@prefix: key值
 //@val: 设置的value
-func PutService(prefix, val string) bool {
+func PutService(prefix, val string) error {
 	if !Client.netStatus {
-		llog.Errorf("EtcfClient.PutService: prefix = %s, server not connected", prefix)
-		return false
+		return fmt.Errorf("EtcfClient.PutService: prefix = %s, server not connected", prefix)
 	}
 	req := &msg.LouMiaoPutValue{}
 	req.Prefix = prefix
@@ -174,16 +172,15 @@ func PutService(prefix, val string) bool {
 	buff, _ := message.EncodeProBuff(0, "LouMiaoPutValue", req)
 	Client.pInnerService.Send(buff)
 
-	return true
+	return nil
 }
 
 //设置值
 //@prefix: key值
 //@val: 设置的value
-func SetValue(prefix, val string) bool {
+func SetValue(prefix, val string) error {
 	if !Client.netStatus {
-		llog.Errorf("EtcfClient.SetValue: prefix = %s, server not connected", prefix)
-		return false
+		return fmt.Errorf("EtcfClient.SetValue: prefix = %s, server not connected", prefix)
 	}
 	req := &msg.LouMiaoPutValue{}
 	req.Prefix = prefix
@@ -193,10 +190,10 @@ func SetValue(prefix, val string) bool {
 	buff, _ := message.EncodeProBuff(0, "LouMiaoPutValue", req)
 	Client.pInnerService.Send(buff)
 
-	return true
+	return nil
 }
 
-//获取一个分布式锁,expire毫秒后会超时返回0
+// AquireLock 获取一个分布式锁,expire毫秒后会超时返回0
 //@prefix: 锁key
 //@expire: 超时时间,毫秒
 //@retutn: 锁剩余时间
@@ -221,10 +218,10 @@ func AquireLock(key string, expire int) int {
 	}
 
 	select {
-	case left := <- ch.(chan int):
+	case left := <-ch.(chan int):
 		return left
 	case <-time.After(time.Duration(expire) * time.Millisecond):
-		llog.Warningf("EtcfClient.AquireLock timeout: %s",  key)
+		llog.Warningf("EtcfClient.AquireLock timeout: %s", key)
 		return 0
 	}
 }
@@ -246,7 +243,7 @@ func UnLock(key string) {
 	llog.Infof("EtcfClient.UnLock: key = %s", key)
 }
 
-//选举leader，所有参与选举的人使用相同的value和prefix，leader负责设置value
+// AquireLeader 选举leader，所有参与选举的人使用相同的value和prefix，leader负责设置value
 //同redisdb的AquireLeader
 //@prefix: 选举区分标识
 //@value: 本次选举的值，每次发起选举，value应该和上次选举时的value不同
@@ -271,20 +268,19 @@ func AquireLeader(key string, value string) (isleader bool) {
 		Client.mChanAquireLock.Store(key, ch)
 	}
 	select {
-	case left := <- ch.(chan int):
+	case left := <-ch.(chan int):
 		return left > 0
 	case <-time.After(time.Duration(1000) * time.Millisecond):
-		llog.Warningf("EtcfClient.AquireLeader timeout: %s",  key)
+		llog.Warningf("EtcfClient.AquireLeader timeout: %s", key)
 		return false
 	}
 }
 
-//获取值
+// GetOne 获取值
 //@prefix: key值
-func GetOne(prefix string) string {
+func GetOne(prefix string) (string, error) {
 	if !Client.netStatus {
-		llog.Errorf("EtcfClient.GetOne: prefix = %s, server not connected", prefix)
-		return ""
+		return "", fmt.Errorf("EtcfClient.GetOne: prefix = %s, server not connected", prefix)
 	}
 
 	req := &msg.LouMiaoGetValue{}
@@ -299,27 +295,25 @@ func GetOne(prefix string) string {
 	Client.pInnerService.Send(buff)
 
 	select {
-	case kvs := <- ch.(chan []ETKeyValue):
+	case kvs := <-ch.(chan []ETKeyValue):
 		if len(kvs) > 0 {
-			for _, v:= range kvs {
+			for _, v := range kvs {
 				if v.Key == prefix {
-					return v.Value
+					return v.Value, nil
 				}
 			}
 		}
-		return ""
+		return "", nil
 	case <-time.After(GET_VALUE_TIMEOUT * time.Second):
-		llog.Errorf("EtcfClient.GetOne timeout: %s",  prefix)
-		return ""
+		return "", fmt.Errorf("EtcfClient.GetOne timeout: %s", prefix)
 	}
 }
 
 //获取值
 //@prefix: key值
-func GetAll(prefix string) []string {
+func GetAll(prefix string) ([]string, error) {
 	if !Client.netStatus {
-		llog.Errorf("EtcfClient.GetAll: prefix = %s, server not connected", prefix)
-		return nil
+		return nil, fmt.Errorf("EtcfClient.GetAll: prefix = %s, server not connected", prefix)
 	}
 
 	req := &msg.LouMiaoGetValue{}
@@ -336,18 +330,17 @@ func GetAll(prefix string) []string {
 	}
 
 	select {
-	case kvs := <- ch.(chan []ETKeyValue):
+	case kvs := <-ch.(chan []ETKeyValue):
 		if len(kvs) > 0 {
 			arr := make([]string, 0)
-			for _, v:= range kvs {
+			for _, v := range kvs {
 				arr = append(arr, v.Value)
 			}
-			return arr
+			return arr, nil
 		}
-		return nil
+		return nil, nil
 	case <-time.After(GET_VALUE_TIMEOUT * time.Second):
-		llog.Errorf("EtcfClient.GetAll timeout: %s",  prefix)
-		return nil
+		return nil, fmt.Errorf("EtcfClient.GetAll timeout: %s", prefix)
 	}
 
 }
@@ -355,7 +348,7 @@ func GetAll(prefix string) []string {
 //监听key
 //@prefix: 监听key值
 //@hanlder: key值变化回调
-func WatchKey(prefix string, hanlder hanlderFunc) bool {
+func WatchKey(prefix string, hanlder func(string, string, bool)) bool {
 	if !Client.netStatus {
 		llog.Errorf("EtcfClient.WatchKey: prefix = %s, server not connected", prefix)
 		return false
@@ -366,6 +359,7 @@ func WatchKey(prefix string, hanlder hanlderFunc) bool {
 	req := &msg.LouMiaoWatchKey{}
 	req.Prefix = prefix
 	req.Opcode = msg.LouMiaoWatchKey_ADD
+	req.Uid = int32(config.SERVER_NODE_UID)
 
 	buff, _ := message.EncodeProBuff(0, "LouMiaoWatchKey", req)
 	Client.pInnerService.Send(buff)
@@ -384,24 +378,25 @@ func RemoveKey(prefix string) {
 	req := &msg.LouMiaoWatchKey{}
 	req.Prefix = prefix
 	req.Opcode = msg.LouMiaoWatchKey_DEL
+	req.Uid = int32(config.SERVER_NODE_UID)
 
 	buff, _ := message.EncodeProBuff(0, "LouMiaoWatchKey", req)
 	Client.pInnerService.Send(buff)
 }
 
 //client connect
-func innerClientConnect( socketId int, data []byte) {
+func innerClientConnect(socketId int, data []byte) {
 	llog.Debugf("etcf client innerConnect: %d", socketId)
 }
 
 //client disconnect
-func innerClientDisConnect( socketId int, data []byte) {
+func innerClientDisConnect(socketId int, data []byte) {
 	llog.Debugf("etcf client innerDisConnect: %d", socketId)
 	Client.netStatus = false
 }
 
 //aquire lock
-func innerClientLouMiaoAquireLock( socketId int, data []byte) {
+func innerClientLouMiaoAquireLock(socketId int, data []byte) {
 	req := &msg.LouMiaoAquireLock{}
 	if message.UnPackProto(req, data) != nil {
 		return
@@ -417,7 +412,7 @@ func innerClientLouMiaoAquireLock( socketId int, data []byte) {
 	select {
 	case ch.(chan int) <- int(req.TimeOut):
 	case <-time.After(WRITE_VALUE_TIMEOUT * time.Millisecond):
-		llog.Warningf("innerClientLouMiaoAquireLock timeout: %s",  req.Prefix)
+		llog.Warningf("innerClientLouMiaoAquireLock timeout: %s", req.Prefix)
 	}
 }
 
@@ -431,7 +426,7 @@ func innerClientLouMiaoNoticeValue(socketId int, data []byte) {
 	//llog.Debugf("innerClientLouMiaoNoticeValue: req = %v", req)
 	Client.otherFunc.Range(func(key, value interface{}) bool {
 		if strings.HasPrefix(req.Prefix, key.(string)) {
-			cb := value.(hanlderFunc)
+			cb := value.(func(string, string, bool))
 			if len(req.Value) > 0 {
 				cb(req.Prefix, req.Value, true)
 			} else {
@@ -458,7 +453,7 @@ func innerClientLouMiaoGetValue(socketId int, data []byte) {
 	}
 	chval := ch.(chan []ETKeyValue)
 	arr := make([]ETKeyValue, 0)
-	for i:=0; i < len(req.Prefixs); i++ {
+	for i := 0; i < len(req.Prefixs); i++ {
 		kv := ETKeyValue{Key: req.Prefixs[i], Value: req.Values[i]}
 		arr = append(arr, kv)
 	}
@@ -466,7 +461,7 @@ func innerClientLouMiaoGetValue(socketId int, data []byte) {
 	select {
 	case chval <- arr:
 	case <-time.After(WRITE_VALUE_TIMEOUT * time.Millisecond):
-		llog.Errorf("innerClientLouMiaoGetValue timeout: %s",  req.Prefix)
+		llog.Errorf("innerClientLouMiaoGetValue timeout: %s", req.Prefix)
 	}
 }
 
@@ -481,15 +476,14 @@ func innerClientLouMiaoLease(socketId int, data []byte) {
 	}
 }
 
-
 //goroutine unsafe
 //net msg handler,this func belong to socket's goroutine
-func packetClientFunc(socketid int, buff []byte, nlen int) bool {
+func packetClientFunc(socketid int, buff []byte, nlen int) error {
 	//llog.Debugf("packetFunc: socketid=%d, bufferlen=%d", socketid, nlen)
 	_, name, buffbody, err := message.UnPackHead(buff, nlen)
 	//llog.Debugf("packetFunc  %s", name)
 	if nil != err {
-		llog.Errorf("packetClientFunc Decode error: %s", err.Error())
+		return fmt.Errorf("packetClientFunc Decode error: %s", err.Error())
 		//This.closeClient(socketid)
 	} else {
 		handler, ok := handler_client_Map[name]
@@ -509,5 +503,5 @@ func packetClientFunc(socketid int, buff []byte, nlen int) bool {
 		}
 
 	}
-	return true
+	return nil
 }

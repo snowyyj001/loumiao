@@ -16,15 +16,15 @@ import (
 )
 
 var (
-	lnc *nats.Conn
-	errorLimiter *ratelimiter.RateLimiter			//上报error信息限流
+	lnc          *nats.Conn
+	errorLimiter *ratelimiter.RateLimiter //上报error信息限流
 )
 
 const (
 	TIMEOUT_NATS = 3
 
-	PermitsPerSecond = 10		//100ms 一个
-	MaxPermits = 1024
+	PermitsPerSecond = 10 //100ms 一个
+	MaxPermits       = 1024
 )
 
 func FormatTopic(topic, prefix string) string {
@@ -70,13 +70,13 @@ func QueueSubscribeTag(topic, prefix, queue string, call func([]byte)) error {
 	return QueueSubscribe(newtopic, queue, call)
 }
 
-//同步订阅消息
+// SubscribeTagSync 同步订阅消息
 func SubscribeTagSync(topic string, prefix string) ([]byte, error) {
 	newtopic := FormatTopic(topic, prefix)
 	return SubscribeSync(newtopic, TIMEOUT_NATS)
 }
 
-//同步订阅消息
+// SubscribeSync 同步订阅消息
 func SubscribeSync(topic string, waittime int) ([]byte, error) {
 	// Subscribe
 	sub, err := lnc.SubscribeSync(topic)
@@ -91,14 +91,14 @@ func SubscribeSync(topic string, waittime int) ([]byte, error) {
 	return msg.Data, err
 }
 
-//异步订阅消息
-func SubscribeTagAsyn(topic string, prefix string, call func([]byte)) error {
+// SubscribeTagAsync 异步订阅消息
+func SubscribeTagAsync(topic string, prefix string, call func([]byte)) error {
 	newtopic := FormatTopic(topic, prefix)
-	return SubscribeAsyn(newtopic, call)
+	return SubscribeAsync(newtopic, call)
 }
 
-//异步订阅消息
-func SubscribeAsyn(topic string, call func([]byte)) error {
+// SubscribeAsync 异步订阅消息
+func SubscribeAsync(topic string, call func([]byte)) error {
 	// Subscribe
 	_, err := lnc.Subscribe(topic, func(m *nats.Msg) {
 		defer util.Recover()
@@ -125,7 +125,7 @@ func PublishString(topic, message string) error {
 
 //发布消息
 func PublishInt(topic string, message int) error {
-	return lnc.Publish(topic, base.Int64ToBytes(int64(message)))
+	return lnc.Publish(topic, base.Int64ToBytesDefault(int64(message)))
 }
 
 //请求消息

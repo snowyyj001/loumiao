@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/snowyyj001/loumiao/llog"
 
@@ -54,6 +55,7 @@ func (self *WebSocket) Init(saddr string) bool {
 	return true
 }
 func (self *WebSocket) Start() bool {
+	llog.Debug("WebSocket.Start")
 	if self.m_nConnectType == 0 {
 		llog.Error("WebSocket.Start error : unkonwen socket type")
 		return false
@@ -67,13 +69,20 @@ func (self *WebSocket) Start() bool {
 	http.HandleFunc("/", serveHome)
 	http.HandleFunc("/ws", serveWs)
 	self.m_httpServer = &http.Server{Addr: self.m_sAddr}
+	succ := true
 	go func() {
 		err := self.m_httpServer.ListenAndServe()
 		if err != nil {
+			succ = false
 			llog.Errorf("WebSocket ListenAndServe: %v", err)
 			return
 		}
 	}()
+	time.Sleep(time.Second)
+	if succ == false {
+		return false
+	}
+
 	llog.Infof("websocket 启动监听，等待链接！%s", self.m_sAddr)
 
 	//延迟，监听关闭

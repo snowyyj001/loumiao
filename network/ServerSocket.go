@@ -26,7 +26,7 @@ type ServerSocket struct {
 	m_nClientCount  int
 	m_nMaxClients   int
 	m_nMinClients   int
-	m_nIdSeed       int32
+	m_nIdSeed       int64
 	m_bShuttingDown bool
 	m_ClientList    map[int]*ServerSocketClient
 	m_ClientLocker  *sync.RWMutex
@@ -43,6 +43,7 @@ func (self *ServerSocket) Init(saddr string) bool {
 	return true
 }
 func (self *ServerSocket) Start() bool {
+	llog.Debug("ServerSocket.Start")
 	if self.m_nConnectType == 0 {
 		llog.Error("ServerSocket.Start error : unkonwen socket type")
 		return false
@@ -75,9 +76,8 @@ func (self *ServerSocket) Start() bool {
 }
 
 func (self *ServerSocket) AssignClientId() int {
-	return int(atomic.AddInt32(&self.m_nIdSeed, 1))
+	return int(atomic.AddInt64(&self.m_nIdSeed, 1))
 }
-
 
 func (self *ServerSocket) GetClientById(id int) *ServerSocketClient {
 	self.m_ClientLocker.RLock()
@@ -147,7 +147,7 @@ func (self *ServerSocket) LoadClient() *ServerSocketClient {
 func (self *ServerSocket) SendById(id int, buff []byte) int {
 	pClient := self.GetClientById(id)
 	if pClient != nil {
-		pClient.Send(buff)
+		return pClient.Send(buff)
 	} else {
 		llog.Warningf("ServerSocket发送数据失败[%d]", id)
 	}

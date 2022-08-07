@@ -7,7 +7,7 @@ import (
 )
 
 var (
-	This        *CallRpcServer
+	This *CallRpcServer
 )
 
 type CallRpcServer struct {
@@ -25,9 +25,9 @@ func (self *CallRpcServer) DoInit() bool {
 func (self *CallRpcServer) DoRegsiter() {
 	llog.Infof("%s DoRegsiter", self.Name)
 
-	self.Register("CallRpc", callRpc)
-	self.Register("ReqRpcCall", reqRpcCall)
-	self.Register("RespRpcCall", respRpcCall)
+	self.Register("CallRpc", callRpc)         //A 直接call
+	self.Register("ReqRpcCall", reqRpcCall)   //B 收到 A的call
+	self.Register("RespRpcCall", respRpcCall) // A 收到 B的resp
 }
 
 //begin communicate with other nodes

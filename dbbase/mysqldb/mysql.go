@@ -11,8 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/snowyyj001/loumiao/util"
-
 	"github.com/snowyyj001/loumiao/config"
 	"github.com/snowyyj001/loumiao/llog"
 	"gorm.io/driver/mysql"
@@ -110,32 +108,25 @@ func STble(tname string) *gorm.DB {
 
 //连接数据库,使用config-mysql参数,同时创建修改表
 func Dial(tbs []interface{}) error {
-	for _, cfg := range config.Cfg.SqlCfg {
-		//account:pass@tcp(url)/dbname
-		uri := fmt.Sprintf("%s?charset=utf8&parseTime=True&loc=Local", cfg.SqlUri)
-		llog.Debugf("mysql Dial: %s", uri)
-		engine, err := gorm.Open(mysql.Open(uri), &gorm.Config{
-			NamingStrategy: schema.NamingStrategy{
-				SingularTable: true, // 使用单数表名，启用该选项，此时，`User` 的表名应该是 `user`
-			},
-			Logger:                 newloger().LogMode(logLevel),
-			SkipDefaultTransaction: true, //创建、更新、删除，禁用事务提交的方式
-		})
-		if err != nil {
-			return err
-		}
-		sqlDB, _ := engine.DB()
-		if cfg.Master == 1 { //主数据库
-			sqlDB.SetMaxIdleConns(POOL_IDLE)
-			sqlDB.SetMaxOpenConns(POOL_MAX)
-			Master = engine
-		} else { //从库最大连接数根据从库数量调整
-			sqlDB.SetMaxIdleConns(util.Max(POOL_IDLE/(len(config.Cfg.SqlCfg)-1), 1))
-			sqlDB.SetMaxOpenConns(util.Max(POOL_MAX/(len(config.Cfg.SqlCfg)-1), 1))
-			Slaves = append(Slaves, engine)
-			SLen++
-		}
+
+	//account:pass@tcp(url)/dbname
+	uri := fmt.Sprintf("%s?charset=utf8&parseTime=True&loc=Local", config.Cfg.DBUri)
+	llog.Debugf("mysql Dial: %s", uri)
+	engine, err := gorm.Open(mysql.Open(uri), &gorm.Config{
+		NamingStrategy: schema.NamingStrategy{
+			SingularTable: true, // 使用单数表名，启用该选项，此时，`User` 的表名应该是 `user`
+		},
+		Logger:                 newloger().LogMode(logLevel),
+		SkipDefaultTransaction: true, //创建、更新、删除，禁用事务提交的方式
+	})
+	if err != nil {
+		return err
 	}
+	sqlDB, _ := engine.DB()
+
+	sqlDB.SetMaxIdleConns(POOL_IDLE)
+	sqlDB.SetMaxOpenConns(POOL_MAX)
+	Master = engine
 
 	if tbs != nil {
 		create(Master, tbs)
@@ -149,14 +140,14 @@ func Dial(tbs []interface{}) error {
 				llog.Info("begin reconnect mysql")
 				err = DialDefault()
 				llog.Info("end reconnect mysql")
-				if err == nil {		//重连成功就退出，否则就不停重试
+				if err == nil { //重连成功就退出，否则就不停重试
 					break
 				}
 			}
 			for i := 0; i < SLen; i++ {
 				sqlDB, _ := Slaves[i].DB()
 				if err := sqlDB.Ping(); err != nil {
-					llog.Errorf("mysql slave[%s] db ping error: %s", config.Cfg.SqlCfg[i].SqlUri, err.Error())
+					llog.Errorf("mysql slave[%s] db ping error: %s", config.Cfg.DBUri, err.Error())
 					Slaves[i] = Master
 				}
 			}
@@ -164,7 +155,7 @@ func Dial(tbs []interface{}) error {
 		}
 	}()
 
-	llog.Infof("mysql dail success: %v", config.Cfg.SqlCfg)
+	llog.Infof("mysql dail success: %v", config.Cfg.DBUri)
 
 	return nil
 }
@@ -281,7 +272,7 @@ func MDuplicate(st schema.Tabler, coloms []string) bool {
 //计算orm结构的CRC32值
 func MGetCRCCode(st schema.Tabler) uint32 {
 	v := reflect.ValueOf(st)
-	tv :=  v.FieldByName("TFlag")
+	tv := v.FieldByName("TFlag")
 	record := tv.Int()
 	tv.SetInt(0)
 
@@ -299,4 +290,3 @@ func MGetCRCCode(st schema.Tabler) uint32 {
 
 	return r
 }
-

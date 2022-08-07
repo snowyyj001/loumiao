@@ -1,12 +1,12 @@
 package etcf
 
 import (
-	"github.com/snowyyj001/loumiao/timer"
-	"github.com/snowyyj001/loumiao/util"
 	"github.com/snowyyj001/loumiao/gorpc"
 	"github.com/snowyyj001/loumiao/llog"
 	"github.com/snowyyj001/loumiao/message"
 	"github.com/snowyyj001/loumiao/msg"
+	"github.com/snowyyj001/loumiao/timer"
+	"github.com/snowyyj001/loumiao/util"
 	"strings"
 )
 
@@ -21,6 +21,7 @@ func innerDisConnect(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	llog.Debugf("etcf server innerDisConnect: %d", socketId)
 	This.removeAllWatchById(socketId)
 	This.removeAllLeaseById(socketId)
+	delete(This.mStoreValuesLeaseTime, socketId)
 }
 
 //watch/remove key
@@ -30,6 +31,7 @@ func innerLouMiaoWatchKey(igo gorpc.IGoRoutine, socketId int, data []byte) {
 		return
 	}
 	llog.Debugf("innerLouMiaoWatchKey: %v", req)
+	siduid_Map[socketId] = int(req.Uid)
 	if req.Opcode == msg.LouMiaoWatchKey_ADD {
 		This.addWatch(req.Prefix, socketId)
 	} else {
@@ -90,21 +92,21 @@ func innerLouMiaoAquireLock(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	if message.UnPackProto(req, data) != nil {
 		return
 	}
-	if req.TimeOut < 1000 {		//加个时间精度控制
+	if req.TimeOut < 1000 { //加个时间精度控制
 		req.TimeOut = 1000
 	}
 	llog.Debugf("innerLouMiaoAquireLock: %v", req)
-	if len(req.Value) > 0 {			//选举leader
+	if len(req.Value) > 0 { //选举leader
 		key := "leader:" + req.Prefix + ":" + req.Value
-		_ , ok := This.mStoreLeaderValues.LoadOrStore(key, true)
+		_, ok := This.mStoreLeaderValues.LoadOrStore(key, true)
 		if ok {
-			req.TimeOut = 0		//slave
+			req.TimeOut = 0 //slave
 			buff, _ := message.EncodeProBuff(0, "LouMiaoAquireLock", req)
 			This.pInnerService.SendById(socketId, buff)
-		} else {		//master
+		} else { //master
 			buff, _ := message.EncodeProBuff(0, "LouMiaoAquireLock", req)
 			This.pInnerService.SendById(socketId, buff)
-			timer.DelayJob(60 * 60 * 1000, func() {		//一小时后删除这个leader key，主要是为了清理内存
+			timer.DelayJob(60*60*1000, func() { //一小时后删除这个leader key，主要是为了清理内存
 				llog.Warningf("innerLouMiaoAquireLock: %s", key)
 				This.mStoreLeaderValues.Delete(key)
 			}, false)
@@ -114,13 +116,13 @@ func innerLouMiaoAquireLock(igo gorpc.IGoRoutine, socketId int, data []byte) {
 		stam, ok := This.mStoreLocks[req.Prefix]
 		if !ok {
 			stam = int(nt) + int(req.TimeOut)
-			This.mStoreLocks[req.Prefix] = stam		//直接拿到锁，先到先得
+			This.mStoreLocks[req.Prefix] = stam //直接拿到锁，先到先得
 
-			This.RunTicker(int(req.TimeOut), This.lockTimeout, req.Prefix)
+			This.RunDelayJob(int(req.TimeOut), This.lockTimeout, req.Prefix)
 
 			buff, _ := message.EncodeProBuff(0, "LouMiaoAquireLock", req)
 			This.pInnerService.SendById(socketId, buff)
-		} else {		//等待锁的释放
+		} else { //等待锁的释放
 			This.mStoreLockWaiters[req.Prefix] = append(This.mStoreLockWaiters[req.Prefix], socketId)
 		}
 	}
@@ -134,7 +136,6 @@ func innerLouMiaoReleaseLock(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	}
 	llog.Debugf("LouMiaoReleaseLock: %v", req)
 
-
 	stam, ok := This.mStoreLocks[req.Prefix]
 	if !ok {
 		return
@@ -145,7 +146,7 @@ func innerLouMiaoReleaseLock(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	arr, ok := This.mStoreLockWaiters[req.Prefix]
 	if ok {
 		//通知还在等待的最后一个对象锁可用(这样数组移除最后一个元素就行了)
-		req := &msg.LouMiaoAquireLock{Prefix: req.Prefix, TimeOut: int32(stam-nt)}
+		req := &msg.LouMiaoAquireLock{Prefix: req.Prefix, TimeOut: int32(stam - nt)}
 		buff, _ := message.EncodeProBuff(0, "LouMiaoAquireLock", req)
 		i := len(arr) - 1
 		socketId := arr[i]

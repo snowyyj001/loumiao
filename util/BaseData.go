@@ -5,7 +5,6 @@ package util
 //所以，应该在一个逻辑里使用一次GetBaseData，然后使用返回的值
 type (
 	BaseDataRes struct {
-		name      string
 		flag      bool //A:true, B:false
 		dataMap_A map[interface{}]interface{}
 		dataMap_B map[interface{}]interface{}
@@ -17,6 +16,7 @@ type (
 		Init()
 		AddData(int, interface{})
 		GetBaseData(int) interface{}
+		Len() int
 		Read() error
 		ReadDone()
 		Name() string
@@ -65,6 +65,22 @@ func (self *BaseDataRes) GetBaseData(id int) interface{} {
 	}
 }
 
+func (self *BaseDataRes) Len() int {
+	if self.flag { //a is using
+		return len(self.dataMap_A)
+	} else {
+		return len(self.dataMap_B)
+	}
+}
+
+func (self *BaseDataRes) GetAllData() map[interface{}]interface{} {
+	if self.flag { //a is using, return a
+		return self.dataMap_A
+	} else {
+		return self.dataMap_B
+	}
+}
+
 func (self *BaseDataRes) Init() {
 	if self.dataMap_A != nil {
 		return
@@ -72,7 +88,6 @@ func (self *BaseDataRes) Init() {
 	self.dataMap_A = make(map[interface{}]interface{})
 	self.dataMap_B = make(map[interface{}]interface{})
 	self.flag = false
-	self.name = "null"
 }
 
 func (self *BaseDataRes) Read() error {
@@ -81,8 +96,4 @@ func (self *BaseDataRes) Read() error {
 
 func (self *BaseDataRes) ReadDone() {
 	self.flag = !self.flag
-}
-
-func (self *BaseDataRes) Name() string {
-	return self.name
 }

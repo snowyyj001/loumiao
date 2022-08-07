@@ -3,6 +3,7 @@ package rpcgate
 
 import (
 	"fmt"
+	"github.com/snowyyj001/loumiao/lnats"
 	"sync"
 
 	"github.com/snowyyj001/loumiao/message"
@@ -83,21 +84,21 @@ func (self *RpcGateServer) DoStart() {
 	llog.Info("RpcGateServer DoStart")
 
 	//etcd client
-	err := etcd.NewClientDis(config.Cfg.EtcdAddr)
+	err := etcd.NewClient()
 	if util.CheckErr(err) {
 		llog.Fatalf("etcd connect failed: %v", config.Cfg.EtcdAddr)
 	}
 	nodemgr.ServerEnabled = true
-	etcd.EtcdClient.PutStatus() //服务如果异常关闭，是没有撤销租约的，在三秒内重启会保留上次状态，这里强制刷新一下
+	etcd.Client.PutStatus() //服务如果异常关闭，是没有撤销租约的，在三秒内重启会保留上次状态，这里强制刷新一下
 
 	//server discover
 	//watch status, for balance
-	err = etcd.EtcdClient.WatchCommon(fmt.Sprintf("%s%d", define.ETCD_NODESTATUS, config.NET_NODE_ID), self.serverStatusUpdate)
+	err = etcd.Client.WatchCommon(fmt.Sprintf("%s%d", define.ETCD_NODESTATUS, config.NET_NODE_ID), self.serverStatusUpdate)
 	if err != nil {
 		llog.Fatalf("etcd watch ETCD_NODESTATUS error : %s", err.Error())
 	}
 	//watch all node, just for account, to gate balance
-	err = etcd.EtcdClient.WatchCommon(fmt.Sprintf("%s%d", define.ETCD_NODEINFO, config.NET_NODE_ID), self.newServerDiscover)
+	err = etcd.Client.WatchCommon(fmt.Sprintf("%s%d", define.ETCD_NODEINFO, config.NET_NODE_ID), self.newServerDiscover)
 	if err != nil {
 		llog.Fatalf("etcd watch NET_GATE_SADDR error : %s", err.Error())
 	}
@@ -109,11 +110,13 @@ func (self *RpcGateServer) DoOpen() {
 	util.Assert(self.pInnerService.Start(), fmt.Sprintf("GateServer listen failed: saddr=%s", self.pInnerService.GetSAddr()))
 
 	//register to etcd when the socket is ok
-	etcd.EtcdClient.PutNode()
+	if err := etcd.Client.PutNode(); err != nil {
+		llog.Fatalf("etcd PutNode error %v", err)
+	}
 
 	llog.Infof("RpcGateServer DoOpen success: name=%s,saddr=%s,uid=%d", self.Name, config.NET_GATE_SADDR, config.SERVER_NODE_UID)
 
-	llog.ReportMail(define.MAIL_TYPE_START, "服务器完成启动")
+	lnats.ReportMail(define.MAIL_TYPE_START, "服务器完成启动")
 }
 
 //goroutine unsafe
@@ -145,12 +148,12 @@ func (self *RpcGateServer) DoDestory() {
 
 //goroutine unsafe
 //net msg handler,this func belong to socket's goroutine
-func packetFunc_rpc(socketid int, buff []byte, nlen int) bool {
+func packetFunc_rpc(socketid int, buff []byte, nlen int) error {
 	//llog.Debugf("packetFunc_rpc: socketid=%d, bufferlen=%d", socketid, nlen)
 	target, name, buffbody, err := message.UnPackHead(buff, nlen)
 	//llog.Debugf("packetFunc_rpc  %s %v", name, pm)
 	if nil != err {
-		llog.Errorf("packetFunc_rpc Decode error: %s", err.Error())
+		return fmt.Errorf("packetFunc_rpc Decode error: %s", err.Error())
 		//This.closeClient(socketid)
 	} else {
 		if target == config.SERVER_NODE_UID || target <= 0 { //server使用的是server uid
@@ -165,7 +168,7 @@ func packetFunc_rpc(socketid int, buff []byte, nlen int) bool {
 			llog.Errorf("packetFunc_rpc target may be error: targetuid=%d, myuid=%d, name=%s", target, config.SERVER_NODE_UID, name)
 		}
 	}
-	return true
+	return nil
 }
 
 func (self *RpcGateServer) removeRpc(socketId int) {

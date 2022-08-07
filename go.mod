@@ -28,8 +28,8 @@ require (
 	google.golang.org/grpc v1.33.2 // indirect
 	google.golang.org/protobuf v1.23.0
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0 // indirect
-	gorm.io/driver/mysql v1.0.4
-	gorm.io/gorm v1.21.12
+	gorm.io/driver/mysql v1.3.5
+	gorm.io/gorm v1.23.8
 
 )
 

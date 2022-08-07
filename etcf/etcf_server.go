@@ -22,29 +22,26 @@ import (
 var (
 	This        *EtcfServer
 	handler_Map map[string]string
+	siduid_Map  map[int]int //socket id -> uid，目前只是为了调试信息查看
 )
 
 type ETKeyLease struct {
-	Key string
+	Key      string
 	SocketId int
 }
-
-const (
-	LEASE_SERVER_TIMEOUT = 2		//租约超时时间，秒
-)
 
 type EtcfServer struct {
 	gorpc.GoRoutineLogic
 
 	pInnerService network.ISocket
 
-	mWatchKeys   map[string]map[int]bool //prefix -> [socket id][true]
-	mStoreValues map[string]string       //prefix -> value
-	mStoreValuesLease  map[string]ETKeyLease       //prefix -> ETKeyLease
-	mStoreValuesLeaseTime  map[int]int64       //socketid -> stmp
-	mStoreLeaderValues sync.Map       //prefix -> bool
-	mStoreLocks map[string]int		//prefix -> time
-	mStoreLockWaiters map[string][]int	//prefix -> uids
+	mWatchKeys            map[string]map[int]bool //prefix -> [socket id][true]
+	mStoreValues          map[string]string       //prefix -> value
+	mStoreValuesLease     map[string]ETKeyLease   //prefix -> ETKeyLease
+	mStoreValuesLeaseTime map[int]int64           //socketid -> stmp
+	mStoreLeaderValues    sync.Map                //prefix -> bool
+	mStoreLocks           map[string]int          //prefix -> time
+	mStoreLockWaiters     map[string][]int        //prefix -> uids
 }
 
 func (self *EtcfServer) DoInit() bool {
@@ -58,6 +55,7 @@ func (self *EtcfServer) DoInit() bool {
 	self.pInnerService.SetConnectType(network.SERVER_CONNECT)
 
 	handler_Map = make(map[string]string)
+	siduid_Map = make(map[int]int)
 
 	self.mWatchKeys = make(map[string]map[int]bool)
 	self.mStoreValues = make(map[string]string)
@@ -83,7 +81,7 @@ func (self *EtcfServer) DoRegsiter() {
 
 	handler_Map["LouMiaoPutValue"] = "EtcfServer"
 	self.RegisterGate("LouMiaoPutValue", innerLouMiaoPutValue)
-	
+
 	handler_Map["LouMiaoGetValue"] = "EtcfServer"
 	self.RegisterGate("LouMiaoGetValue", innerLouMiaoGetValue)
 
@@ -103,7 +101,7 @@ func (self *EtcfServer) DoStart() {
 
 	util.Assert(self.pInnerService.Start(), fmt.Sprintf("EtcfServer listen failed: saddr=%s", self.pInnerService.GetSAddr()))
 
-	self.RunTimer(1000, self.update_1000)
+	//self.RunTimer(1000, self.update_1000)
 }
 
 func (self *EtcfServer) DoDestory() {
@@ -116,10 +114,11 @@ func (self *EtcfServer) DoDestory() {
 func (self *EtcfServer) update_1000(dt int64) {
 	//llog.Debugf("%s update_1000: %d", self.Name, dt)
 	for sid, stmp := range self.mStoreValuesLeaseTime {
-		if util.TimeStampSec() - stmp >= LEASE_SERVER_TIMEOUT {		//超时
-			llog.Infof("EtcfServer.update_1000: lease timeout, sid = %d,", sid)
-			self.removeAllLeaseById(sid)
-			delete(self.mStoreValuesLeaseTime, sid)
+		if util.TimeStampSec()-stmp >= LEASE_SERVER_TIMEOUT { //超时
+			uid, _ := siduid_Map[sid]
+			llog.Warningf("EtcfServer.update_1000: lease timeout, sid = %d, uid = %d, timeout = %d", sid, uid, util.TimeStampSec()-stmp)
+			//self.removeAllLeaseById(sid)
+			//delete(self.mStoreValuesLeaseTime, sid)
 		}
 	}
 }
@@ -135,7 +134,7 @@ func (self *EtcfServer) addWatch(prefix string, sid int) {
 
 	for key, value := range This.mStoreValues {
 		if strings.HasPrefix(key, prefix) {
-			self.noticeValue(sid, key, value)		//将已经存在的值发送给目标server
+			self.noticeValue(sid, key, value) //将已经存在的值发送给目标server
 		}
 	}
 }
@@ -208,7 +207,8 @@ func (self *EtcfServer) noticeValue(sid int, prefix string, value string) {
 	req.Prefix = prefix
 	req.Value = value
 	buff, _ := message.EncodeProBuff(0, "LouMiaoNoticeValue", req)
-	This.pInnerService.SendById(sid, buff)
+	n := This.pInnerService.SendById(sid, buff)
+	llog.Debugf("EtcfServer.noticeValue: %d %d ", n, len(buff))
 }
 
 func (self *EtcfServer) lockTimeout(param interface{}) {
@@ -222,7 +222,7 @@ func (self *EtcfServer) lockTimeout(param interface{}) {
 		//通知还在等待的锁超时
 		req := &msg.LouMiaoAquireLock{Prefix: prefix, TimeOut: 0}
 		buff, _ := message.EncodeProBuff(0, "LouMiaoAquireLock", req)
-		for i:=0; i<len(arr); i++ {
+		for i := 0; i < len(arr); i++ {
 			socketId := arr[i]
 			This.pInnerService.SendById(socketId, buff)
 		}
@@ -232,12 +232,12 @@ func (self *EtcfServer) lockTimeout(param interface{}) {
 
 //goroutine unsafe
 //net msg handler,this func belong to socket's goroutine
-func packetFunc(socketid int, buff []byte, nlen int) bool {
+func packetFunc(socketid int, buff []byte, nlen int) error {
 	//llog.Debugf("packetFunc: socketid=%d, bufferlen=%d", socketid, nlen)
 	_, name, buffbody, err := message.UnPackHead(buff, nlen)
 	//llog.Debugf("packetFunc  %s", name)
 	if nil != err {
-		llog.Errorf("packetFunc Decode error: %s", err.Error())
+		return fmt.Errorf("packetFunc Decode error: %s", err.Error())
 		//This.closeClient(socketid)
 	} else {
 		handler, ok := handler_Map[name]
@@ -249,5 +249,5 @@ func packetFunc(socketid int, buff []byte, nlen int) bool {
 		}
 
 	}
-	return true
+	return nil
 }

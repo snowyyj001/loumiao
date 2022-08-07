@@ -5,9 +5,8 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"github.com/snowyyj001/loumiao/config"
-
 	"github.com/snowyyj001/loumiao/base"
+	"github.com/snowyyj001/loumiao/config"
 
 	"github.com/snowyyj001/loumiao/llog"
 	"github.com/snowyyj001/loumiao/util"
@@ -22,12 +21,12 @@ import (
 //5，6字节代表目标服务器类型/目标服务器uid
 //7，8字节代表消息名长度
 
-//target: 目标服务器类型/id
+// Encode target: 目标服务器类型/id
 //name: 消息名
 //msg: 具体的消息包
 var Encode func(target int, name string, packet interface{}) ([]byte, int)
 
-//uid: 服务器id
+// Decode uid: 服务器id
 //buff: 消息包
 //length: 包长度
 var Decode func(uid int, buff []byte, length int) (error, int, string, interface{})
@@ -65,7 +64,7 @@ func EncodeProBuff(target int, name string, packet interface{}) ([]byte, int) {
 		llog.Errorf("EncodeProBuff: too big packet size: %d", nLen)
 		return nil, 0
 	}
-
+	//llog.Debugf("EncodeProBuff: %s %d %d", name, nLen, bytesBuffer.Len())
 	return bytesBuffer.Bytes(), nLen
 }
 
@@ -169,15 +168,17 @@ func DecodeJson(uid int, buff []byte, length int) (error, int, string, interface
 	}
 	return nil, target, msgName, packet
 }
+
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //
 
 //对一个json或pb结构体序列化
 var Pack func(packet interface{}) ([]byte, error)
+
 //对buff反序列化为一个json或pb结构体
 var UnPack func(packet interface{}, buff []byte) error
 
-//解析包头
+// UnPackHead 解析包头
 //@ret: targetid, 消息名, 包体, error
 func UnPackHead(buff []byte, length int) (int, string, []byte, error) {
 	mbuff1 := buff[4:6]
@@ -189,7 +190,7 @@ func UnPackHead(buff []byte, length int) (int, string, []byte, error) {
 		return 0, "", nil, fmt.Errorf("UnPackHead: msgname len is illegal: %d", nameLen)
 	}
 	msgName := string(buff[8 : 8+nameLen])
-	return target, msgName, buff[8+nameLen:length], nil
+	return target, msgName, buff[8+nameLen : length], nil
 }
 
 func PackJson(packet interface{}) ([]byte, error) {
@@ -199,9 +200,9 @@ func PackJson(packet interface{}) ([]byte, error) {
 func UnPackJson(packet interface{}, buff []byte) error {
 	err := json.Unmarshal(buff, packet)
 	if err != nil {
-		llog.Errorf("message.UnPackJson: err = %s", err.Error())
+		llog.Errorf("message.UnPackJson: err = %s, buff = %s", err.Error(), string(buff))
 	}
-	return  err
+	return err
 }
 
 func PackProto(packet interface{}) ([]byte, error) {
@@ -211,9 +212,32 @@ func PackProto(packet interface{}) ([]byte, error) {
 func UnPackProto(packet interface{}, buff []byte) error {
 	err := proto.Unmarshal(buff, packet.(proto.Message))
 	if err != nil {
-		llog.Errorf("message.UnPackProto: err = %s", err.Error())
+		llog.Errorf("message.UnPackProto: packet = %v, err = %s", packet, err.Error())
 	}
-	return  err
+	return err
+}
+
+//udp不会粘包，所以不需要长度
+type PacketUdp struct {
+	UserId int64
+	CmdId  uint16
+}
+
+func PackUdp(cmd uint16, userId int64, buffer []byte) []byte {
+	var head PacketUdp
+	buf := new(bytes.Buffer)
+	head.CmdId = cmd
+	head.UserId = userId
+	binary.Write(buf, binary.BigEndian, head)
+	buf.Write(buffer)
+	return buf.Bytes()
+}
+
+func UpPackUdp(buffer []byte) (uint16, int64, []byte) {
+	var head PacketUdp
+	bytebuff := bytes.NewBuffer(buffer)
+	binary.Read(bytebuff, binary.BigEndian, &head)
+	return head.CmdId, head.UserId, bytebuff.Bytes()
 }
 
 func DoInit() {

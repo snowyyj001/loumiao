@@ -11,9 +11,10 @@ import (
 
 func Assert(x bool, y string) {
 	if bool(x) == false {
-		log.Fatalf("Assert: %s", y)
+		log.Println("Assert: %s", y)
 	}
 }
+
 //随机数[i,n]
 func RandI(i int, n int) int {
 	if i > n {
@@ -56,7 +57,7 @@ func Bool(str string) bool {
 	return n
 }
 
-//整形转换成字节
+// IntToBytes 整形转换成字节
 func IntToBytes(val int) []byte {
 	tmp := uint32(val)
 	buff := make([]byte, 4)
@@ -64,7 +65,7 @@ func IntToBytes(val int) []byte {
 	return buff
 }
 
-//字节转换成整形
+// BytesToInt 字节转换成整形
 func BytesToInt(data []byte) int {
 	buff := make([]byte, 4)
 	copy(buff, data)
@@ -72,35 +73,36 @@ func BytesToInt(data []byte) int {
 	return int(tmp)
 }
 
-//整形16转换成字节
-func Int16ToBytes(val int16) []byte {
+// Int16ToBytesDefault 整形16转换成字节
+func Int16ToBytesDefault(val int16) []byte {
 	tmp := uint16(val)
 	buff := make([]byte, 2)
 	binary.LittleEndian.PutUint16(buff, tmp)
 	return buff
 }
 
-//字节转换成为int16
-func BytesToInt16(data []byte) int16 {
+// BytesToInt16Default 字节转换成为int16
+func BytesToInt16Default(data []byte) int16 {
 	buff := make([]byte, 2)
 	copy(buff, data)
 	tmp := binary.LittleEndian.Uint16(buff)
 	return int16(tmp)
 }
 
-//转化64位
-func Int64ToBytes(val int64) []byte {
+// Int64ToBytesDefault 转化64位
+func Int64ToBytesDefault(val int64) []byte {
 	tmp := uint64(val)
 	buff := make([]byte, 8)
 	binary.LittleEndian.PutUint64(buff, tmp)
 	return buff
 }
 
-func BytesToInt64(data []byte) int64 {
-	buff := make([]byte, 8)
-	copy(buff, data)
-	tmp := binary.LittleEndian.Uint64(buff)
-	return int64(tmp)
+// BytesToInt64Default 转化64位
+func BytesToInt64Default(data []byte) int64 {
+	bytebuff := bytes.NewBuffer(data)
+	var r int64
+	binary.Read(bytebuff, binary.LittleEndian, &r)
+	return r
 }
 
 //转化float
@@ -118,7 +120,7 @@ func BytesToFloat32(data []byte) float32 {
 	return math.Float32frombits(tmp)
 }
 
-//转化float64
+// Float64ToByte 转化float64
 func Float64ToByte(val float64) []byte {
 	tmp := math.Float64bits(val)
 	buff := make([]byte, 8)
@@ -131,15 +133,6 @@ func BytesToFloat64(data []byte) float64 {
 	copy(buff, data)
 	tmp := binary.LittleEndian.Uint64(buff)
 	return math.Float64frombits(tmp)
-}
-
-//[]int转[]int32
-func IntToInt32(val []int) []int32 {
-	tmp := []int32{}
-	for _, v := range val {
-		tmp = append(tmp, int32(v))
-	}
-	return tmp
 }
 
 func BytesToUInt16(buff []byte, order binary.ByteOrder) uint16 {
@@ -161,4 +154,19 @@ func BytesToInt32(buff []byte, order binary.ByteOrder) int32 {
 	var data int32
 	binary.Read(bytebuff, order, &data)
 	return data
+}
+
+// Int64ToBytes 转化64位
+func Int64ToBytes(val int64, order binary.ByteOrder) []byte {
+	tmp := uint64(val)
+	buff := make([]byte, 8)
+	order.PutUint64(buff, tmp)
+	return buff
+}
+
+func BytesToInt64(data []byte, order binary.ByteOrder) int64 {
+	bytebuff := bytes.NewBuffer(data)
+	var r int64
+	binary.Read(bytebuff, order, &r)
+	return r
 }

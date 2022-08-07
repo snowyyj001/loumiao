@@ -94,13 +94,17 @@ func (self *GoRoutineMgr) DoStart() {
 	for _, igo := range self.go_name_Map {
 		if igo.IsRunning() == false && igo.IsInited() == true {
 			igo.Run()
+			igo.SetRunning()
 			igo.DoStart()
+			igo.SetRunning()
 		}
 	}
 	for name, igo := range self.go_name_Tmp {
 		if igo.IsRunning() == false && igo.IsInited() == true {
 			igo.Run()
+			igo.SetRunning()
 			igo.DoStart()
+			igo.SetRunning()
 		}
 		self.go_name_Map[name] = igo
 	}
@@ -124,7 +128,9 @@ func (self *GoRoutineMgr) DoSingleStart(name string) {
 	if has {
 		if igo.IsRunning() == false && igo.IsInited() == true {
 			igo.Run()
+			igo.SetRunning()
 			igo.DoStart()
+			igo.SetRunning()
 		}
 		if igo.IsRunning() == false || igo.IsInited() == false {
 			delete(self.go_name_Map, name)
@@ -163,7 +169,7 @@ func (self *GoRoutineMgr) Statistics() {
 	timer.NewTimer(CHAN_Statistics_Time, func(dt int64) bool { //60s统计一次
 		for _, igo := range self.go_name_Map {
 			if igo.IsSync() {
-				llog.Debugf("GoRoutineMgr.Statistics: name=%s, jobing=%d,jobleft=%d, jobmax=%d", igo.GetName(), igo.RunningJobNumber() ,igo.LeftJobNumber(), igo.GetChanLen())
+				llog.Debugf("GoRoutineMgr.Statistics: name=%s, jobing=%d,jobleft=%d, jobmax=%d", igo.GetName(), igo.RunningJobNumber(), igo.LeftJobNumber(), igo.GetChanLen())
 			} else {
 				llog.Debugf("GoRoutineMgr.Statistics: name=%s, ,jobleft=%d, jobmax=%d", igo.GetName(), igo.LeftJobNumber(), igo.GetChanLen())
 			}

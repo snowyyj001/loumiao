@@ -2,6 +2,7 @@
 package client
 
 import (
+	"fmt"
 	"github.com/snowyyj001/loumiao/config"
 	"github.com/snowyyj001/loumiao/gorpc"
 	"github.com/snowyyj001/loumiao/llog"
@@ -49,13 +50,11 @@ func (self *ClientServer) DoDestory() {
 	llog.Info("ClientServer DoDestory")
 }
 
-func PacketFunc(socketid int, buff []byte, nlen int) bool {
+func PacketFunc(socketid int, buff []byte, nlen int) error {
 	_, name, buffbody, err := message.UnPackHead(buff, nlen)
 
 	if err != nil {
-		llog.Errorf("KcpGateServer recvPackMsg Decode error: %s", err.Error())
-		This.pService.Close()
-		return false
+		return fmt.Errorf("KcpGateServer recvPackMsg Decode error: %s", err.Error())
 	}
 
 	handler, ok := handler_Map[name]
@@ -74,5 +73,5 @@ func PacketFunc(socketid int, buff []byte, nlen int) bool {
 	} else {
 		llog.Errorf("ClientServer recvPackMsg self handler is nil, drop it[%s]", name)
 	}
-	return true
+	return nil
 }

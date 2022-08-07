@@ -1,3 +1,14 @@
+package util
+
+import (
+	"errors"
+	"fmt"
+	"sync"
+	"time"
+
+	"github.com/snowyyj001/loumiao/config"
+)
+
 /*
 * Snowflake
 *
@@ -12,27 +23,17 @@
 * 2. 14位数据机器位，可以部署在16383(0x3FFF)个节点
 * 3. 12位序列，0.01秒内的计数，同一机器，同一时间截并发4095个序号
  */
-package util
-
-import (
-	"errors"
-	"fmt"
-	"sync"
-	"time"
-
-	"github.com/snowyyj001/loumiao/config"
-)
 
 const (
-	twepoch        = int64(16093440000000)             //开始时间截 (2020-12-31 00:00:00), 0.01秒
+	twepoch        = int64(16093440000000)            //开始时间截 (2020-12-31 00:00:00), 0.01秒
 	workeridBits   = uint(14)                         //机器id所占的位数
 	sequenceBits   = uint(12)                         //序列所占的位数
 	workeridMax    = int64(-1 ^ (-1 << workeridBits)) //支持的最大机器id数量
 	sequenceMask   = int64(-1 ^ (-1 << sequenceBits)) //
 	workeridShift  = sequenceBits                     //机器id左移位数
 	timestampShift = sequenceBits + workeridBits      //时间戳左移位数
-	maxuid = 1000		//最大开服数
-	timescale = 10000000		//UnixNano/timescale=10ms
+	maxuid         = 1000                             //最大开服数
+	timescale      = 10000000                         //UnixNano/timescale=10ms
 )
 
 var SnowFlakeInst *Snowflake
@@ -68,7 +69,7 @@ func (s *Snowflake) Generate() int64 {
 
 	s.Lock()
 
-	now := time.Now().UnixNano() / timescale		//0.01秒
+	now := time.Now().UnixNano() / timescale //0.01秒
 
 	if s.timestamp == now {
 		s.sequence = (s.sequence + 1) & sequenceMask
@@ -103,7 +104,7 @@ func UUID() int64 { //该函数调用应该在config.SERVER_NODE_UID赋值之后
 	}
 	r := SnowFlakeInst.Generate()
 
-	if r <= 0  {
+	if r <= 0 {
 		fmt.Errorf("UUID:uuid: %d", r)
 		return 0
 	}

@@ -22,13 +22,13 @@ var (
 //连接数据库
 //url：数据库地址
 ///例如： Redis.Dial("127.0.0.1:6379")
-func Dial(url string) error {
+func Dial(url, pass string) error {
 	llog.Debugf("redis Dial: %s", url)
 	cpuNum := runtime.NumCPU()
 	pool = &redis.Pool{
 		MaxIdle: cpuNum,
 		Dial: func() (redis.Conn, error) {
-			return redis.Dial("tcp", url)
+			return redis.Dial("tcp", url, redis.DialUsername(""), redis.DialPassword(pass))
 		},
 		TestOnBorrow: func(c redis.Conn, t time.Time) error {
 			if time.Since(t) < time.Second {
@@ -67,7 +67,12 @@ func Dial(url string) error {
 //连接数据库,使用config-redis默认参数
 func DialDefault() error {
 	llog.Debugf("redis DialDefault: %s", config.Cfg.RedisUri)
-	return Dial(config.Cfg.RedisUri)
+	var uri, pass string
+	uri = config.Cfg.RedisUri[0]
+	if len(config.Cfg.RedisUri) > 1 {
+		pass = config.Cfg.RedisUri[1]
+	}
+	return Dial(uri, pass)
 }
 
 //关闭连接
@@ -166,7 +171,7 @@ func String(reply interface{}, err error) (string, error) {
 	case string:
 		return reply, nil
 	case nil:
-		return "", nil		//不使用redis.String，这里行为不一样
+		return "", nil //不使用redis.String，这里行为不一样
 	case redis.Error:
 		return "", reply
 	}
@@ -208,7 +213,7 @@ func Int(reply interface{}, err error) (int, error) {
 		n, err := strconv.ParseInt(string(reply), 10, 0)
 		return int(n), err
 	case nil:
-		return 0, nil		//不使用redis.Int，这里行为不一样
+		return 0, nil //不使用redis.Int，这里行为不一样
 	case redis.Error:
 		return 0, reply
 	}
@@ -398,6 +403,21 @@ func HLen(name string) (int, error) {
 	return v, err
 }
 
+// HMgetInt 传入的 字段列表获得对应的值
+func HMgetInt(name string, fields ...string) ([]int, error) {
+	db := pool.Get()
+	defer db.Close()
+	args := []interface{}{name}
+	for _, field := range fields {
+		args = append(args, field)
+	}
+	value, err := redis.Values(db.Do("HMGET", args...))
+	if err != nil {
+		llog.Errorf("HMget: name =%s, fields = %v, err = %s", name, fields, err.Error())
+	}
+	return redis.Ints(value, err)
+}
+
 // 传入的 字段列表获得对应的值
 func HMget(name string, fields ...string) ([]string, error) {
 	db := pool.Get()
@@ -469,7 +489,9 @@ func HGetInt64(key, field string) (int64, error) {
 	return v, err
 }
 
-// set 集合
+////////////////// set 集合
+
+// Smembers
 // 获取 set 集合中所有的元素, 想要什么类型的自己指定
 func Smembers(args ...interface{}) (interface{}, error) {
 	db := pool.Get()
@@ -514,15 +536,15 @@ func ScardInt(key string) (int, error) {
 	return v, err
 }
 
-//判断 member 元素是否是集合 key 的成员
-func SisMember(key string, member interface{}) (int, error) {
+// SisMember 判断 member 元素是否是集合 key 的成员
+func SisMember(key string, member interface{}) (bool, error) {
 	db := pool.Get()
 	defer db.Close()
 	v, err := Int(db.Do("SISMEMBER", key, member))
 	if err != nil {
 		llog.Errorf("SisMember: key = %s, member = %v, err = %s", key, member, err.Error())
 	}
-	return v, err
+	return v == 1, err
 }
 
 // 迭代集合中键的元素
@@ -549,7 +571,7 @@ func Sscan(key string, cursor int) ([]string, int) {
 }
 
 // 迭代集合中的元素
-func SscanSimple(key string, call func(members string) ) {
+func SscanSimple(key string, call func(members string)) {
 	var c int
 	for {
 		res, n := Sscan(key, c)
@@ -586,9 +608,8 @@ func ZAdd(key string, args ...interface{}) (int, error) {
 	return v, err
 }
 
-
 // 移除有序集中的一个或多个成员，不存在的成员将被忽略。
-func Zrem (key string, args ...interface{}) (int, error) {
+func Zrem(key string, args ...interface{}) (int, error) {
 	db := pool.Get()
 	defer db.Close()
 	v, err := Int(db.Do("ZREM ", redis.Args{}.Add(key).AddFlat(args)...))
@@ -621,12 +642,12 @@ func Zrank(key string, member interface{}) (int, error) {
 }
 
 type ZSetUnit struct {
-	Key string
+	Key   string
 	Score int
 }
 
 // 迭代有序集合中的元素（包括元素成员和元素分值）
-func Zscan (key string, cursor int) ([]ZSetUnit, int) {
+func Zscan(key string, cursor int) ([]ZSetUnit, int) {
 	db := pool.Get()
 	defer db.Close()
 	results := make([]ZSetUnit, 0)
@@ -649,7 +670,7 @@ func Zscan (key string, cursor int) ([]ZSetUnit, int) {
 }
 
 // 迭代有序集合中的元素（包括元素成员和元素分值）
-func ZscanSimple(key string, call func(key string, score int) )  {
+func ZscanSimple(key string, call func(key string, score int)) {
 	var c int
 	for {
 		res, n := Zscan(key, c)
@@ -674,8 +695,7 @@ func Llen(key string) (int, error) {
 	return v, err
 }
 
-
-//选举leader，所有参与选举的人使用相同的value和prefix，leader负责设置value
+// AquireLeader 选举leader，所有参与选举的人使用相同的value和prefix，leader负责设置value
 //@prefix: 选举区分标识
 //@value: 本次选举的值，每次发起选举，value应该和上次选举时的value不同
 func AquireLeader(prefix string, value int) (isleader bool) {
@@ -686,7 +706,7 @@ func AquireLeader(prefix string, value int) (isleader bool) {
 		val, _ = GetInt(key)
 		if val != value { //还未被设置
 			Set(key, value)
-			Expire(key, 60*60)		//一小时后删除这个leader key，主要是为了清理内存
+			Expire(key, 60*60) //一小时后删除这个leader key，主要是为了清理内存
 			isleader = true
 		}
 		UnLock(prefix, val)

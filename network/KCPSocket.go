@@ -34,6 +34,8 @@ const (
 	KCPDSCP         = 0
 	KCPAckNodelay   = true
 	KCPTIMEOUT      = 6
+	DATASHARD       = 10 //fec参数，禁用和PARITYSHARD同时设置为0
+	PARITYSHARD     = 3  //fec参数
 )
 
 type KcpSocket struct {
@@ -59,7 +61,7 @@ func (self *KcpSocket) Init(saddr string) bool {
 }
 func (self *KcpSocket) Start() bool {
 	if self.m_nConnectType == 0 {
-		llog.Error("KcpSocket.Start error : unkonwen socket type")
+		llog.Error("KcpSocket.Start error : unknown socket type")
 		return false
 	}
 	self.m_bShuttingDown = false
@@ -69,7 +71,7 @@ func (self *KcpSocket) Start() bool {
 		return false
 	}
 
-	ln, err := kcp.ListenWithOptions(self.m_sAddr, nil, 0, 0)
+	ln, err := kcp.ListenWithOptions(self.m_sAddr, nil, DATASHARD, PARITYSHARD)
 	if err != nil {
 		llog.Errorf("%v", err)
 		return false
@@ -145,7 +147,7 @@ func (self *KcpSocket) SetMaxClients(maxnum int) {
 func (self *KcpSocket) SendById(id int, buff []byte) int {
 	pClient := self.GetClientById(id)
 	if pClient != nil {
-		pClient.Send(buff)
+		return pClient.Send(buff)
 		//llog.Warningf("KcpSocket.SendById n = %d, buflen = %d", n, len(buff))
 	} else {
 		llog.Warningf("KcpSocket发送数据失败[%d]", id)

@@ -1,6 +1,7 @@
 package kcpgate
 
 import (
+	"fmt"
 	"github.com/snowyyj001/loumiao/config"
 	"github.com/snowyyj001/loumiao/gorpc"
 	"github.com/snowyyj001/loumiao/llog"
@@ -75,18 +76,16 @@ func (self *KcpGateServer) RegisterSelfNet(hanlderName string, hanlderFunc gorpc
 }
 
 //goroutine unsafe,此时已不涉及map的修改，直处理了，不用再去RecvPackMsg中处理
-func packetFunc(socketid int, buff []byte, nlen int) bool {
+func packetFunc(socketid int, buff []byte, nlen int) error {
 	//llog.Debugf("packetFunc: socketid=%d, bufferlen=%d", socketid, nlen)
 	target, name, buffbody, err := message.UnPackHead(buff, nlen)
 	if err != nil {
-		llog.Errorf("KcpGateServer packetFunc Decode error: %s", err.Error())
-		This.closeClient(socketid)
-		return false
+		return fmt.Errorf("KcpGateServer packetFunc Decode error: %s", err.Error())
+		//This.closeClient(socketid)
 	}
 	if target != config.NET_NODE_TYPE && target > 0 {
-		llog.Errorf("KcpGateServer packetFunc target error: target = %d, my = %d, name = %s", target, config.NET_NODE_TYPE, name)
-		This.closeClient(socketid)
-		return false
+		return fmt.Errorf("KcpGateServer packetFunc target error: target = %d, my = %d, name = %s", target, config.NET_NODE_TYPE, name)
+		//This.closeClient(socketid)
 	}
 	handler, ok := handler_Map[name]
 	if ok {
@@ -104,7 +103,7 @@ func packetFunc(socketid int, buff []byte, nlen int) bool {
 	} else {
 		llog.Errorf("KcpGateServer recvPackMsg self handler is nil, drop it[%s]", name)
 	}
-	return true
+	return nil
 }
 
 //这两个函数加了锁，可以直接调用，就不需要像gate那样通过actor调用了

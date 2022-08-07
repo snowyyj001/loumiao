@@ -32,6 +32,11 @@ func innerLouMiaoRpcRegister(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	}
 	llog.Debugf("innerLouMiaoRpcRegister: %v", req)
 
+	if sid, ok := This.clients_u[int(req.Uid)]; ok {
+		llog.Errorf("innerLouMiaoRpcRegister: rpc has already register: %d %d, ", req.Uid, sid, socketId)
+		return
+	}
+
 	This.rpcUids.Store(req.Uid, true)
 	This.clients_u[int(req.Uid)] = socketId
 	This.users_u[socketId] = int(req.Uid)
@@ -52,7 +57,7 @@ func innerLouMiaoRpcMsg(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	llog.Debugf("0.innerLouMiaoRpcMsg=%s, socurce=%d, target=%d, Flag=%d", req.FuncName, req.SourceId, req.TargetId, req.Flag)
 	if util.HasBit(int(req.Flag), define.RPCMSG_FLAG_BROAD) {
 		if req.TargetId == 0 {
-			for _, sid := range  This.clients_u {
+			for _, sid := range This.clients_u {
 				//This.pInnerService.SendById(sid, buff)
 				This.pInnerService.SendById(sid, data)
 			}
@@ -76,7 +81,9 @@ func innerLouMiaoRpcMsg(igo gorpc.IGoRoutine, socketId int, data []byte) {
 		return
 	}
 	buff, _ := message.EncodeProBuff(0, "LouMiaoRpcMsg", req)
+	//fmt.Println("innerLouMiaoRpcMsg: ", rpcClientId, req.FuncName)
 	This.pInnerService.SendById(rpcClientId, buff)
+	//fmt.Println("innerLouMiaoRpcMsg: ", rpcClientId, req.FuncName, n)
 }
 
 func sendRpcMsgToServer(igo gorpc.IGoRoutine, data interface{}) interface{} {

@@ -107,8 +107,9 @@ func (self *CDataFile) ReadDataFile(fileName string) bool {
 	self.readstep = self.RecordNum * self.ColumNum
 	for nColumnIndex := 0; nColumnIndex < self.ColumNum; nColumnIndex++ {
 		//col name
-		self.fstream.ReadString()
-		nDataType := self.fstream.ReadInt(8)
+		//self.fstream.ReadString()
+		//nDataType := self.fstream.ReadInt(8)
+		nDataType := 1
 		self.dataTypes.PushBack(int(nDataType))
 	}
 	return true
@@ -145,7 +146,7 @@ func (self *CDataFile) GetData(pData *RData) bool {
 	case DType_F64:
 		pData.m_F64 = self.fstream.ReadFloat64()
 	case DType_S64:
-		pData.m_S64 = self.fstream.ReadInt64(64)
+		pData.m_S64 = self.fstream.ReadInt64()
 
 	case DType_StringArray:
 		nLen := self.fstream.ReadInt(8)
@@ -187,13 +188,14 @@ func (self *CDataFile) GetData(pData *RData) bool {
 		nLen := self.fstream.ReadInt(8)
 		pData.m_S64Array = make([]int64, nLen)
 		for i := 0; i < nLen; i++ {
-			pData.m_S64Array[i] = self.fstream.ReadInt64(64)
+			pData.m_S64Array[i] = self.fstream.ReadInt64()
 		}
 	}
 
 	pData.m_Type = self.dataTypes.Get(self.currentColumnIndex).(int)
 	self.currentColumnIndex = (self.currentColumnIndex + 1) % self.ColumNum
 	self.readstep--
+
 	return true
 }
 
@@ -201,7 +203,7 @@ func (self *CDataFile) GetData(pData *RData) bool {
 	RData funciton
 ****************************/
 func (self *RData) String(dataname, datacol string) string {
-	Assert(self.m_Type == DType_String, fmt.Sprintf("read [%s] col[%s] error", dataname, datacol))
+	Assert(self.m_Type == DType_String, fmt.Sprintf("read [%s] col[%s] type[%d]error", dataname, datacol, self.m_Type))
 	return self.m_String
 }
 
