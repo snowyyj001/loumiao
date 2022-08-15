@@ -301,7 +301,7 @@ func unRegisterNet(igo gorpc.IGoRoutine, data interface{}) interface{} {
 
 func sendClient(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	m := data.(*gorpc.M)
-	if config.NET_NODE_TYPE == config.ServerType_Gate {
+	if config.NET_NODE_TYPE == config.ServerType_Account || config.NET_NODE_TYPE == config.ServerType_Gate {
 		This.pService.SendById(m.Id, m.Data.([]byte)) //set to client
 		return nil
 	}
@@ -322,7 +322,7 @@ func sendClient(igo gorpc.IGoRoutine, data interface{}) interface{} {
 
 func sendMulClient(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	m := data.(*gorpc.M)
-	if config.NET_NODE_TYPE == config.ServerType_Gate {
+	if config.NET_NODE_TYPE == config.ServerType_Account || config.NET_NODE_TYPE == config.ServerType_Gate {
 		llog.Error("0.sendMulClient gate can not send client")
 		return nil
 	}

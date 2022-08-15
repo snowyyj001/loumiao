@@ -13,7 +13,7 @@ import (
 const (
 	ServerType_None       = iota //0 物理机控制节点
 	ServerType_Gate              //1 网关
-	ServerType_Match             //2 匹配
+	ServerType_Account           //2 账号
 	ServerType_World             //3 世界
 	ServerType_Zone              //4 地图
 	ServerType_DB                //5 数据库
@@ -24,17 +24,18 @@ const (
 	ServerType_RPCGate           //10 rpc gate
 	ServerType_ETCF              //11 配置中心
 	ServerType_LOGINQUEUE        //12 排队
-	ServerType_Robot             //13 机器人
+	ServerType_Match             //13 匹配
+	ServerType_Robot             //14 机器人
 )
 
 var (
 	ServerNames = map[int]string{
-		ServerType_None:       "machine",
+		ServerType_None:       "pod",
 		ServerType_Gate:       "gate",
-		ServerType_Match:      "match",
+		ServerType_Account:    "login",
 		ServerType_World:      "lobby",
 		ServerType_Zone:       "zone",
-		ServerType_DB:         "db",
+		ServerType_DB:         "dbserver",
 		ServerType_Log:        "logserver",
 		ServerType_Public:     "publicserver",
 		ServerType_WEB_GM:     "webserver",
@@ -42,7 +43,25 @@ var (
 		ServerType_RPCGate:    "rpcserver",
 		ServerType_ETCF:       "etcfserver",
 		ServerType_LOGINQUEUE: "queueserver",
+		ServerType_Match:      "matchserver",
 		ServerType_Robot:      "robot",
+	}
+	ServerDesc = map[int]string{
+		ServerType_None:       "运行在每个物理机上的节点k8s-pod",
+		ServerType_Gate:       "网关",
+		ServerType_Account:    "tcp账号",
+		ServerType_World:      "大厅",
+		ServerType_Zone:       "战斗",
+		ServerType_DB:         "数据库",
+		ServerType_Log:        "日志",
+		ServerType_Public:     "公共服",
+		ServerType_WEB_GM:     "gm后台",
+		ServerType_WEB_LOGIN:  "web账号",
+		ServerType_RPCGate:    "rpc调度中心",
+		ServerType_ETCF:       "注册中心",
+		ServerType_LOGINQUEUE: "排队服",
+		ServerType_Match:      "匹配",
+		ServerType_Robot:      "机器人",
 	}
 )
 
@@ -54,7 +73,7 @@ var (
 
 	NET_PROTOCOL            = "PROTOBUF"       //消息协议格式："PROTOBUF" or "JSON"
 	NET_WEBSOCKET           = false            //使用websocket or socket
-	NET_MAX_CONNS           = 65535            //最大连接数
+	NET_MAX_CONNS           = 50000            //最大连接数
 	NET_MAX_RPC_CONNS       = 1024             //rpc最大连接数
 	NET_BUFFER_SIZE         = 1024 * 32        //最大消息包长度32k(对外)
 	NET_CLUSTER_BUFFER_SIZE = 16 * 1024 * 1024 //最大消息包长度16M(对内)
@@ -121,6 +140,7 @@ func init() {
 		if err != nil {
 			log.Fatalf("cfg fromat error: %s", err.Error())
 		}
+		Cfg.Platform = scfg.Platform
 		Cfg.NetCfg.Id = scfg.NetCfg.Id
 		Cfg.NetCfg.Uid = scfg.NetCfg.Uid
 		Cfg.NetCfg.SAddr = scfg.NetCfg.SAddr
@@ -129,6 +149,13 @@ func init() {
 		Cfg.NetCfg.Release = scfg.NetCfg.Release
 		Cfg.RedisUri = scfg.RedisUri
 		Cfg.DBUri = scfg.DBUri
+		//etcd和nats如果不传，就用配置文件里的值
+		if len(scfg.EtcdAddr) > 0 {
+			Cfg.EtcdAddr = scfg.EtcdAddr
+		}
+		if len(scfg.NatsAddr) > 0 {
+			Cfg.NatsAddr = scfg.NatsAddr
+		}
 	}
 	if Cfg.NetCfg.Uid == 0 {
 		log.Fatalf("cfg content uid error: %d", Cfg.NetCfg.Uid)

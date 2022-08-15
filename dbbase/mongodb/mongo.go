@@ -370,6 +370,34 @@ func CreateIndex(dbname, colname, keyname string, unique bool) {
 	}
 }
 
+// CreateIndexByMDefault 创建索引
+func CreateIndexByMDefault(colname string, d bson.D, unique bool) {
+	CreateIndexByM(DbName, colname, d, unique)
+}
+
+// CreateIndexByM 创建索引
+func CreateIndexByM(dbname, colname string, d bson.D, unique bool) {
+	if mClient == nil {
+		llog.Errorf("CreateIndex no db connected: %s %s", colname, d)
+		return
+	}
+	collection := mClient.Database(dbname).Collection(colname)
+	// create Index
+	indexName, err := collection.Indexes().CreateOne(
+		context.Background(),
+		mongo.IndexModel{
+			Keys:    d,
+			Options: options.Index().SetUnique(unique),
+		},
+	)
+
+	if err == nil {
+		llog.Debugf("CreateIndexByM success: %s", indexName)
+	} else {
+		llog.Errorf("CreateIndexByM error: %s", err.Error())
+	}
+}
+
 // ExpireIndexDefault 创建过期索引
 func ExpireIndexDefault(colname, keyname string, sec int) {
 	ExpireIndex(DbName, colname, keyname, sec)

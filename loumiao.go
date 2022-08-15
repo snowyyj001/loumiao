@@ -67,6 +67,8 @@ func Run() {
 		}
 	}()
 
+	util.DumpPid()
+
 	if config.SERVER_DEBUGPORT > 0 {
 		go func() {
 			http.ListenAndServe(fmt.Sprintf("0.0.0.0:%d", config.SERVER_DEBUGPORT), nil)

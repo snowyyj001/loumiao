@@ -36,6 +36,8 @@ func (self *WebClient) Start() bool {
 
 	if self.Connect() {
 		go wsclientRoutine(self)
+	} else {
+		llog.Errorf("WebClient.Start error : can not connect %s", self.m_sAddr)
 	}
 	//延迟，监听关闭
 	//defer ln.Close()
@@ -50,7 +52,6 @@ func (self *WebClient) Stop() bool {
 	self.Close()
 	return true
 }
-
 
 func (self *WebClient) Send(buff []byte) int {
 	if self.m_WsConn == nil {
@@ -70,9 +71,10 @@ func (self *WebClient) Connect() bool {
 	if self.m_nState == SSF_CONNECT {
 		return false
 	}
-
+	//fmt.Println("11111111111111")
 	wsAddr := url.URL{Scheme: "ws", Host: self.m_sAddr, Path: "/ws"}
 	conn, _, err := websocket.DefaultDialer.Dial(wsAddr.String(), nil)
+	//fmt.Println("2222222222")
 	if err != nil {
 		return false
 	}

@@ -190,8 +190,8 @@ func (self *GateServer) DoStart() {
 			util.Assert(self.pInnerService.Start(), fmt.Sprintf("GateServer listen failed: saddr=%s", self.pInnerService.GetSAddr()))
 		}
 	}
-
-	need := config.NET_NODE_TYPE == config.ServerType_Gate              //挑选world给client需要
+	need := config.NET_NODE_TYPE == config.ServerType_Account           //挑选网关和world给client需要
+	need = config.NET_NODE_TYPE == config.ServerType_Gate               //挑选world给client需要
 	need = need || config.NET_NODE_TYPE == config.ServerType_World      //挑选zone给client需要，其他主逻辑也可能需要
 	need = need || config.NET_NODE_TYPE == config.ServerType_LOGINQUEUE //统计所有world在线人数需要
 	need = need || config.NET_NODE_TYPE == config.ServerType_WEB_LOGIN  //挑选网关给client需要

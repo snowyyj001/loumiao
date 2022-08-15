@@ -7,6 +7,9 @@ import (
 	"github.com/snowyyj001/loumiao/llog"
 	"math"
 	rand2 "math/rand"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"reflect"
 	"runtime"
 	"strconv"
@@ -72,11 +75,6 @@ func TimeStr() string {
 //当前格式化时间字符串
 func TimeStrFormat(mat string) string {
 	return time.Now().Format(mat)
-}
-
-//当前时间
-func NowTime() time.Time {
-	return time.Now()
 }
 
 //时间戳秒
@@ -263,4 +261,32 @@ func GetVersionString(version int) string {
 	v3 := version % 1000
 
 	return fmt.Sprintf("%d.%d.%d", v1, v2, v3)
+}
+
+func GetExeName() string {
+	filePath, _ := exec.LookPath(os.Args[0])
+	//llog.Println("os.Args ", os.Args)
+	fileName := filepath.Base(filePath)
+	if len(os.Args) > 1 {
+		arg1 := os.Args[1]
+		if len(arg1) > 0 {
+			arg1 = strings.Replace(arg1, ":", "[", -1)
+			fileName += "_" + arg1 + "]"
+		}
+	}
+
+	return fileName
+}
+
+func DumpPid() {
+	pid := os.Getpid()
+	llog.Infof("pid: %d", pid)
+
+	fileName := GetExeName()
+
+	pidFile, err := os.OpenFile(fileName+".pid", os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0644)
+	if err != nil {
+		llog.Errorf("OpenFile err: %s", err.Error())
+	}
+	pidFile.WriteString(fmt.Sprint(pid))
 }
