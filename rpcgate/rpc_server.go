@@ -79,7 +79,7 @@ func (self *RpcGateServer) DoRegsiter() {
 	self.RegisterGate("LouMiaoRpcRegister", innerLouMiaoRpcRegister)
 }
 
-//begin communicate with other nodes
+// begin communicate with other nodes
 func (self *RpcGateServer) DoStart() {
 	llog.Info("RpcGateServer DoStart")
 
@@ -88,12 +88,22 @@ func (self *RpcGateServer) DoStart() {
 	if util.CheckErr(err) {
 		llog.Fatalf("etcd connect failed: %v", config.Cfg.EtcdAddr)
 	}
+
 	nodemgr.ServerEnabled = true
-	etcd.Client.PutStatus() //服务如果异常关闭，是没有撤销租约的，在三秒内重启会保留上次状态，这里强制刷新一下
+	//etcd.Client.PutStatus() //服务如果异常关闭，是没有撤销租约的，在三秒内重启会保留上次状态，这里强制刷新一下
+
+	llog.Debug("ServerSocket.Start i")
+	util.Assert(self.pInnerService.Start(), fmt.Sprintf("GateServer listen failed: saddr=%s", self.pInnerService.GetSAddr()))
+
+	llog.Infof("RpcGateServer DoStart success: name=%s,saddr=%s,uid=%d", self.Name, config.NET_GATE_SADDR, config.SERVER_NODE_UID)
+}
+
+// begin start socket servie
+func (self *RpcGateServer) DoOpen() {
 
 	//server discover
 	//watch status, for balance
-	err = etcd.Client.WatchCommon(fmt.Sprintf("%s%d", define.ETCD_NODESTATUS, config.NET_NODE_ID), self.serverStatusUpdate)
+	err := etcd.Client.WatchCommon(fmt.Sprintf("%s%d", define.ETCD_NODESTATUS, config.NET_NODE_ID), self.serverStatusUpdate)
 	if err != nil {
 		llog.Fatalf("etcd watch ETCD_NODESTATUS error : %s", err.Error())
 	}
@@ -102,24 +112,18 @@ func (self *RpcGateServer) DoStart() {
 	if err != nil {
 		llog.Fatalf("etcd watch NET_GATE_SADDR error : %s", err.Error())
 	}
-	llog.Infof("RpcGateServer DoStart success: name=%s,saddr=%s,uid=%d", self.Name, config.NET_GATE_SADDR, config.SERVER_NODE_UID)
-}
-
-//begin start socket servie
-func (self *RpcGateServer) DoOpen() {
-	util.Assert(self.pInnerService.Start(), fmt.Sprintf("GateServer listen failed: saddr=%s", self.pInnerService.GetSAddr()))
 
 	//register to etcd when the socket is ok
 	if err := etcd.Client.PutNode(); err != nil {
 		llog.Fatalf("etcd PutNode error %v", err)
 	}
-
-	llog.Infof("RpcGateServer DoOpen success: name=%s,saddr=%s,uid=%d", self.Name, config.NET_GATE_SADDR, config.SERVER_NODE_UID)
+	nodemgr.ServerEnabled = true
+	llog.Infof("RpcGateServer DoOpen success: name=%s, saddr=%s, uid=%d", self.Name, config.NET_GATE_SADDR, config.SERVER_NODE_UID)
 
 	lnats.ReportMail(define.MAIL_TYPE_START, "服务器完成启动")
 }
 
-//goroutine unsafe
+// goroutine unsafe
 func (self *RpcGateServer) serverStatusUpdate(key, val string, dis bool) {
 	node := nodemgr.NodeStatusUpdate(key, val, dis)
 	if node == nil {
@@ -133,7 +137,7 @@ func (self *RpcGateServer) serverStatusUpdate(key, val string, dis bool) {
 	}
 }
 
-//goroutine unsafe
+// goroutine unsafe
 func (self *RpcGateServer) newServerDiscover(key, val string, dis bool) {
 	node := nodemgr.NodeDiscover(key, val, dis)
 	if node == nil {
@@ -146,8 +150,8 @@ func (self *RpcGateServer) DoDestory() {
 	nodemgr.ServerEnabled = false
 }
 
-//goroutine unsafe
-//net msg handler,this func belong to socket's goroutine
+// goroutine unsafe
+// net msg handler,this func belong to socket's goroutine
 func packetFunc_rpc(socketid int, buff []byte, nlen int) error {
 	//llog.Debugf("packetFunc_rpc: socketid=%d, bufferlen=%d", socketid, nlen)
 	target, name, buffbody, err := message.UnPackHead(buff, nlen)
@@ -203,7 +207,7 @@ func (self *RpcGateServer) removeRpcHanlder(socketid int) {
 	}
 }
 
-//rpc调用的目标server选择
+// rpc调用的目标server选择
 func (self *RpcGateServer) getCluserServerSocketId(funcName string) int {
 	arr := self.rpcMap[funcName]
 	sz := len(arr)

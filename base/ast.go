@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-//获取常量对应的注释
+// 获取常量对应的注释
 func Ast(fileName string) map[int]string {
 	names := map[int]string{}
 	fset := token.NewFileSet()
@@ -34,7 +34,7 @@ func Ast(fileName string) map[int]string {
 					if len(val.Values) >= 1 {
 						val, ok := val.Values[0].(*ast.BasicLit)
 						if ok {
-							constVal = Int(val.Value)
+							constVal, _ = Int(val.Value)
 						}
 					}
 					names[constVal] = strings.Trim(val.Comment.Text(), "\n")
@@ -87,7 +87,7 @@ func dump(typeof reflect.Type, valueof reflect.Value) {
 	}
 }
 
-//dump信息,调试用，发布环境不要用
+// dump信息,调试用，发布环境不要用
 func Dump(name string, value interface{}) {
 	fmt.Println("Dump=============>", name)
 	typeof := reflect.TypeOf(value)

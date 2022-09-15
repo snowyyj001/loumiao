@@ -4,23 +4,23 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/snowyyj001/loumiao/etcf"
+
 	"sync"
 	"time"
 
+	"github.com/snowyyj001/loumiao/config"
+	"github.com/snowyyj001/loumiao/define"
+	"github.com/snowyyj001/loumiao/etcf"
+	"github.com/snowyyj001/loumiao/llog"
 	"github.com/snowyyj001/loumiao/nodemgr"
 
-	"github.com/snowyyj001/loumiao/config"
-	"github.com/snowyyj001/loumiao/llog"
-	"go.etcd.io/etcd/clientv3"
-	"go.etcd.io/etcd/clientv3/concurrency"
-	"go.etcd.io/etcd/mvcc/mvccpb"
-
-	"github.com/snowyyj001/loumiao/define"
+	"github.com/coreos/etcd/clientv3"
+	"github.com/coreos/etcd/clientv3/concurrency"
+	"github.com/coreos/etcd/mvcc/mvccpb"
 )
 
 const (
-	useEtcf = false //使用自己内部的etcf替代方案，不支持集群
+	useEtcf = true //使用自己内部的etcf替代方案，不支持集群
 )
 
 var (
@@ -73,17 +73,16 @@ type EtcdBase struct {
 	keepAliveChan <-chan *clientv3.LeaseKeepAliveResponse
 }
 
-//
 func (self *EtcdBase) GetClient() *clientv3.Client {
 	return self.client
 }
 
-//设置租约回调
+// 设置租约回调
 func (self *EtcdBase) SetLeasefunc(call func(bool)) {
 	self.leasefunc = call
 }
 
-//设置value
+// 设置value
 func (self *EtcdBase) Put(key string, val string, withlease bool) error {
 	if withlease {
 		_, err := self.client.Put(context.TODO(), key, val, clientv3.WithLease(self.leaseResp.ID))
@@ -94,14 +93,14 @@ func (self *EtcdBase) Put(key string, val string, withlease bool) error {
 	}
 }
 
-//删除value
+// 删除value
 func (self *EtcdBase) Delete(key string) error {
 	llog.Debugf("etcd delete: %s", key)
 	_, err := self.client.Delete(context.TODO(), key)
 	return err
 }
 
-//获得value
+// 获得value
 func (self *EtcdBase) Get(key string) (*clientv3.GetResponse, error) {
 	gresp, err := self.client.Get(context.TODO(), key)
 	return gresp, err
@@ -138,9 +137,9 @@ func (self *EtcdBase) GetAll(key string) ([]string, error) {
 	return rets, nil
 }
 
-//设置租约
-//@timeNum: 过期时间
-//@keepalive: 是否自动续约
+// 设置租约
+// @timeNum: 过期时间
+// @keepalive: 是否自动续约
 func (self *EtcdBase) SetLease(timeNum int64, keepalive bool) error {
 	if self.lease != nil {
 		return fmt.Errorf("lease error")
@@ -175,7 +174,7 @@ func (self *EtcdBase) SetLease(timeNum int64, keepalive bool) error {
 	return nil
 }
 
-//监听 续租情况
+// 监听 续租情况
 func (self *EtcdBase) listenLeaseRespChan() {
 	for {
 		select {
@@ -198,7 +197,7 @@ func (self *EtcdBase) listenLeaseRespChan() {
 	}
 }
 
-//撤销租约
+// 撤销租约
 func (self *EtcdBase) RevokeLease() error {
 	if self.leaseResp == nil {
 		return fmt.Errorf("RevokeLease: lease has already been ewvoked")
@@ -210,9 +209,9 @@ func (self *EtcdBase) RevokeLease() error {
 	return err
 }
 
-//获取一个分布式锁,expire毫秒后会超时返回nil
-//@prefix: 锁key
-//@expire: 超时时间,毫秒
+// 获取一个分布式锁,expire毫秒后会超时返回nil
+// @prefix: 锁key
+// @expire: 超时时间,毫秒
 func AquireLock(prefix string, expire int) *concurrency.Mutex {
 	if This == nil {
 		return nil
@@ -245,9 +244,9 @@ func UnLock(key string, lockval *concurrency.Mutex) {
 	}
 }
 
-//选举leader，所有参与选举的人使用相同的value和prefix，leader负责设置value
-//@prefix: 选举区分标识
-//@value: 本次选举的值，每次发起选举，value应该和上次选举时的value不同
+// 选举leader，所有参与选举的人使用相同的value和prefix，leader负责设置value
+// @prefix: 选举区分标识
+// @value: 本次选举的值，每次发起选举，value应该和上次选举时的value不同
 func AquireLeader(prefix string, value string) (isleader bool) {
 	isleader = false
 	mt := AquireLock(prefix, 200)
@@ -269,8 +268,8 @@ func AquireLeader(prefix string, value string) (isleader bool) {
 	return
 }
 
-///////////////////////////////////////////////////////////
-//服发现
+// /////////////////////////////////////////////////////////
+// 服发现
 type ClientDis struct {
 	EtcdBase
 	otherFunc sync.Map //[string]HanlderFunc
@@ -303,9 +302,9 @@ func (self *ClientDis) watcher(prefix string) {
 	}
 }
 
-//通用发现
-//@prefix: 监听key值
-//@hanlder: key值变化回调
+// 通用发现
+// @prefix: 监听key值
+// @hanlder: key值变化回调
 func (self *ClientDis) WatchCommon(prefix string, hanlder func(string, string, bool)) error {
 	resp, err := self.client.Get(context.Background(), prefix, clientv3.WithPrefix())
 	if err != nil {
@@ -329,21 +328,21 @@ func (self *ClientDis) extractOthers(hanlder func(string, string, bool), resp *c
 	}
 }
 
-//通过租约 注册服务
+// 通过租约 注册服务
 func (self *ClientDis) PutService(key, val string) error {
 	kv := clientv3.NewKV(self.client)
 	_, err := kv.Put(context.TODO(), key, val, clientv3.WithLease(self.leaseResp.ID))
 	return err
 }
 
-//删除服务，保留租约
+// 删除服务，保留租约
 func (self *ClientDis) DelService(key string) {
 	self.Delete(key)
 }
 
 func (self *ClientDis) leaseCallBack(success bool) {
 	if success { //成功续租
-		llog.Debugf("etcd lease 续租成功")
+		//llog.Debugf("etcd lease 续租成功")
 		if nodemgr.SelfNode != nil {
 			self.PutStatus()
 		}
@@ -381,7 +380,7 @@ func (self *ClientDis) SetValue(prefix, val string) error {
 	return self.Put(prefix, val, false)
 }
 
-//创建服务发现
+// 创建服务发现
 func NewEtcd() (*ClientDis, error) {
 	conf := clientv3.Config{
 		Endpoints:   config.Cfg.EtcdAddr,

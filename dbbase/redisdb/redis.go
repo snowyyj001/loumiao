@@ -19,9 +19,9 @@ var (
 	pool *redis.Pool
 )
 
-//连接数据库
-//url：数据库地址
-///例如： Redis.Dial("127.0.0.1:6379")
+// 连接数据库
+// url：数据库地址
+// /例如： Redis.Dial("127.0.0.1:6379")
 func Dial(url, pass string) error {
 	llog.Debugf("redis Dial: %s", url)
 	cpuNum := runtime.NumCPU()
@@ -54,17 +54,21 @@ func Dial(url, pass string) error {
 			return err
 		},
 	}
-	c, err := pool.Dial()
-	if util.CheckErr(err) {
-		return fmt.Errorf("redis Dial error: %s", url)
+	if c, err := pool.Dial(); err == nil {
+		_, err = c.Do("PING")
+		if err != nil {
+			return err
+		}
+	} else {
+		c.Close()
 	}
-	c.Close()
+
 	llog.Infof("redis dail success: %s", url)
 
 	return nil
 }
 
-//连接数据库,使用config-redis默认参数
+// 连接数据库,使用config-redis默认参数
 func DialDefault() error {
 	llog.Debugf("redis DialDefault: %s", config.Cfg.RedisUri)
 	var uri, pass string
@@ -75,13 +79,13 @@ func DialDefault() error {
 	return Dial(uri, pass)
 }
 
-//关闭连接
+// 关闭连接
 func Close() {
 	pool.Close()
 	pool = nil
 }
 
-///Do a command
+// /Do a command
 func Do(command string, args ...interface{}) (interface{}, error) {
 	db := pool.Get()
 	defer db.Close()
@@ -102,9 +106,9 @@ func Set(args ...interface{}) (interface{}, error) {
 	return v, err
 }
 
-//redis分布式锁,尝试expiretime毫秒后拿不到锁就返回0,否则返回锁的随机值
-//@key: 锁key
-//@expiretime: 锁的过期时间,毫秒,0代表立即返回锁结果
+// redis分布式锁,尝试expiretime毫秒后拿不到锁就返回0,否则返回锁的随机值
+// @key: 锁key
+// @expiretime: 锁的过期时间,毫秒,0代表立即返回锁结果
 func AquireLock(key string, expiretime int) int {
 	db := pool.Get()
 	defer db.Close()
@@ -156,11 +160,11 @@ func UnLock(key string, val int) {
 // equal to nil, then String returns "", err. Otherwise String converts the
 // reply to a string as follows:
 //
-//  Reply type      Result
-//  bulk string     string(reply), nil
-//  simple string   reply, nil
-//  nil             "",  nil
-//  other           "",  error
+//	Reply type      Result
+//	bulk string     string(reply), nil
+//	simple string   reply, nil
+//	nil             "",  nil
+//	other           "",  error
 func String(reply interface{}, err error) (string, error) {
 	if err != nil {
 		return "", err
@@ -193,11 +197,11 @@ func GetString(key string) (string, error) {
 // equal to nil, then Int returns 0, err. Otherwise, Int converts the
 // reply to an int as follows:
 //
-//  Reply type    Result
-//  integer       int(reply), nil
-//  bulk string   parsed reply, nil
-//  nil           0, nil
-//  other         0, error
+//	Reply type    Result
+//	integer       int(reply), nil
+//	bulk string   parsed reply, nil
+//	nil           0, nil
+//	other         0, error
 func Int(reply interface{}, err error) (int, error) {
 	if err != nil {
 		return 0, err
@@ -234,11 +238,11 @@ func GetInt(key string) (int, error) {
 // not equal to nil, then Int64 returns 0, err. Otherwise, Int64 converts the
 // reply to an int64 as follows:
 //
-//  Reply type    Result
-//  integer       reply, nil
-//  bulk string   parsed reply, nil
-//  nil           0, nil
-//  other         0, error
+//	Reply type    Result
+//	integer       reply, nil
+//	bulk string   parsed reply, nil
+//	nil           0, nil
+//	other         0, error
 func Int64(reply interface{}, err error) (int64, error) {
 	if err != nil {
 		return 0, err
@@ -305,11 +309,11 @@ func Expire(name string, newSecondsLifeTime int64) error {
 // equal to nil, then Bool returns false, err. Otherwise Bool converts the
 // reply to boolean as follows:
 //
-//  Reply type      Result
-//  integer         value != 0, nil
-//  bulk string     strconv.ParseBool(reply)
-//  nil             false, ErrNil
-//  other           false, error
+//	Reply type      Result
+//	integer         value != 0, nil
+//	bulk string     strconv.ParseBool(reply)
+//	nil             false, ErrNil
+//	other           false, error
 func Bool(reply interface{}, err error) (bool, error) {
 	if err != nil {
 		return false, err
@@ -514,7 +518,7 @@ func SAdd(key string, args ...interface{}) (int, error) {
 	return v, err
 }
 
-//删除 set 集合中一个或多个成员
+// 删除 set 集合中一个或多个成员
 func SRem(key string, args ...interface{}) (int, error) {
 	db := pool.Get()
 	defer db.Close()
@@ -696,8 +700,8 @@ func Llen(key string) (int, error) {
 }
 
 // AquireLeader 选举leader，所有参与选举的人使用相同的value和prefix，leader负责设置value
-//@prefix: 选举区分标识
-//@value: 本次选举的值，每次发起选举，value应该和上次选举时的value不同
+// @prefix: 选举区分标识
+// @value: 本次选举的值，每次发起选举，value应该和上次选举时的value不同
 func AquireLeader(prefix string, value int) (isleader bool) {
 	isleader = false
 	val := AquireLock(prefix, 1000)

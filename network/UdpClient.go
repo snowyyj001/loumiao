@@ -10,10 +10,10 @@ import (
 
 type UdpClient struct {
 	Socket
-	m_nMaxClients int
-	m_nMinClients int
-	Uid           int
-	SendTimes     int
+	mMaxClients int
+	mMinClients int
+	Uid         int
+	SendTimes   int
 }
 
 func (self *UdpClient) Init(saddr string) bool {
@@ -112,7 +112,7 @@ func clientUdpRoutine(pClient *UdpClient) {
 			llog.Debugf("udp read msg too little: %d", n)
 			continue
 		}
-		msgId, _, body := message.UpPackUdp(buff)
+		msgId, _, body := message.UnPackUdp(buff)
 		err = pClient.m_PacketFunc(int(msgId), body, n-10)
 		if err != nil {
 			llog.Debugf("udp 处理消息错误: %s", err.Error())

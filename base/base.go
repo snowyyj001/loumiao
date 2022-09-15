@@ -3,10 +3,14 @@ package base
 import (
 	"bytes"
 	"encoding/binary"
+	"io"
 	"log"
 	"math"
 	"math/rand"
+	"net"
+	"net/http"
 	"strconv"
+	"strings"
 )
 
 func Assert(x bool, y string) {
@@ -15,7 +19,7 @@ func Assert(x bool, y string) {
 	}
 }
 
-//随机数[i,n]
+// 随机数[i,n]
 func RandI(i int, n int) int {
 	if i > n {
 		return i
@@ -23,7 +27,7 @@ func RandI(i int, n int) int {
 	return int(i + rand.Int()%(n-i+1))
 }
 
-//随机数[i,n]
+// 随机数[i,n]
 func RandF(i float32, n float32) float32 {
 	if i > n {
 		return i
@@ -31,13 +35,19 @@ func RandF(i float32, n float32) float32 {
 	return i + (n-i)*rand.Float32()
 }
 
-//-----------string strconv type-------------//
-func Int(str string) int {
-	n, _ := strconv.Atoi(str)
-	return n
+// -----------string strconv type-------------//
+func Int(str string) (int, error) {
+	if len(str) == 0 {
+		return 0, nil
+	}
+	n, err := strconv.Atoi(str)
+	return n, err
 }
 
 func Int64(str string) int64 {
+	if len(str) == 0 {
+		return 0
+	}
 	n, _ := strconv.ParseInt(str, 0, 64)
 	return n
 }
@@ -105,7 +115,7 @@ func BytesToInt64Default(data []byte) int64 {
 	return r
 }
 
-//转化float
+// 转化float
 func Float32ToByte(val float32) []byte {
 	tmp := math.Float32bits(val)
 	buff := make([]byte, 4)
@@ -169,4 +179,103 @@ func BytesToInt64(data []byte, order binary.ByteOrder) int64 {
 	var r int64
 	binary.Read(bytebuff, order, &r)
 	return r
+}
+
+var allIp []string
+
+func GetSelfIp(ifnames ...string) []string {
+	if allIp != nil {
+		return allIp
+	}
+	inters, _ := net.Interfaces()
+	if len(ifnames) == 0 {
+		ifnames = []string{"eth", "lo", "eno", "无线网络连接", "本地连接", "以太网"}
+	}
+
+	filterFunc := func(name string) bool {
+		for _, v := range ifnames {
+			if strings.Index(name, v) != -1 {
+				return true
+			}
+		}
+		return false
+	}
+
+	for _, inter := range inters {
+		if !filterFunc(inter.Name) {
+			continue
+		}
+		addrs, _ := inter.Addrs()
+		for _, a := range addrs {
+			if ipnet, ok := a.(*net.IPNet); ok {
+				if ipnet.IP.To4() != nil {
+					allIp = append(allIp, ipnet.IP.String())
+				}
+			}
+		}
+	}
+	return allIp
+}
+
+func IsIntraIp(ip string) bool {
+	if ip == "127.0.0.1" {
+		return true
+	}
+	ips := strings.Split(ip, ".")
+	ipA := ips[0]
+	if ipA == "10" {
+		return true
+	}
+	ipB := ips[1]
+
+	if ipA == "192" {
+		if ipB == "168" {
+			return true
+		}
+	}
+
+	if ipA == "172" {
+		ipb, _ := strconv.Atoi(ipB)
+		if ipb >= 16 && ipb <= 31 {
+			return true
+		}
+	}
+
+	return false
+}
+func GetSelfIntraIp(ifnames ...string) (ips []string) {
+	all := GetSelfIp(ifnames...)
+	for _, v := range all {
+		if IsIntraIp(v) {
+			ips = append(ips, v)
+		}
+	}
+
+	return
+}
+
+func HttpPost(url, form string) (string, error, *http.Response) {
+	resp, err := http.Post(url, "application/x-www-form-urlencoded", strings.NewReader(form))
+	if err != nil {
+		return "", err, nil
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err, resp
+	}
+	return string(body), nil, resp
+}
+
+func HttpGet(url string) (string, error, *http.Response) {
+	resp, err := http.Get(url)
+	if err != nil {
+		return "", err, nil
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err, resp
+	}
+	return string(body), nil, resp
 }

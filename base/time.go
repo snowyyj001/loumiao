@@ -37,7 +37,7 @@ func SetTimeOffset(day int32, hour int32, minute int32) {
 	minuteOffset = minute
 }
 
-//取当天0点
+// 取当天0点
 func Time0(timeIn time.Time) time.Time {
 	return timeIn.Truncate(time.Hour * 24).Add(-TimeOffsetD)
 }
@@ -56,4 +56,50 @@ func TimeMonday0(timeIn time.Time) time.Time {
 
 func TimeThisMonday0() time.Time {
 	return TimeMonday0(TimeNow())
+}
+
+func WeekDayNormal() int {
+	day := int(TimeNow().Weekday()) - 1
+	if day < 0 {
+		day = 6
+	}
+	return day
+}
+
+// IsToday stamp是否是当天
+func IsToday(stamp int64) bool {
+	t := time.Now()
+	_, timeOffset := t.Zone()
+	timeD := time.Duration(timeOffset) * time.Second
+	checkTimeStart := t.Add(timeD).Truncate(time.Hour * 24).Add(-timeD)
+	checkTimeEnd := t.Add(timeD).Truncate(time.Hour * 24).Add(-timeD).Add(time.Hour * 24)
+	if stamp >= checkTimeStart.Unix() && stamp <= checkTimeEnd.Unix() {
+		return true
+	}
+	return false
+}
+
+// IsThisWeek stamp是否是本周
+func IsThisWeek(stamp int64) bool {
+	t := time.Now()
+	_, timeOffset := t.Zone()
+	timeD := time.Duration(timeOffset) * time.Second
+	checkTimeStart := t.Add(timeD).Truncate(time.Hour * 24 * 7).Add(-timeD)
+	checkTimeEnd := t.Add(timeD).Truncate(time.Hour * 24 * 7).Add(-timeD).Add(time.Hour * 24 * 7)
+	if stamp >= checkTimeStart.Unix() && stamp <= checkTimeEnd.Unix() {
+		return true
+	}
+	return false
+}
+
+// IsThisMonth stamp是否是本月
+func IsThisMonth(stamp int64) bool {
+	t := time.Now()
+	currentYear, currentMonth, _ := t.Date()
+	checkTimeStart := time.Date(currentYear, currentMonth, 1, 0, 0, 0, 0, t.Location())
+	checkTimeEnd := time.Date(currentYear, currentMonth, 1, 0, 0, 0, 0, t.Location()).AddDate(0, 1, 0)
+	if stamp >= checkTimeStart.Unix() && stamp <= checkTimeEnd.Unix() {
+		return true
+	}
+	return false
 }

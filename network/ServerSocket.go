@@ -1,6 +1,7 @@
 package network
 
 import (
+	"github.com/snowyyj001/loumiao/nodemgr"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -24,8 +25,8 @@ type IServerSocket interface {
 type ServerSocket struct {
 	Socket
 	m_nClientCount  int
-	m_nMaxClients   int
-	m_nMinClients   int
+	mMaxClients     int
+	mMinClients     int
 	m_nIdSeed       int64
 	m_bShuttingDown bool
 	m_ClientList    map[int]*ServerSocketClient
@@ -180,11 +181,11 @@ func (self *ServerSocket) OnNetFail(int) {
 func (self *ServerSocket) Close() {
 	self.m_Listen.Close()
 	self.Clear()
-
+	nodemgr.ServerEnabled = false
 }
 
 func (self *ServerSocket) SetMaxClients(maxnum int) {
-	self.m_nMaxClients = maxnum
+	self.mMaxClients = maxnum
 }
 
 func serverRoutine(server *ServerSocket) {
@@ -192,7 +193,7 @@ func serverRoutine(server *ServerSocket) {
 	for {
 		tcpConn, err := server.m_Listen.AcceptTCP()
 		if err != nil {
-			if ne, ok := err.(net.Error); ok && ne.Temporary() {
+			if ne, ok := err.(net.Error); ok && ne.Timeout() {
 				if tempDelay == 0 {
 					tempDelay = 1 * time.Millisecond
 				} else {
@@ -207,7 +208,7 @@ func serverRoutine(server *ServerSocket) {
 			}
 		}
 		tempDelay = 0
-		if server.m_nClientCount >= server.m_nMaxClients {
+		if server.m_nClientCount >= server.mMaxClients {
 			tcpConn.Close()
 			llog.Warning("serverRoutine: too many conns")
 			continue

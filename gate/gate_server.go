@@ -6,6 +6,7 @@ import (
 	"github.com/snowyyj001/loumiao/base/maps"
 	"github.com/snowyyj001/loumiao/lnats"
 	"github.com/snowyyj001/loumiao/message"
+	"github.com/snowyyj001/loumiao/timer"
 	"sync"
 
 	"github.com/snowyyj001/loumiao/config"
@@ -118,8 +119,8 @@ func (self *GateServer) DoInit() bool {
 func (self *GateServer) DoRegsiter() {
 	llog.Infof("%s DoRegsiter", self.Name)
 
-	self.Register("RegisterNet", registerNet)
-	self.Register("UnRegisterNet", unRegisterNet)
+	//	self.Register("RegisterNet", RegisterNet)
+	//	self.Register("UnRegisterNet", unRegisterNet)
 	self.Register("SendClient", sendClient)
 	self.Register("SendMulClient", sendMulClient)
 	self.Register("NewClient", newClient)
@@ -165,7 +166,7 @@ func (self *GateServer) DoRegsiter() {
 	self.RegisterSelfCallRpc(bindServer)
 }
 
-//begin communicate with other nodes
+// begin communicate with other nodes
 func (self *GateServer) DoStart() {
 	llog.Info("GateServer.DoStart")
 
@@ -183,13 +184,22 @@ func (self *GateServer) DoStart() {
 
 	if config.NET_NODE_TYPE != config.ServerType_WEB_LOGIN {
 		if self.pService != nil {
-			llog.Debug("ServerSocket.Start000")
+			llog.Debug("ServerSocket.Start o")
 			util.Assert(self.pService.Start(), fmt.Sprintf("GateServer listen failed: saddr=%s", self.pService.GetSAddr()))
 		}
-		if self.pInnerService != nil {
+		if self.pInnerService != nil { //内部组网监听，地址自动切换也没关系
+			llog.Debug("ServerSocket.Start i")
 			util.Assert(self.pInnerService.Start(), fmt.Sprintf("GateServer listen failed: saddr=%s", self.pInnerService.GetSAddr()))
 		}
 	}
+
+	llog.Infof("GateServer DoStart success: name=%s,saddr=%s,uid=%d", self.Name, config.NET_GATE_SADDR, config.SERVER_NODE_UID)
+}
+
+// DoOpen 监听并注册etcd
+func (self *GateServer) DoOpen() {
+	llog.Info("GateServer.DoOpen")
+
 	need := config.NET_NODE_TYPE == config.ServerType_Account           //挑选网关和world给client需要
 	need = config.NET_NODE_TYPE == config.ServerType_Gate               //挑选world给client需要
 	need = need || config.NET_NODE_TYPE == config.ServerType_World      //挑选zone给client需要，其他主逻辑也可能需要
@@ -216,27 +226,20 @@ func (self *GateServer) DoStart() {
 		key = fmt.Sprintf("%s%d", define.ETCD_NODEINFO, config.NET_NODE_ID)
 	}
 	//watch all node，所有集群内的节点都需要参与服发现
-	err = etcd.Client.WatchCommon(key, self.newServerDiscover)
+	err := etcd.Client.WatchCommon(key, self.newServerDiscover)
 	if err != nil {
 		llog.Fatalf("etcd watch NET_GATE_SADDR error: %s", err.Error())
 	}
 
-	llog.Infof("GateServer DoStart success: name=%s,saddr=%s,uid=%d", self.Name, config.NET_GATE_SADDR, config.SERVER_NODE_UID)
-}
-
-//begin start socket servie
-func (self *GateServer) DoOpen() {
-	llog.Info("GateServer.DoOpen")
-
-	//timer.DelayJob(100, func() { //delay 100ms, that all RegisterRpcHandler should be compled
-	//应该首先watch，注册rpc消息，再把自己put进去
-	//register to etcd when the socket is ok
-	if err := etcd.Client.PutNode(); err != nil {
-		llog.Fatalf("etcd PutService error %v", err)
-	}
-	nodemgr.ServerEnabled = true
-	llog.Infof("GateServer DoOpen success: name=%s, saddr=%s, uid=%d", self.Name, config.NET_GATE_SADDR, config.SERVER_NODE_UID)
-	//	}, false)
+	timer.DelayJob(1000, func() { //delay 1000ms, rpc or other actor should be ok
+		//应该首先watch，注册rpc消息，再把自己put进去
+		//register to etcd when the socket is ok
+		if err := etcd.Client.PutNode(); err != nil {
+			llog.Fatalf("etcd PutService error %v", err)
+		}
+		nodemgr.ServerEnabled = true
+		llog.Infof("GateServer DoOpen success: name=%s, saddr=%s, uid=%d", self.Name, config.NET_GATE_SADDR, config.SERVER_NODE_UID)
+	}, false)
 
 	lnats.ReportMail(define.MAIL_TYPE_START, "服务器完成启动")
 }
@@ -279,7 +282,6 @@ func (self *GateServer) RegisterSelfCallRpc(hanlderFunc gorpc.HanlderFunc) {
 	This.rpcMap[funcName] = "GateServer"
 }
 
-//
 func (self *GateServer) getServerService() network.ISocket {
 	if self.ServerType == network.CLIENT_CONNECT { //对外(login,gate)
 		return self.pService
@@ -288,7 +290,7 @@ func (self *GateServer) getServerService() network.ISocket {
 	}
 }
 
-//goroutine unsafe
+// goroutine unsafe
 func (self *GateServer) serverStatusUpdate(key, val string, dis bool) {
 	node := nodemgr.NodeStatusUpdate(key, val, dis)
 	if node == nil || !dis {
@@ -303,7 +305,7 @@ func (self *GateServer) serverStatusUpdate(key, val string, dis bool) {
 	}
 }
 
-//goroutine unsafe
+// goroutine unsafe
 func (self *GateServer) newServerDiscover(key, val string, dis bool) {
 	node := nodemgr.NodeDiscover(key, val, dis)
 	if node == nil || !dis {
@@ -371,8 +373,8 @@ func (self *GateServer) DoDestory() {
 	etcd.Client.RevokeLease()
 }
 
-//goroutine unsafe
-//net msg handler,this func belong to socket's goroutine
+// goroutine unsafe
+// net msg handler,this func belong to socket's goroutine
 func packetFunc_client(socketid int, buff []byte, nlen int) error {
 	//llog.Debugf("packetFunc: socketid=%d, bufferlen=%d", socketid, nlen)
 	target, name, buffbody, err := message.UnPackHead(buff, nlen)
@@ -400,8 +402,8 @@ func packetFunc_client(socketid int, buff []byte, nlen int) error {
 	return nil
 }
 
-//goroutine unsafe
-//net msg handler,this func belong to socket's goroutine
+// goroutine unsafe
+// net msg handler,this func belong to socket's goroutine
 func packetFunc_server(socketid int, buff []byte, nlen int) error {
 	//llog.Debugf("packetFunc_server: socketid=%d, bufferlen=%d", socketid, nlen)
 	target, name, buffbody, err := message.UnPackHead(buff, nlen)
@@ -425,7 +427,7 @@ func packetFunc_server(socketid int, buff []byte, nlen int) error {
 	return nil
 }
 
-//创建一个clientsocket连接server
+// 创建一个clientsocket连接server
 func (self *GateServer) buildClient(uid int, addr string) *network.ClientSocket {
 	client := new(network.ClientSocket)
 	client.SetClientId(uid)
@@ -462,7 +464,7 @@ func (self *GateServer) GetRpcClient(uid int) *network.ClientSocket {
 	return nil
 }
 
-//rpc调用的gate选择
+// rpc调用的gate选择
 func (self *GateServer) getCluserRpcGateUid() int {
 
 	sz := len(self.rpcGates)
@@ -501,9 +503,9 @@ func (self *GateServer) GetGateClientId(userid int) int {
 	return socketId
 }
 
-//关闭客户端
-//@sync 是否等立即清除连接记录
-//@userId 客户端uid
+// 关闭客户端
+// @sync 是否等立即清除连接记录
+// @userId 客户端uid
 func (self *GateServer) StopClient(sync bool, userId int) {
 	sid := This.tokens_u[userId]
 	if sid > 0 {

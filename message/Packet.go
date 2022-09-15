@@ -22,13 +22,13 @@ import (
 //7，8字节代表消息名长度
 
 // Encode target: 目标服务器类型/id
-//name: 消息名
-//msg: 具体的消息包
+// name: 消息名
+// msg: 具体的消息包
 var Encode func(target int, name string, packet interface{}) ([]byte, int)
 
 // Decode uid: 服务器id
-//buff: 消息包
-//length: 包长度
+// buff: 消息包
+// length: 包长度
 var Decode func(uid int, buff []byte, length int) (error, int, string, interface{})
 
 func EncodeProBuff(target int, name string, packet interface{}) ([]byte, int) {
@@ -172,14 +172,14 @@ func DecodeJson(uid int, buff []byte, length int) (error, int, string, interface
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //
 
-//对一个json或pb结构体序列化
+// 对一个json或pb结构体序列化
 var Pack func(packet interface{}) ([]byte, error)
 
-//对buff反序列化为一个json或pb结构体
+// 对buff反序列化为一个json或pb结构体
 var UnPack func(packet interface{}, buff []byte) error
 
 // UnPackHead 解析包头
-//@ret: targetid, 消息名, 包体, error
+// @ret: targetid, 消息名, 包体, error
 func UnPackHead(buff []byte, length int) (int, string, []byte, error) {
 	mbuff1 := buff[4:6]
 	target := int(base.BytesToUInt16(mbuff1, binary.BigEndian))
@@ -217,7 +217,7 @@ func UnPackProto(packet interface{}, buff []byte) error {
 	return err
 }
 
-//udp不会粘包，所以不需要长度
+// udp不会粘包，所以不需要长度
 type PacketUdp struct {
 	UserId int64
 	CmdId  uint16
@@ -233,7 +233,7 @@ func PackUdp(cmd uint16, userId int64, buffer []byte) []byte {
 	return buf.Bytes()
 }
 
-func UpPackUdp(buffer []byte) (uint16, int64, []byte) {
+func UnPackUdp(buffer []byte) (uint16, int64, []byte) {
 	var head PacketUdp
 	bytebuff := bytes.NewBuffer(buffer)
 	binary.Read(bytebuff, binary.BigEndian, &head)

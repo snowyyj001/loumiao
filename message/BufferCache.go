@@ -15,7 +15,7 @@ sync.Map的性能高体现在读操作远多于写操作的时候。 极端情�
 */
 const (
 	EXPIRE  = 3 * 1000 //每3s，删除过多的缓存
-	KEEPLEN = 640       //缓存超过KEEPLEN，开始清理
+	KEEPLEN = 640      //缓存超过KEEPLEN，开始清理
 )
 
 type BufferCache struct {
@@ -49,8 +49,8 @@ func delExpireCache(sz int) {
 	}, true)
 }
 
-//获取一个长度为sz的[]byte对象
-func GetBuffer(sz int) []byte {
+// GeCachetBuffer 获取一个长度为sz的[]byte对象
+func GeCachetBuffer(sz int) []byte {
 	if sz <= 0 {
 		return nil
 	}
@@ -80,18 +80,18 @@ func GetBuffer(sz int) []byte {
 	}
 }
 
-//复制buff对象
-func CloneBuffer(src []byte) []byte {
+// CloneCacheBuffer 复制buff对象
+func CloneCacheBuffer(src []byte) []byte {
 	if len(src) == 0 {
 		return nil
 	}
-	target := GetBuffer(len(src))
+	target := GeCachetBuffer(len(src))
 	copy(target, src)
 	return target
 }
 
-//缓存buff对象
-func BackBuffer(buff []byte) {
+// BackCacheBuffer 缓存buff对象
+func BackCacheBuffer(buff []byte) {
 	sz := len(buff)
 	if sz <= 0 {
 		return
@@ -105,4 +105,8 @@ func BackBuffer(buff []byte) {
 		cache.mutex.Unlock()
 		//fmt.Println("BackBuffer: ", sz, cache.vec.Len(), cache.vec.Size())
 	}
+}
+
+func recvCache() {
+
 }

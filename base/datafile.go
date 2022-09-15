@@ -2,70 +2,70 @@ package base
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
-
-	"github.com/snowyyj001/loumiao/base/vector"
+	"strings"
 )
 
-//datatype
 const (
-	DType_none        = iota
-	DType_String      = iota
-	DType_Enum        = iota
-	DType_S8          = iota
-	DType_S16         = iota
-	DType_S32         = iota
-	DType_F32         = iota
-	DType_F64         = iota
-	DType_S64         = iota
-	DType_StringArray = iota
-	DType_S8Array     = iota
-	DType_S16Array    = iota
-	DType_S32Array    = iota
-	DType_F32Array    = iota
-	DType_F64Array    = iota
-	DType_S64Array    = iota
+	DATASHEET_BEGIN_ROW = 4
+)
+
+// datatype
+const (
+	DType_none          = ""
+	DType_Enum          = "enum"
+	DType_String        = "string"
+	DType_S32           = "int"
+	DType_S64           = "long"
+	DType_KVString      = "kvs"
+	DType_KVNumber      = "kvn"
+	DType_StringArray   = "[string]"
+	DType_S32Array      = "[int]"
+	DType_S64Array      = "[long]"
+	DType_KVStringArray = "[kvs]"
+	DType_KVNumberArray = "[kvn]"
 )
 
 type (
-	RData struct {
-		m_Type int
+	KeyValueS struct {
+		Key   string
+		Value string
+	}
 
-		m_String      string
-		m_Enum        int
-		m_S8          int8
-		m_S16         int16
-		m_S32         int
-		m_F32         float32
-		m_F64         float64
-		m_S64         int64
-		m_StringArray []string
-		m_S8Array     []int8
-		m_S16Array    []int16
-		m_S32Array    []int
-		m_F32Array    []float32
-		m_F64Array    []float64
-		m_S64Array    []int64
+	KeyValueN struct {
+		Key   int
+		Value int
 	}
 
 	CDataFile struct {
 		RecordNum int //记录数量
 		ColumNum  int //列数量
+		SheetName string
 
 		fstream            *BitStream
 		readstep           int //控制读的总数量
-		dataTypes          vector.Vector
+		DataNames          []string
+		DataTypes          []string
 		currentColumnIndex int
+		currentRowIndex    int
 	}
 
 	IDateFile interface {
 		ReadDataFile(string) bool
-		GetData(*RData) bool
 		ReadDataInit()
 	}
 )
 
+type BufferLoader func(file string) []byte
+
+func DataBufferLoader(file string) []byte {
+	fmt.Println("DataBufferLoader: ", file)
+	if bytes, err := os.ReadFile(file); err != nil {
+		return nil
+	} else {
+		return bytes
+	}
+}
 func (self *CDataFile) ReadDataInit() {
 	self.ColumNum = 0
 	self.RecordNum = 0
@@ -73,206 +73,296 @@ func (self *CDataFile) ReadDataInit() {
 	self.fstream = nil
 }
 
-func (self *CDataFile) ReadDataFile(fileName string) bool {
-	self.dataTypes.Clear()
-	self.currentColumnIndex = 0
-
-	file, err := os.Open(fileName)
-	if err != nil {
-		fmt.Printf("[%s] open failed", fileName)
-		return false
-	}
-	defer file.Close()
-	buf, err := ioutil.ReadAll(file)
-	if err != nil {
-		return false
-	}
-	self.fstream = NewBitStream(buf, len(buf))
-
-	for {
-		tchr := self.fstream.ReadInt(8)
-		if tchr == '@' { //找到数据文件的开头
-			tchr = self.fstream.ReadInt(8) //这个是换行字符
-			//fmt.Println(tchr)
-			break
-		}
-	}
-	//得到记录总数
-	self.RecordNum = self.fstream.ReadInt(32)
-	//得到列的总数
-	self.ColumNum = self.fstream.ReadInt(32)
-	//sheet name
-	self.fstream.ReadString()
-
+func (self *CDataFile) SetWriterInit(colNum, rowNum int, stream *BitStream) {
+	self.ColumNum = colNum
+	self.RecordNum = rowNum
+	self.readstep = 0
+	self.fstream = stream
 	self.readstep = self.RecordNum * self.ColumNum
-	for nColumnIndex := 0; nColumnIndex < self.ColumNum; nColumnIndex++ {
-		//col name
-		//self.fstream.ReadString()
-		//nDataType := self.fstream.ReadInt(8)
-		nDataType := 1
-		self.dataTypes.PushBack(int(nDataType))
-	}
-	return true
 }
 
-/****************************
-	格式:
-	头文件:
-	1、总记录数(int)
-	2、总字段数(int)
-	字段格式:
-	1、字段长度(int)
-	2、字读数据类型(int->2,string->1,enum->3,float->4)
-	3、字段内容(int,string)
-*************************/
-func (self *CDataFile) GetData(pData *RData) bool {
-	if self.readstep == 0 || self.fstream == nil {
-		return false
-	}
+/*
+excel 格式：
+row 0 : 注释
+row 1 : 变量名
+row 2 : 变量类型
+row 3 : 导出标志
+*/
+func (self *CDataFile) WriteDataFile(sheetName string, dataTypes, dataNames, comments, exports []string) error {
+	self.DataNames = dataNames
+	self.DataTypes = dataTypes
+	self.fstream.WriteInt32(self.RecordNum)
+	self.fstream.WriteInt32(self.ColumNum)
+	self.fstream.WriteString(sheetName)
 
-	switch self.dataTypes.Get(self.currentColumnIndex).(int) {
+	for i := 0; i < self.ColumNum; i++ {
+		self.fstream.WriteString(comments[i])
+	}
+	for i := 0; i < self.ColumNum; i++ {
+		self.fstream.WriteString(dataNames[i])
+	}
+	for i := 0; i < self.ColumNum; i++ {
+		self.fstream.WriteString(dataTypes[i])
+	}
+	for i := 0; i < self.ColumNum; i++ {
+		self.fstream.WriteString(exports[i])
+	}
+	return nil
+}
+
+func (self *CDataFile) WriteData(val string) error {
+	dataType := self.DataTypes[self.currentColumnIndex]
+	switch dataType {
 	case DType_String:
-		pData.m_String = self.fstream.ReadString()
-	case DType_S8:
-		pData.m_S8 = int8(self.fstream.ReadInt(8))
-	case DType_S16:
-		pData.m_S16 = int16(self.fstream.ReadInt(16))
+		self.fstream.WriteString(val)
 	case DType_S32:
-		pData.m_S32 = self.fstream.ReadInt(32)
+		v, err := Int(val)
+		if err != nil {
+			return err
+		}
+		self.fstream.WriteInt32(v)
 	case DType_Enum:
-		pData.m_Enum = self.fstream.ReadInt(16)
-	case DType_F32:
-		pData.m_F32 = self.fstream.ReadFloat()
-	case DType_F64:
-		pData.m_F64 = self.fstream.ReadFloat64()
+		v, err := Int(val)
+		if err != nil {
+			return err
+		}
+		self.fstream.WriteInt32(v)
 	case DType_S64:
-		pData.m_S64 = self.fstream.ReadInt64()
-
+		v, err := Int(val)
+		if err != nil {
+			return err
+		}
+		self.fstream.WriteInt64(int64(v))
+	case DType_KVString:
+		arr := strings.Split(val, ":")
+		if len(arr) != 2 {
+			return fmt.Errorf("WriteData: col = %d, row = %d, %s is not a format (*:*)", self.currentColumnIndex, self.currentRowIndex, val)
+		}
+		self.fstream.WriteString(val)
+	case DType_KVNumber:
+		arr := strings.Split(val, ":")
+		if len(arr) != 2 {
+			return fmt.Errorf("WriteData: col = %d, row = %d, %s is not a format (*:*)", self.currentColumnIndex, self.currentRowIndex, val)
+		}
+		_, err := Int(arr[0])
+		if err != nil {
+			return fmt.Errorf("WriteData: col = %d, row = %d, %s", self.currentColumnIndex, self.currentRowIndex, err.Error())
+		}
+		_, err = Int(arr[1])
+		if err != nil {
+			return fmt.Errorf("WriteData: col = %d, row = %d, %s", self.currentColumnIndex, self.currentRowIndex, err.Error())
+		}
+		self.fstream.WriteString(val)
 	case DType_StringArray:
-		nLen := self.fstream.ReadInt(8)
-		pData.m_StringArray = make([]string, nLen)
-		for i := 0; i < nLen; i++ {
-			pData.m_StringArray[i] = self.fstream.ReadString()
-		}
-	case DType_S8Array:
-		nLen := self.fstream.ReadInt(8)
-		pData.m_S8Array = make([]int8, nLen)
-		for i := 0; i < nLen; i++ {
-			pData.m_S8Array[i] = int8(self.fstream.ReadInt(8))
-		}
-	case DType_S16Array:
-		nLen := self.fstream.ReadInt(8)
-		pData.m_S16Array = make([]int16, nLen)
-		for i := 0; i < nLen; i++ {
-			pData.m_S16Array[i] = int16(self.fstream.ReadInt(16))
-		}
+		self.fstream.WriteString(val)
 	case DType_S32Array:
-		nLen := self.fstream.ReadInt(8)
-		pData.m_S32Array = make([]int, nLen)
-		for i := 0; i < nLen; i++ {
-			pData.m_S32Array[i] = self.fstream.ReadInt(32)
+		arr := strings.Split(val, ",")
+		sz := len(arr)
+		for i := 0; i < sz; i++ {
+			_, err := Int(arr[i])
+			if err != nil {
+				return fmt.Errorf("WriteData: col = %d, row = %d, %s", self.currentColumnIndex, self.currentRowIndex, err.Error())
+			}
 		}
-	case DType_F32Array:
-		nLen := self.fstream.ReadInt(8)
-		pData.m_F32Array = make([]float32, nLen)
-		for i := 0; i < nLen; i++ {
-			pData.m_F32Array[i] = self.fstream.ReadFloat()
-		}
-	case DType_F64Array:
-		nLen := self.fstream.ReadInt(8)
-		pData.m_F64Array = make([]float64, nLen)
-		for i := 0; i < nLen; i++ {
-			pData.m_F64Array[i] = self.fstream.ReadFloat64()
-		}
+		self.fstream.WriteString(val)
 	case DType_S64Array:
-		nLen := self.fstream.ReadInt(8)
-		pData.m_S64Array = make([]int64, nLen)
-		for i := 0; i < nLen; i++ {
-			pData.m_S64Array[i] = self.fstream.ReadInt64()
+		arr := strings.Split(val, ",")
+		sz := len(arr)
+		for i := 0; i < sz; i++ {
+			_, err := Int(arr[i])
+			if err != nil {
+				return fmt.Errorf("WriteData: col = %d, row = %d, %s", self.currentColumnIndex, self.currentRowIndex, err.Error())
+			}
 		}
-	}
+		self.fstream.WriteString(val)
+	case DType_KVStringArray:
+		arr := strings.Split(val, ",")
+		sz := len(arr)
+		for i := 0; i < sz; i++ {
+			narr := strings.Split(arr[i], ":")
+			if len(narr) != 2 {
+				return fmt.Errorf("WriteData: col = %d, row = %d, err = %s is not a format (*;*), %s", self.currentColumnIndex, self.currentRowIndex, val, arr[i])
+			}
+		}
+		self.fstream.WriteString(val)
+	case DType_KVNumberArray:
+		arr := strings.Split(val, ",")
+		sz := len(arr)
 
-	pData.m_Type = self.dataTypes.Get(self.currentColumnIndex).(int)
-	self.currentColumnIndex = (self.currentColumnIndex + 1) % self.ColumNum
+		for i := 0; i < sz; i++ {
+			narr := strings.Split(arr[i], ":")
+			if len(narr) != 2 {
+				return fmt.Errorf("WriteData: col = %d, row = %d, %s is not a format (*:*), %s", self.currentColumnIndex, self.currentRowIndex, val, arr[i])
+			}
+			_, err := Int(narr[0])
+			if err != nil {
+				return fmt.Errorf("WriteData: col = %d, row = %d, %s", self.currentColumnIndex, self.currentRowIndex, err.Error())
+			}
+			_, err = Int(narr[1])
+			if err != nil {
+				return fmt.Errorf("WriteData: col = %d, row = %d, %s", self.currentColumnIndex, self.currentRowIndex, err.Error())
+			}
+		}
+		self.fstream.WriteString(val)
+	default:
+		return fmt.Errorf("WriteData: col = %d, row = %d, data type[%d]", self.currentColumnIndex, self.currentRowIndex, dataType)
+	}
+	self.currentColumnIndex++
+	if self.currentColumnIndex == self.ColumNum {
+		self.currentRowIndex++
+		self.currentColumnIndex = 0
+	}
+	self.readstep--
+	return nil
+}
+
+func (self *CDataFile) GetData() (interface{}, error) {
+	dataType := self.DataTypes[self.currentColumnIndex]
+
+	self.currentColumnIndex++
+	if self.currentColumnIndex == self.ColumNum {
+		self.currentRowIndex++
+		self.currentColumnIndex = 0
+	}
 	self.readstep--
 
-	return true
+	switch dataType {
+	case DType_String:
+		return self.fstream.ReadString(), nil
+	case DType_S32:
+		return self.fstream.ReadInt32(), nil
+	case DType_Enum:
+		return self.fstream.ReadInt32(), nil
+	case DType_S64:
+		return self.fstream.ReadInt64(), nil
+	case DType_KVString:
+		str := self.fstream.ReadString()
+		arr := strings.Split(str, ":")
+		if len(arr) != 2 {
+			return nil, fmt.Errorf("GetData: col = %d, row = %d, err = %s is not a format (*:*)", self.currentColumnIndex, self.currentRowIndex, str)
+		}
+		kv := KeyValueS{arr[0], arr[1]}
+		return kv, nil
+	case DType_KVNumber:
+		str := self.fstream.ReadString()
+		arr := strings.Split(str, ":")
+		if len(arr) != 2 {
+			return nil, fmt.Errorf("GetData: col = %d, row = %d, err = %s is not a format (*:*)", self.currentColumnIndex, self.currentRowIndex, str)
+		}
+		v1, err := Int(arr[0])
+		if err != nil {
+			return nil, fmt.Errorf("GetData: col = %d, row = %d, err = %s", self.currentColumnIndex, self.currentRowIndex, err.Error())
+		}
+		v2, err := Int(arr[1])
+		if err != nil {
+			return nil, fmt.Errorf("GetData: col = %d, row = %d, err = %s", self.currentColumnIndex, self.currentRowIndex, err.Error())
+		}
+		kv := KeyValueN{v1, v2}
+		return kv, nil
+	case DType_StringArray:
+		str := self.fstream.ReadString()
+		arr := strings.Split(str, ",")
+		return arr, nil
+	case DType_S32Array:
+		str := self.fstream.ReadString()
+		arr := strings.Split(str, ",")
+		sz := len(arr)
+		vals := make([]int32, sz, sz)
+		for i := 0; i < sz; i++ {
+			v, err := Int(arr[i])
+			if err != nil {
+				return nil, fmt.Errorf("GetData: col = %d, row = %d, err = %s", self.currentColumnIndex, self.currentRowIndex, err.Error())
+			}
+			vals[i] = int32(v)
+		}
+		return vals, nil
+	case DType_S64Array:
+		str := self.fstream.ReadString()
+		arr := strings.Split(str, ",")
+		sz := len(arr)
+		vals := make([]int64, sz, sz)
+		for i := 0; i < sz; i++ {
+			v, err := Int(arr[i])
+			if err != nil {
+				return nil, fmt.Errorf("GetData: col = %d, row = %d, err = %s", self.currentColumnIndex, self.currentRowIndex, err.Error())
+			}
+			vals[i] = int64(v)
+		}
+		return vals, nil
+	case DType_KVStringArray:
+		str := self.fstream.ReadString()
+		arr := strings.Split(str, ",")
+		sz := len(arr)
+		var r []*KeyValueS
+		for i := 0; i < sz; i++ {
+			narr := strings.Split(arr[i], ":")
+			if len(narr) != 2 {
+				return nil, fmt.Errorf("GetData: col = %d, row = %d, err = %s is not a format (*;*), %s", self.currentColumnIndex, self.currentRowIndex, str, arr[i])
+			}
+			r = append(r, &KeyValueS{arr[0], arr[1]})
+		}
+		return r, nil
+	case DType_KVNumberArray:
+		str := self.fstream.ReadString()
+		arr := strings.Split(str, ",")
+		sz := len(arr)
+		var r []*KeyValueN
+		for i := 0; i < sz; i++ {
+			narr := strings.Split(arr[i], ":")
+			if len(narr) != 2 {
+				return nil, fmt.Errorf("GetData: col = %d, row = %d, err = %s is not a format (*;*), %s", self.currentColumnIndex, self.currentRowIndex, str, arr[i])
+			}
+			v1, err := Int(arr[0])
+			if err != nil {
+				return nil, fmt.Errorf("GetData: col = %d, row = %d, err = %s", self.currentColumnIndex, self.currentRowIndex, err.Error())
+			}
+			v2, err := Int(arr[1])
+			if err != nil {
+				return nil, fmt.Errorf("GetData: col = %d, row = %d, err = %s", self.currentColumnIndex, self.currentRowIndex, err.Error())
+			}
+			r = append(r, &KeyValueN{v1, v2})
+		}
+		return r, nil
+	}
+	return nil, fmt.Errorf("GetData: col = %d, row = %d, err = data type[%d]", self.currentColumnIndex, self.currentRowIndex, dataType)
 }
 
-/****************************
-	RData funciton
-****************************/
-func (self *RData) String(dataname, datacol string) string {
-	Assert(self.m_Type == DType_String, fmt.Sprintf("read [%s] col[%s] type[%d]error", dataname, datacol, self.m_Type))
-	return self.m_String
+func (self *CDataFile) ReadDataHead(buff []byte) {
+	self.fstream = NewBitStreamR(buff)
+	self.RecordNum = self.fstream.ReadInt32()
+	self.ColumNum = self.fstream.ReadInt32()
+	self.SheetName = self.fstream.ReadString()
+
+	for i := 0; i < self.ColumNum; i++ {
+		self.fstream.ReadString()
+	}
+	for i := 0; i < self.ColumNum; i++ {
+		self.DataNames = append(self.DataNames, self.fstream.ReadString())
+	}
+	for i := 0; i < self.ColumNum; i++ {
+		self.DataTypes = append(self.DataTypes, self.fstream.ReadString())
+	}
+	for i := 0; i < self.ColumNum; i++ {
+		self.fstream.ReadString()
+	}
 }
 
-func (self *RData) Enum(dataname, datacol string) int {
-	Assert(self.m_Type == DType_Enum, fmt.Sprintf("read [%s] col[%s] error", dataname, datacol))
-	return self.m_Enum
-}
+func (self *CDataFile) ReadDataHeadCol(buff []byte) {
+	self.fstream = NewBitStreamR(buff)
+	self.RecordNum = self.fstream.ReadInt32()
+	self.ColumNum = self.fstream.ReadInt32()
+	self.SheetName = self.fstream.ReadString()
 
-func (self *RData) Int8(dataname, datacol string) int8 {
-	Assert(self.m_Type == DType_S8, fmt.Sprintf("read [%s] col[%s] error", dataname, datacol))
-	return self.m_S8
-}
-
-func (self *RData) Int16(dataname, datacol string) int16 {
-	Assert(self.m_Type == DType_S16, fmt.Sprintf("read [%s] col[%s] error", dataname, datacol))
-	return self.m_S16
-}
-
-func (self *RData) Int(dataname, datacol string) int {
-	Assert(self.m_Type == DType_S32, fmt.Sprintf("read [%s] col[%s] error", dataname, datacol))
-	return self.m_S32
-}
-
-func (self *RData) Float32(dataname, datacol string) float32 {
-	Assert(self.m_Type == DType_F32, fmt.Sprintf("read [%s] col[%s] error", dataname, datacol))
-	return self.m_F32
-}
-
-func (self *RData) Float64(dataname, datacol string) float64 {
-	Assert(self.m_Type == DType_F64, fmt.Sprintf("read [%s] col[%s] error", dataname, datacol))
-	return self.m_F64
-}
-
-func (self *RData) Int64(dataname, datacol string) int64 {
-	Assert(self.m_Type == DType_S64, fmt.Sprintf("read [%s] col[%s] error", dataname, datacol))
-	return self.m_S64
-}
-
-func (self *RData) StringArray(dataname, datacol string) []string {
-	Assert(self.m_Type == DType_StringArray, fmt.Sprintf("read [%s] col[%s] error", dataname, datacol))
-	return self.m_StringArray
-}
-
-func (self *RData) Int8Array(dataname, datacol string) []int8 {
-	Assert(self.m_Type == DType_S8Array, fmt.Sprintf("read [%s] col[%s] error", dataname, datacol))
-	return self.m_S8Array
-}
-
-func (self *RData) Int16Array(dataname, datacol string) []int16 {
-	Assert(self.m_Type == DType_S16Array, fmt.Sprintf("read [%s] col[%s] error", dataname, datacol))
-	return self.m_S16Array
-}
-
-func (self *RData) IntArray(dataname, datacol string) []int {
-	Assert(self.m_Type == DType_S32Array, fmt.Sprintf("read [%s] col[%s] error", dataname, datacol))
-	return self.m_S32Array
-}
-
-func (self *RData) Float32Array(dataname, datacol string) []float32 {
-	Assert(self.m_Type == DType_F32Array, fmt.Sprintf("read [%s] col[%s] error", dataname, datacol))
-	return self.m_F32Array
-}
-
-func (self *RData) Float64Array(dataname, datacol string) []float64 {
-	Assert(self.m_Type == DType_F64Array, fmt.Sprintf("read [%s] col[%s] error", dataname, datacol))
-	return self.m_F64Array
-}
-
-func (self *RData) Int64Array(dataname, datacol string) []int64 {
-	Assert(self.m_Type == DType_S64Array, fmt.Sprintf("read [%s] col[%s] error", dataname, datacol))
-	return self.m_S64Array
+	for i := 0; i < self.ColumNum; i++ {
+		self.fstream.ReadString()
+	}
+	for i := 0; i < self.ColumNum; i++ {
+		self.DataNames = append(self.DataNames, self.fstream.ReadString())
+	}
+	for i := 0; i < self.ColumNum; i++ {
+		self.DataTypes = append(self.DataTypes, self.fstream.ReadString())
+	}
+	for i := 0; i < self.ColumNum; i++ {
+		self.fstream.ReadString()
+	}
 }

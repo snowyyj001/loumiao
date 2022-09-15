@@ -1,6 +1,7 @@
 package network
 
 import (
+	"github.com/snowyyj001/loumiao/nodemgr"
 	"net/http"
 	"sync"
 	"sync/atomic"
@@ -26,8 +27,8 @@ type IWebSocket interface {
 type WebSocket struct {
 	Socket
 	m_nClientCount  int
-	m_nMaxClients   int
-	m_nMinClients   int
+	mMaxClients     int
+	mMinClients     int
 	m_nIdSeed       int32
 	m_bShuttingDown bool
 	m_bCanAccept    bool
@@ -195,10 +196,11 @@ func (self *WebSocket) OnNetFail(int) {
 func (self *WebSocket) Close() {
 	self.m_httpServer.Close()
 	self.Clear()
+	nodemgr.ServerEnabled = false
 }
 
 func (self *WebSocket) SetMaxClients(maxnum int) {
-	self.m_nMaxClients = maxnum
+	self.mMaxClients = maxnum
 }
 
 func serveWs(w http.ResponseWriter, r *http.Request) {

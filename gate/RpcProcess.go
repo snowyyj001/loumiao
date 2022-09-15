@@ -21,7 +21,7 @@ import (
 所以bind信息时，在login成功之后，unbind时在socket的断开时
 */
 
-//client connect
+// client connect
 func innerConnect(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	llog.Debugf("GateServer innerConnect: %d", socketId)
 	//对于account/gate来说，socket连接数就是在线人数
@@ -33,7 +33,7 @@ func innerConnect(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	}
 }
 
-//client disconnect
+// client disconnect
 func innerDisConnect(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	llog.Debugf("GateServer innerDisConnect: %d", socketId)
 	if This.ServerType == network.CLIENT_CONNECT { //对外(login,gate)
@@ -46,12 +46,12 @@ func innerDisConnect(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	}
 }
 
-//server connect
+// server connect
 func outerConnect(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	//llog.Debugf("GateServer outerConnect: %d", socketId)
 }
 
-//server disconnect
+// server disconnect
 func outerDisConnect(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	//	llog.Debugf("GateServer outerDisConnect: %d", socketId)
 
@@ -59,7 +59,7 @@ func outerDisConnect(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	This.removeClient(socketId)
 }
 
-//client connected to server
+// client connected to server
 func onClientConnected(uid int, tid int) {
 	llog.Debugf("GateServer onClientConnected: uid=%d,tid=%d", uid, tid)
 	if This.ServerType != network.CLIENT_CONNECT {
@@ -72,7 +72,7 @@ func onClientConnected(uid int, tid int) {
 	}
 }
 
-//client/gate disconnected to gate/server
+// client/gate disconnected to gate/server
 func onClientDisConnected(uid int, tid int) {
 	llog.Debugf("GateServer onClientDisConnected: uid=%d,tid=%d", uid, tid)
 	if config.NET_NODE_TYPE == config.ServerType_Gate { ////tell world that a client has disconnect with this gate
@@ -88,7 +88,7 @@ func onClientDisConnected(uid int, tid int) {
 	}
 }
 
-//login gate, gate -> server
+// login gate, gate -> server
 func innerLouMiaoLoginGate(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	req := &msg.LouMiaoLoginGate{}
 	if message.UnPackProto(req, data) != nil {
@@ -113,7 +113,7 @@ func innerLouMiaoLoginGate(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	This.BindServerGate(socketId, userid, req.TokenId)
 }
 
-//recv rpc msg
+// recv rpc msg
 func innerLouMiaoRpcMsg(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	req := &msg.LouMiaoRpcMsg{}
 	if message.UnPackProto(req, data) != nil {
@@ -150,7 +150,7 @@ func innerLouMiaoRpcMsg(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	}
 }
 
-//recv broad cast msg
+// recv broad cast msg
 func innerLouMiaoBroadCastMsg(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	req := &msg.LouMiaoBroadCastMsg{}
 	if message.UnPackProto(req, data) != nil {
@@ -182,7 +182,7 @@ func innerLouMiaoBroadCastMsg(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	}
 }
 
-//recv net msg
+// recv net msg
 func innerLouMiaoNetMsg(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	req := &msg.LouMiaoNetMsg{} //after decode LouMiaoNetMsg msg, post Buffer to next
 	if message.UnPackProto(req, data) != nil {
@@ -224,7 +224,7 @@ func innerLouMiaoNetMsg(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	}
 }
 
-//exit the server
+// exit the server
 func innerLouMiaoKickOut(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	//llog.Debugf("innerLouMiaoKickOut %v", data)
 
@@ -235,7 +235,7 @@ func innerLouMiaoKickOut(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	llog.Fatalf("innerLouMiaoKickOut: another gate server has already listened the saddr : %s, now close self[%d]，we have the same uid", config.NET_GATE_SADDR, config.SERVER_NODE_UID)
 }
 
-//client be in connected or disconnect a gate
+// client be in connected or disconnect a gate
 func innerLouMiaoClientConnect(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	req := &msg.LouMiaoClientConnect{}
 	if message.UnPackProto(req, data) != nil {
@@ -262,7 +262,7 @@ func innerLouMiaoClientConnect(igo gorpc.IGoRoutine, socketId int, data []byte) 
 	}
 }
 
-//gate绑定client相关的server信息
+// gate绑定client相关的server信息
 func bindServer(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	buffer := data.([]byte)
 	req := &msg.LouMiaoBindServer{}
@@ -280,7 +280,7 @@ func bindServer(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	return nil
 }
 
-func registerNet(igo gorpc.IGoRoutine, data interface{}) interface{} {
+func RegisterNet(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	m := data.(*gorpc.M)
 	sname, ok := handler_Map[m.Name]
 	if ok {
@@ -346,7 +346,7 @@ func sendMulClient(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	return nil
 }
 
-//new client added
+// new client added
 func newClient(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	m := data.(*gorpc.M)
 	llog.Debugf("GateServer newRpc: uid=%d,param=%d", m.Id, m.Param)
@@ -382,7 +382,7 @@ func newClient(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	return nil
 }
 
-//send rpc msg
+// send rpc msg
 func sendRpc(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	m := data.(*gorpc.M)
 	clientuid := This.getCluserRpcGateUid()
@@ -399,7 +399,7 @@ func sendRpc(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	return nil
 }
 
-//server send msg to gate server
+// server send msg to gate server
 func sendGate(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	if This.ServerType == network.CLIENT_CONNECT {
 		llog.Error("0.sendGate gate or account can not call this function")
@@ -469,8 +469,8 @@ func closeServer(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	return nil
 }
 
-//gate send msg to all clients or
-//server send msg to all gates
+// gate send msg to all clients or
+// server send msg to all gates
 func broadCastClients(buff []byte) {
 	llog.Debugf("GateServer broadCastClients: %d", config.SERVER_NODE_UID)
 	if config.NET_NODE_TYPE == config.ServerType_Gate {

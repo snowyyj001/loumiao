@@ -4,9 +4,12 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"github.com/snowyyj001/loumiao/base"
 	"gopkg.in/yaml.v2"
 	"log"
 	"os"
+	"runtime"
+	"strconv"
 	"strings"
 )
 
@@ -84,14 +87,17 @@ var (
 	SERVER_TYPE_NAME = "server"       //服务器类型名字
 	SERVER_NODE_UID  = 0              //服务器uid
 	NET_LISTEN_SADDR = "0.0.0.0:6789" //内网tcp监听地址
+	NET_LISTEN_PORT  = 0              //内网tcp监听端口
 	SERVER_PARAM     = ""             //启动参数
 	SERVER_RELEASE   = false          //配置上区分一下release和debug，方便开发期间的一些coding
 	SERVER_DEBUGPORT = 0              //pprof的监听端口,0不监听
 	SERVER_PLATFORM  = "2144"         //平台
+
+	PUBLIC_IP_ADDR = "127.0.0.1" //公网ip
 )
 
 // NetNode uid通过etcd自动分配，一般不要手动分配uid，除非清楚知道自己在做什么,参考GetServerUid
-//uid和SAddr是一一对应的,可以通过删除ETCD_LOCKUID来重置uid的分配
+// uid和SAddr是一一对应的,可以通过删除ETCD_LOCKUID来重置uid的分配
 type NetNode struct {
 	Id        int    `json:"id"`
 	Type      int    `json:"type"`
@@ -119,6 +125,25 @@ type ServerCfg struct {
 var Cfg ServerCfg
 
 func init() {
+	var globalCfg ServerCfg
+	if f, err := os.Open("../config/cfg.yml"); err == nil {
+		yaml.NewDecoder(f).Decode(&globalCfg)
+		fmt.Println("global cfg", globalCfg)
+
+		if runtime.GOOS == "windows" {
+			ips := base.GetSelfIntraIp()
+			PUBLIC_IP_ADDR = ips[0]
+
+		} else {
+			if r, err, _ := base.HttpGet(globalCfg.NetCfg.Param); err == nil {
+				PUBLIC_IP_ADDR = r
+				PUBLIC_IP_ADDR = strings.Trim(PUBLIC_IP_ADDR, "\n")
+			} else {
+				fmt.Println("获取公网ip失败: ", globalCfg.NetCfg.Param)
+			}
+		}
+	}
+
 	if f, err := os.Open("config/cfg.yml"); err != nil {
 		fmt.Println(err)
 		return
@@ -126,7 +151,7 @@ func init() {
 		yaml.NewDecoder(f).Decode(&Cfg)
 		fmt.Println(Cfg)
 	}
-
+	fmt.Println("本机公网ip：", PUBLIC_IP_ADDR)
 	argv := len(os.Args)
 	fmt.Println("启动参数个数argv: ", argv)
 	fmt.Println("启动参数值argc：", os.Args)
@@ -161,6 +186,17 @@ func init() {
 		log.Fatalf("cfg content uid error: %d", Cfg.NetCfg.Uid)
 	}
 
+	if globalCfg.NetCfg.Id > 0 {
+		Cfg.NetCfg.Id = globalCfg.NetCfg.Id
+		Cfg.NetCfg.Protocol = globalCfg.NetCfg.Protocol
+		Cfg.NetCfg.WebSocket = globalCfg.NetCfg.WebSocket
+		Cfg.Platform = globalCfg.Platform
+		Cfg.DBUri = globalCfg.DBUri
+		Cfg.RedisUri = globalCfg.RedisUri
+		Cfg.EtcdAddr = globalCfg.EtcdAddr
+		Cfg.NatsAddr = globalCfg.NatsAddr
+	}
+
 	NET_NODE_ID = Cfg.NetCfg.Id      //区服id
 	SERVER_NODE_UID = Cfg.NetCfg.Uid //server uid
 	NET_NODE_TYPE = Cfg.NetCfg.Type
@@ -189,6 +225,8 @@ func init() {
 
 	arrStr := strings.Split(NET_GATE_SADDR, ":")            //服发现使用正常的ip,例如 192.168.32.15:6789 127.0.0.1:6789
 	NET_LISTEN_SADDR = fmt.Sprintf("0.0.0.0:%s", arrStr[1]) //socket监听,监听所有网卡绑定的ip，格式(0.0.0.0:port)(web监听格式也可以是(:port))
+	val, _ := strconv.Atoi(arrStr[1])
+	NET_LISTEN_PORT = val
 	Cfg.NetCfg.SAddr = NET_GATE_SADDR
 	NET_NODE_AREAID = fmt.Sprintf("%d", NET_NODE_ID) //just for simple when need string type
 }

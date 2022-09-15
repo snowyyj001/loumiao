@@ -1,36 +1,23 @@
 package base
 
-import "encoding/binary"
-
-//----------------bitsream---------------
-//for example
-//buf := make([]byte, 256)
-//var bitstream base.BitStream
-//bitstream.BuildPacketStream(buf, 256)
-//bitstream.WriteInt(1000, 16)
-// or
-//bitstream := NewBitStream(buf)
-//----------------------------------------
+import (
+	"encoding/binary"
+)
 
 const (
-	Bit8       = 8
-	Bit16      = 16
-	Bit32      = 32
-	Bit64      = 64
+	Bit8       = 1
+	Bit16      = 2
+	Bit32      = 4
+	Bit64      = 8
 	MAX_PACKET = 5 * 1024 * 1024 //5MB
 )
 
 type (
 	BitStream struct {
-		dataPtr        []byte
-		bitNum         int
-		flagNum        int
-		tailFlag       bool
-		bufSize        int
-		bitsLimite     int
-		error          bool
-		maxReadBitNum  int
-		maxWriteBitNum int
+		dataPtr    []byte
+		bitNum     int
+		bufSize    int
+		bitsLimite int
 	}
 
 	IBitStream interface {
@@ -78,16 +65,11 @@ func (self *BitStream) BuildPacketStream(buffer []byte, writeSize int) bool {
 func (self *BitStream) setBuffer(bufPtr []byte, size int, maxSize int) {
 	self.dataPtr = bufPtr
 	self.bitNum = 0
-	self.flagNum = 0
-	self.tailFlag = false
 	self.bufSize = size
-	self.maxReadBitNum = size << 3
 	if maxSize < 0 {
 		maxSize = size
 	}
-	self.maxWriteBitNum = maxSize << 3
 	self.bitsLimite = size
-	self.error = false
 }
 
 func (self *BitStream) Reset() {
@@ -104,7 +86,7 @@ func (self *BitStream) GetBytePtr() []byte {
 }
 
 func (self *BitStream) GetReadByteSize() int {
-	return (self.maxReadBitNum >> 3) - self.GetPosition()
+	return self.bufSize - self.GetPosition()
 }
 
 func (self *BitStream) GetCurPos() int {
@@ -112,7 +94,7 @@ func (self *BitStream) GetCurPos() int {
 }
 
 func (self *BitStream) GetPosition() int {
-	return (self.bitNum + 7) >> 3
+	return self.bitNum
 }
 
 func (self *BitStream) GetStreamSize() int {
@@ -120,13 +102,7 @@ func (self *BitStream) GetStreamSize() int {
 }
 
 func (self *BitStream) SetPosition(pos int) bool {
-	Assert(pos == 0 || self.flagNum == 0, "不正确的setPosition调用")
-	if pos != 0 && self.flagNum != 0 {
-		return false
-	}
-
-	self.bitNum = pos << 3
-	self.flagNum = 0
+	self.bitNum = pos
 	return true
 }
 
@@ -139,47 +115,27 @@ func (self *BitStream) clear() {
 func (self *BitStream) resize() bool {
 	//fmt.Println("BitStream Resize")
 	self.dataPtr = append(self.dataPtr, make([]byte, self.bitsLimite)...)
+	self.bufSize = self.bufSize + self.bitsLimite
+
 	size := self.bitsLimite * 2
 	if size <= 0 || size >= MAX_PACKET*2 {
 		return false
 	}
-	self.bufSize = size
-	self.maxReadBitNum = size << 3
-	self.maxWriteBitNum = size << 3
 	self.bitsLimite = size
 	return true
 }
 
-//@bitCount: 8 16 24 32 40 48 64 ...
 func (self *BitStream) WriteBits(bitPtr []byte, bitCount int) {
 	if bitCount == 0 {
 		return
 	}
-
-	if self.tailFlag {
-		self.error = true
-		Assert(false, "Out of range write")
-		return
-	}
-
-	if (bitCount & 0x7) != 0 {
-		bitCount = (bitCount & ^0x7) + 8
-	}
-
-	for bitCount+self.bitNum > self.maxWriteBitNum {
+	for bitCount+self.bitNum > self.bufSize {
 		if !self.resize() {
-			self.error = true
 			Assert(false, "Out of range write")
 			return
 		}
 	}
-
-	bitNum := self.bitNum >> 3
-	byteCount := (bitCount + 7) >> 3
-	copy(self.dataPtr[bitNum:], bitPtr[:byteCount])
-	/*for i, v := range bitPtr[:byteCount] {
-		self.dataPtr[bitNum+i] = v
-	}*/
+	copy(self.dataPtr[self.bitNum:], bitPtr[:bitCount])
 	self.bitNum += bitCount
 }
 
@@ -187,28 +143,10 @@ func (self *BitStream) ReadBits(bitCount int) []byte {
 	if bitCount == 0 {
 		return []byte{}
 	}
-
-	if self.tailFlag {
-		self.error = true
+	if bitCount+self.bitNum > self.bufSize {
 		Assert(false, "Out of range read")
-		return []byte{}
 	}
-
-	if (bitCount & 0x7) != 0 {
-		bitCount = (bitCount & ^0x7) + 8
-	}
-
-	for bitCount+self.bitNum > self.maxReadBitNum {
-		if !self.resize() {
-			self.error = true
-			Assert(false, "Out of range read")
-			return []byte{}
-		}
-	}
-
-	byteCount := (bitCount + 7) >> 3
-	bitNum := self.bitNum >> 3
-	stPtr := self.dataPtr[bitNum : bitNum+byteCount]
+	stPtr := self.dataPtr[self.bitNum : self.bitNum+bitCount]
 	self.bitNum += bitCount
 	return stPtr
 }
@@ -246,23 +184,6 @@ func (self *BitStream) ReadInt32() int {
 	return ret
 }
 
-func (self *BitStream) WriteInt(value int, bitCount int) {
-	self.WriteBits(IntToBytes(value), bitCount)
-}
-
-func (self *BitStream) ReadInt(bitCount int) int {
-	var ret int
-	buf := self.ReadBits(bitCount)
-	ret = BytesToInt(buf)
-	if bitCount == Bit32 {
-		return int(ret)
-	} else {
-		ret &= (1 << uint32(bitCount)) - 1
-	}
-
-	return int(ret)
-}
-
 func (self *BitStream) ReadFlag() bool {
 	buf := self.ReadBits(Bit8)
 	v := int8(buf[0])
@@ -278,68 +199,10 @@ func (self *BitStream) WriteFlag(value bool) bool {
 	return value
 }
 
-/*
-func (self *BitStream) ReadFlag() bool {
-	if ((self.flagNum - (self.flagNum>>3)<<3) == 0) && !self.tailFlag {
-		self.flagNum = self.bitNum
-		if self.bitNum+8 < self.maxReadBitNum {
-			self.bitNum += 8
-		} else {
-			if !self.resize() {
-				self.tailFlag = true
-			} else {
-				self.bitNum += 8
-			}
-		}
-	}
-
-	if self.flagNum+1 > self.maxReadBitNum {
-		self.error = true
-		Assert(false, "Out of range read")
-		return false
-	}
-
-	mask := 1 << uint32(self.flagNum&0x7)
-	ret := (int(self.dataPtr[(self.flagNum>>3)]) & mask) != 0
-	self.flagNum++
-	return ret
-}
-
-func (self *BitStream) WriteFlag(value bool) bool {
-	if ((self.flagNum - (self.flagNum>>3)<<3) == 0) && !self.tailFlag {
-		self.flagNum = self.bitNum
-
-		if self.bitNum+8 < self.maxWriteBitNum {
-			self.bitNum += 8 //跳开8个用于写flag
-		} else {
-			if !self.resize() {
-				self.tailFlag = true
-			} else {
-				self.bitNum += 8 //跳开8个用于写flag
-			}
-		}
-	}
-
-	if self.flagNum+1 > self.maxWriteBitNum {
-		self.error = true
-		Assert(false, "Out of range write")
-		return false
-	}
-
-	if value {
-		self.dataPtr[(self.flagNum >> 3)] |= 1 << uint32(self.flagNum&0x7)
-	} else {
-		self.dataPtr[(self.flagNum >> 3)] &= ^(1 << uint32(self.flagNum&0x7))
-	}
-
-	self.flagNum++
-	return value
-}*/
-
 func (self *BitStream) ReadString() string {
 	if self.ReadFlag() {
-		nLen := self.ReadInt(Bit16)
-		buf := self.ReadBits(nLen << 3)
+		nLen := self.ReadInt16()
+		buf := self.ReadBits(nLen)
 		return string(buf)
 	}
 	return string("")
@@ -349,8 +212,8 @@ func (self *BitStream) WriteString(value string) {
 	buf := []byte(value)
 	nLen := len(buf)
 	if self.WriteFlag(nLen > 0) {
-		self.WriteInt(nLen, Bit16)
-		self.WriteBits(buf, nLen<<3)
+		self.WriteInt16(nLen)
+		self.WriteBits(buf, nLen)
 	}
 }
 
@@ -374,7 +237,7 @@ func (self *BitStream) ReadFloat() float32 {
 	buf := self.ReadBits(Bit32)
 	ret = BytesToFloat32(buf)
 
-	return float32(ret)
+	return ret
 }
 
 func (self *BitStream) WriteFloat64(value float64) {
@@ -392,21 +255,21 @@ func (self *BitStream) ReadFloat64() float64 {
 func (self *BitStream) WriteBytes(buf []byte) {
 	nLen := len(buf)
 	if self.WriteFlag(nLen > 0) {
-		self.WriteInt(nLen, Bit16)
-		self.WriteBits(buf, nLen<<3)
+		self.WriteInt16(nLen)
+		self.WriteBits(buf, nLen)
 	}
 }
 
 func (self *BitStream) ReadBytes() []byte {
 	if self.ReadFlag() {
-		nLen := self.ReadInt(Bit16)
-		buf := self.ReadBits(nLen << 3)
+		nLen := self.ReadInt16()
+		buf := self.ReadBits(nLen)
 		return buf
 	}
 	return []byte{}
 }
 
-//根据buff构造一个bitstream，一般用来接收消息
+// NewBitStream 根据buff构造一个bitstream，一般用来接收消息
 func NewBitStream(buf []byte, nLen int) *BitStream {
 	var bitstream BitStream
 	if nLen == 0 {
@@ -416,16 +279,15 @@ func NewBitStream(buf []byte, nLen int) *BitStream {
 	return &bitstream
 }
 
-//根据buff构造一个bitstream，一般用来接收消息
+// NewBitStreamR 根据buff构造一个bitstream，一般用来接收消息
 func NewBitStreamR(buf []byte) *BitStream {
 	var bitstream BitStream
 	nLen := len(buf)
-
 	bitstream.BuildPacketStream(buf, nLen)
 	return &bitstream
 }
 
-//构造一个nLen大小的bitstream，一般用来发送消息
+// NewBitStreamS 构造一个nLen大小的bitstream，一般用来发送消息
 func NewBitStreamS(nLen int) *BitStream {
 	var bitstream BitStream
 	buf := make([]byte, nLen)
@@ -433,7 +295,7 @@ func NewBitStreamS(nLen int) *BitStream {
 	return &bitstream
 }
 
-//一个字符串占用的字节大小
+// BitStrLen 一个字符串占用的字节大小
 func BitStrLen(str string) int {
 	sz := len(str)
 	if sz == 0 {

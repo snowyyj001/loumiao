@@ -12,13 +12,13 @@ import (
 	"os"
 )
 
-//坐标系
-//Z				Y
-//*			  *
-//*        *
-//*     *
-//*  *
-//*  *  *  *  *  X
+// 坐标系
+// Z				Y
+// *			  *
+// *        *
+// *     *
+// *  *
+// *  *  *  *  *  X
 const (
 	NaviGridSize = 1.0                        //网格大小
 	AREA_TILE    = 10                         //几个网格组查区域
@@ -63,7 +63,7 @@ type (
 	}
 )
 
-//位置转网格
+// 位置转网格
 func PosToGrid(pos lmath.Point3F) (int, int) {
 	fx, fy := pos.X, pos.Y
 	return int(fx / NaviGridSize), int(fy / NaviGridSize)
@@ -85,7 +85,7 @@ func (this *NavigationMesh) GetGridId(x, y int) int {
 	return x*this.GetSizeX() + y
 }
 
-//--------------NavigationMesh------------------//
+// --------------NavigationMesh------------------//
 func (this *NavigationMesh) Init(rows, cols int) {
 	this.m_Tile = make([]*Grid, rows*cols)
 	for i := 0; i < rows*cols; i++ {
@@ -142,8 +142,8 @@ func (this *NavigationMesh) Load(fileName string) bool {
 		return false
 	}
 	bitStream := base.NewBitStream(buf, len(buf))
-	this.m_TileSizeX = bitStream.ReadInt(base.Bit16)
-	this.m_TileSizeY = bitStream.ReadInt(base.Bit16)
+	this.m_TileSizeX = bitStream.ReadInt16()
+	this.m_TileSizeY = bitStream.ReadInt16()
 	this.Init(this.m_TileSizeX, this.m_TileSizeY)
 	flags := bitStream.ReadBits((this.m_TileSizeX * this.m_TileSizeY) << 3)
 	//阻挡

@@ -45,7 +45,7 @@ func (self *KcpGateServer) DoInit() bool {
 func (self *KcpGateServer) DoRegsiter() {
 	llog.Info("KcpGateServer DoRegsiter")
 
-	self.Register("RegisterNet", registerNet)
+	//self.Register("RegisterNet", RegisterNet)
 
 	self.RegisterSelfNet("CONNECT", innerConnect)
 	self.RegisterSelfNet("DISCONNECT", innerDisConnect)
@@ -69,13 +69,13 @@ func (self *KcpGateServer) closeClient(clientid int) {
 	self.pService.StopClient(clientid)
 }
 
-//simple register self net hanlder, this func can only be called before igo started
+// simple register self net hanlder, this func can only be called before igo started
 func (self *KcpGateServer) RegisterSelfNet(hanlderName string, hanlderFunc gorpc.HanlderNetFunc) {
 	handler_Map[hanlderName] = "KcpGateServer"
 	self.RegisterGate(hanlderName, hanlderFunc)
 }
 
-//goroutine unsafe,此时已不涉及map的修改，直处理了，不用再去RecvPackMsg中处理
+// goroutine unsafe,此时已不涉及map的修改，直处理了，不用再去RecvPackMsg中处理
 func packetFunc(socketid int, buff []byte, nlen int) error {
 	//llog.Debugf("packetFunc: socketid=%d, bufferlen=%d", socketid, nlen)
 	target, name, buffbody, err := message.UnPackHead(buff, nlen)
@@ -106,12 +106,12 @@ func packetFunc(socketid int, buff []byte, nlen int) error {
 	return nil
 }
 
-//这两个函数加了锁，可以直接调用，就不需要像gate那样通过actor调用了
+// 这两个函数加了锁，可以直接调用，就不需要像gate那样通过actor调用了
 func (self *KcpGateServer) SendClient(clientid int, buff []byte) {
 	self.pService.SendById(clientid, buff)
 }
 
-//给clientids广播消息
+// 给clientids广播消息
 func (self *KcpGateServer) SendMulClient(clientids []int, buff []byte) {
 	for _, socketId := range clientids {
 		self.pService.SendById(socketId, buff)

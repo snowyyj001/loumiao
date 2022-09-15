@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/golang/protobuf/proto"
 	"github.com/snowyyj001/loumiao/gate"
+	"github.com/snowyyj001/loumiao/kcpgate"
 	"github.com/snowyyj001/loumiao/msg"
 	"github.com/snowyyj001/loumiao/udpgate"
 	"net/http"
@@ -24,13 +25,12 @@ import (
 	"github.com/snowyyj001/loumiao/gorpc"
 	"github.com/snowyyj001/loumiao/llog"
 	"github.com/snowyyj001/loumiao/message"
-	"github.com/snowyyj001/loumiao/timer"
 	"github.com/snowyyj001/loumiao/util"
 )
 
 var c chan os.Signal
 
-//最开始的初始化
+// 最开始的初始化
 func DoInit() {
 	message.DoInit()
 	Start(new(callrpc.CallRpcServer), "CallRpcServer", true)
@@ -49,15 +49,15 @@ func Prepare(igo gorpc.IGoRoutine, name string, sync bool) {
 	igo.Register("ServiceHandler", gorpc.ServiceHandler)
 }
 
-//创建一个服务,立即开启
-//@name: actor名，唯一
-//@sync: 是否异步协程，无状态服务可以是异步协程，有状态服务应该使用同步协程，可以保证协程安全
+// 创建一个服务,立即开启
+// @name: actor名，唯一
+// @sync: 是否异步协程，无状态服务可以是异步协程，有状态服务应该使用同步协程，可以保证协程安全
 func Start(igo gorpc.IGoRoutine, name string, sync bool) {
 	Prepare(igo, name, sync)
 	gorpc.MGR.DoSingleStart(name)
 }
 
-//开启游戏
+// 开启游戏
 func Run() {
 	defer func() {
 		if r := recover(); r != nil {
@@ -77,13 +77,13 @@ func Run() {
 
 	gorpc.MGR.DoStart()
 
-	timer.DelayJob(1000, func() {
-		igo := gorpc.MGR.GetRoutine("GateServer")
-		if igo != nil {
-			igo.DoOpen()
-		}
-		llog.Infof("loumiao start success: %s", config.SERVER_NAME)
-	}, true)
+	//timer.DelayJob(1000, func() {
+	igo := gorpc.MGR.GetRoutine("GateServer")
+	if igo != nil {
+		igo.DoOpen()
+	}
+	llog.Infof("loumiao start success: %s", config.SERVER_NAME)
+	//}, true)
 
 	c = make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, os.Kill, syscall.SIGTERM, syscall.SIGINT)
@@ -95,31 +95,33 @@ func Run() {
 	llog.Infof("loumiao done !")
 }
 
-//关闭游戏
+// 关闭游戏
 func Stop() {
 	llog.Info("loumiao stop the server !")
 	c <- os.Kill
 }
 
-//注册网络消息,对于内部server节点来说HanlderNetFunc的第二个参数clientid就是userid
+// RegisterNetHandler 注册网络消息,对于内部server节点来说HanlderNetFunc的第二个参数clientid就是userid
 func RegisterNetHandler(igo gorpc.IGoRoutine, name string, call gorpc.HanlderNetFunc) {
-	gorpc.MGR.Send("GateServer", "RegisterNet", &gorpc.M{Id: 0, Name: name, Data: igo.GetName()})
+	//gorpc.MGR.Send("GateServer", "RegisterNet", &gorpc.M{Id: 0, Name: name, Data: igo.GetName()})
+	gate.RegisterNet(igo, &gorpc.M{Id: 0, Name: name, Data: igo.GetName()})
 	igo.RegisterGate(name, call)
 }
 
-//暂时没发现需要撤销注册的情况
+// 暂时没发现需要撤销注册的情况
 func UnRegisterNetHandler(igo gorpc.IGoRoutine, name string) {
 	//	gorpc.MGR.Send("GateServer", "UnRegisterNet", &gorpc.M{Id: 0, Name: name})
 	//	igo.UnRegisterGate(name)
 }
 
-//注册网络消息kcp server,对于内部server节点来说HanlderNetFunc的第二个参数clientid就是真实的socketid
+// RegisterKcpNetHandler 注册网络消息kcp server,对于内部server节点来说HanlderNetFunc的第二个参数clientid就是真实的socketid
 func RegisterKcpNetHandler(igo gorpc.IGoRoutine, name string, call gorpc.HanlderNetFunc) {
-	gorpc.MGR.Send("KcpGateServer", "RegisterNet", &gorpc.M{Id: 0, Name: name, Data: igo.GetName()})
+	//gorpc.MGR.Send("KcpGateServer", "RegisterNet", &gorpc.M{Id: 0, Name: name, Data: igo.GetName()})
+	kcpgate.RegisterNet(igo, &gorpc.M{Id: 0, Name: name, Data: igo.GetName()})
 	igo.RegisterGate(name, call)
 }
 
-//暂时没发现需要撤销注册的情况
+// 暂时没发现需要撤销注册的情况
 func UnRegisterKcpNetHandler(igo gorpc.IGoRoutine, name string) {
 	//gorpc.MGR.Send("GateServer", "UnRegisterNet", &gorpc.M{Id: 0, Name: name})
 	//igo.UnRegisterGate(name)
@@ -127,9 +129,7 @@ func UnRegisterKcpNetHandler(igo gorpc.IGoRoutine, name string) {
 
 // RegisterUdpNetHandler 注册网络消息udp server,
 func RegisterUdpNetHandler(igo gorpc.IGoRoutine, msgId int, userid int, call gorpc.HanlderNetFunc) {
-	msgFunc := fmt.Sprintf("udpfunc_%d", msgId)
-	udpgate.RegisterHandler(userid, msgFunc, igo)
-	igo.RegisterGate(msgFunc, call)
+	udpgate.RegisterHandler(userid, igo, call)
 }
 
 // UnRegisterUdpNetHandler 取消注册网络消息udp server,
@@ -137,9 +137,9 @@ func UnRegisterUdpNetHandler(userId int) {
 	udpgate.UnRegisterHandler(userId)
 }
 
-//发送给客户端消息
-//@clientid: 客户端userid
-//@data: 消息结构体指针
+// 发送给客户端消息
+// @clientid: 客户端userid
+// @data: 消息结构体指针
 func SendClient(clientid int, data interface{}) {
 	buff, n := message.Encode(0, "", data)
 	if n == 0 {
@@ -149,9 +149,9 @@ func SendClient(clientid int, data interface{}) {
 	gorpc.MGR.Send("GateServer", "SendClient", m)
 }
 
-//发送给客户端消息
-//@clientids: 客户端userid, 空代表全服发送
-//@data: 消息结构体指针
+// 发送给客户端消息
+// @clientids: 客户端userid, 空代表全服发送
+// @data: 消息结构体指针
 func SendMulClient(clientids []int, data interface{}) {
 	buff, n := message.Encode(0, "", data)
 	if n == 0 {
@@ -162,13 +162,13 @@ func SendMulClient(clientids []int, data interface{}) {
 	gorpc.MGR.Send("GateServer", "SendMulClient", m)
 }
 
-//广播消息
-//@data: 消息结构体指针
+// 广播消息
+// @data: 消息结构体指针
 func BroadCastMsg(data interface{}) {
 	SendMulClient(nil, data)
 }
 
-// RegisterRpcHandler 注册rpc消息，使用igo名字
+// RegisterRpcHandlerName 注册rpc消息，使用igo名字
 func RegisterRpcHandlerName(igo gorpc.IGoRoutine, call gorpc.HanlderNetFunc) {
 	util.Assert(nodemgr.ServerEnabled == false, "RegisterRpcHandler can not register after server started")
 	if igo.GetName() == "GateServer" {
@@ -179,7 +179,8 @@ func RegisterRpcHandlerName(igo gorpc.IGoRoutine, call gorpc.HanlderNetFunc) {
 		arr_1 := strings.Split(arr[1], ".")
 		funcName_New := fmt.Sprintf("%s/%s.%s", arr[0], igo.GetName(), arr_1[1])
 		//llog.Debugf("funcName = %s", funcName)
-		gorpc.MGR.Send("GateServer", "RegisterNet", &gorpc.M{Id: -1, Name: funcName_New, Data: igo.GetName()})
+		//gorpc.MGR.Send("GateServer", "RegisterNet", &gorpc.M{Id: -1, Name: funcName_New, Data: igo.GetName()})
+		gate.RegisterNet(igo, &gorpc.M{Id: -1, Name: funcName_New, Data: igo.GetName()})
 		igo.RegisterGate(funcName_New, call)
 	}
 }
@@ -192,13 +193,14 @@ func RegisterRpcHandler(igo gorpc.IGoRoutine, call gorpc.HanlderNetFunc) {
 	} else {
 		funcName := util.RpcFuncName(call)
 		//llog.Debugf("funcName = %s", funcName)
-		gorpc.MGR.Send("GateServer", "RegisterNet", &gorpc.M{Id: -1, Name: funcName, Data: igo.GetName()})
+		//gorpc.MGR.Send("GateServer", "RegisterNet", &gorpc.M{Id: -1, Name: funcName, Data: igo.GetName()})
+		gate.RegisterNet(igo, &gorpc.M{Id: -1, Name: funcName, Data: igo.GetName()})
 		igo.RegisterGate(funcName, call)
 	}
 }
 
 // RegisterRpcCallHandler 注册rpc消息，使用igo名字
-//return: call应该返回一个[]byte类型，或pb结构体
+// return: call应该返回一个[]byte类型，或pb结构体
 func RegisterRpcCallHandlerName(igo gorpc.IGoRoutine, call gorpc.HanlderFunc) {
 	util.Assert(nodemgr.ServerEnabled == false, "RegisterRpcCallHandler can not register after server started")
 	if igo.GetName() == "GateServer" {
@@ -209,12 +211,13 @@ func RegisterRpcCallHandlerName(igo gorpc.IGoRoutine, call gorpc.HanlderFunc) {
 		arr_1 := strings.Split(arr[1], ".")
 		funcName_New := fmt.Sprintf("%s/%s.%s", arr[0], igo.GetName(), arr_1[1])
 		igo.Register(funcName_New, call)
-		gorpc.MGR.Send("GateServer", "RegisterNet", &gorpc.M{Id: -1, Name: funcName_New, Data: igo.GetName()})
+		//gorpc.MGR.Send("GateServer", "RegisterNet", &gorpc.M{Id: -1, Name: funcName_New, Data: igo.GetName()})
+		gate.RegisterNet(igo, &gorpc.M{Id: -1, Name: funcName_New, Data: igo.GetName()})
 	}
 }
 
 // RegisterRpcCallHandler 注册rpc消息
-//return: call应该返回一个[]byte类型，或pb结构体
+// return: call应该返回一个[]byte类型，或pb结构体
 func RegisterRpcCallHandler(igo gorpc.IGoRoutine, call gorpc.HanlderFunc) {
 	util.Assert(nodemgr.ServerEnabled == false, "RegisterRpcCallHandler can not register after server started")
 	if igo.GetName() == "GateServer" {
@@ -222,14 +225,15 @@ func RegisterRpcCallHandler(igo gorpc.IGoRoutine, call gorpc.HanlderFunc) {
 	} else {
 		funcName := util.RpcFuncName(call)
 		igo.Register(funcName, call)
-		gorpc.MGR.Send("GateServer", "RegisterNet", &gorpc.M{Id: -1, Name: funcName, Data: igo.GetName()})
+		//gorpc.MGR.Send("GateServer", "RegisterNet", &gorpc.M{Id: -1, Name: funcName, Data: igo.GetName()})
+		gate.RegisterNet(igo, &gorpc.M{Id: -1, Name: funcName, Data: igo.GetName()})
 	}
 }
 
 // SendRpc 远程rpc调用
-//@funcName: rpc函数
-//@data: 函数参数,一个二进制buff或pb结构体
-//@target: 目标server的uid，如果target==0，则随机指定目标地址, 否则gate会把消息转发给指定的target服务
+// @funcName: rpc函数
+// @data: 函数参数,一个二进制buff或pb结构体
+// @target: 目标server的uid，如果target==0，则随机指定目标地址, 否则gate会把消息转发给指定的target服务
 func SendRpc(funcName string, data interface{}, target int) {
 	m := &gorpc.M{Id: target, Name: funcName}
 	if reflect.TypeOf(data).Kind() == reflect.Slice { //bitstream
@@ -248,11 +252,11 @@ func SendRpc(funcName string, data interface{}, target int) {
 }
 
 // CallRpc 远程rpc调用
-//igo: 调用者的actor，会阻塞此actor
-//@funcName: rpc函数
-//@data: 一个二进制buff或pb结构体
-//@target: 目标server的uid，如果target==0，则随机指定目标地址, 否则gate会把消息转发给指定的target服务
-//return: 返回的[]byte结果或nil
+// igo: 调用者的actor，会阻塞此actor
+// @funcName: rpc函数
+// @data: 一个二进制buff或pb结构体
+// @target: 目标server的uid，如果target==0，则随机指定目标地址, 否则gate会把消息转发给指定的target服务
+// return: 返回的[]byte结果或nil
 func CallRpc(igo gorpc.IGoRoutine, funcName string, data interface{}, target int) ([]byte, bool) {
 	m := &gorpc.M{Id: target, Name: funcName}
 	m.Param = define.RPCMSG_FLAG_CALL
@@ -290,9 +294,9 @@ func CallRpc(igo gorpc.IGoRoutine, funcName string, data interface{}, target int
 }
 
 // BroadCastRpc 远程rpc广播调用
-//@funcName: rpc函数
-//@data: 函数参数,一个二进制buff或pb结构体
-//@target: 目标server的type，如果target==0，则在发给所有的server
+// @funcName: rpc函数
+// @data: 函数参数,一个二进制buff或pb结构体
+// @target: 目标server的type，如果target==0，则在发给所有的server
 func BroadCastRpc(funcName string, data interface{}, target int) {
 	m := &gorpc.M{Id: target, Name: funcName}
 	m.Param = define.RPCMSG_FLAG_BROAD
@@ -311,9 +315,9 @@ func BroadCastRpc(funcName string, data interface{}, target int) {
 }
 
 // SendActor 全局通用发送actor消息
-//@actorName: 目标actor的名字
-//@actorHandler: 目标actor的处理函数
-//@data: 函数参数
+// @actorName: 目标actor的名字
+// @actorHandler: 目标actor的处理函数
+// @data: 函数参数
 func SendActor(actorName string, actorHandler string, data interface{}) {
 	m := &gorpc.M{Data: data, Flag: true}
 	gorpc.MGR.Send(actorName, actorHandler, m)
@@ -335,9 +339,9 @@ func BindGate(userid, gateid int) {
 }
 
 // Publish sub/pub系统，只在本节点服务内生效
-//发布
-//@key: 发布的key
-//@value: 发布的值
+// 发布
+// @key: 发布的key
+// @value: 发布的值
 func Publish(key string, data interface{}) { //发布
 	igo := gorpc.MGR.GetRoutine("GateServer")
 	if igo == nil {
@@ -351,9 +355,9 @@ func Publish(key string, data interface{}) { //发布
 }
 
 // Subscribe 订阅
-//@name: 订阅者的igo
-//@key: 订阅的key
-//@hanlder: 订阅的actor处理函数,为""即为取消订阅
+// @name: 订阅者的igo
+// @key: 订阅的key
+// @hanlder: 订阅的actor处理函数,为""即为取消订阅
 func Subscribe(igo gorpc.IGoRoutine, key string, call gorpc.HanlderFunc) { //订阅
 	gateigo := gorpc.MGR.GetRoutine("GateServer")
 	if gateigo == nil {

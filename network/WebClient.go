@@ -11,8 +11,8 @@ import (
 
 type WebClient struct {
 	Socket
-	m_nMaxClients int
-	m_nMinClients int
+	mMaxClients int
+	mMinClients int
 }
 
 func (self *WebClient) Init(saddr string) bool {

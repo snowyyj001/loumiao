@@ -148,13 +148,13 @@ func Response(topic string, call func([]byte) []byte) error {
 }
 
 //请求消息
-func RequestTag(topic string, prefix string, message []byte, waittime int) []byte {
+func RequestTag(topic string, prefix string, message []byte, waittime int) ([]byte, error) {
 	newtopic := FormatTopic(topic, prefix)
 	msg, err := lnc.Request(newtopic, message, time.Duration(waittime)*time.Second)
 	if err != nil {
-		return []byte(err.Error())
+		return nil, err
 	}
-	return msg.Data
+	return msg.Data, nil
 }
 
 //回复消息

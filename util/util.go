@@ -25,7 +25,7 @@ func Recover() {
 	if r := recover(); r != nil {
 		buf := make([]byte, 2048)
 		l := runtime.Stack(buf, false)
-		llog.Errorf("Recover %v: %s", r, buf[:l])
+		llog.Errorf("Recover %v: %s", r, string(buf[:l]))
 	}
 }
 
@@ -36,22 +36,22 @@ func RpcFuncName(call interface{}) string {
 	return funcName
 }
 
-//随机数[0,n)
+// 随机数[0,n)
 func Random(n int) int {
 	return int(rand2.Int31n(int32(n)))
 }
 
-//随机数[n1,n2)
+// 随机数[n1,n2)
 func Randomd(n1, n2 int) int {
 	return n1 + int(rand2.Int31n(int32(n2-n1)))
 }
 
-//随机数[0,n)
+// 随机数[0,n)
 func Random64(n int64) int64 {
 	return rand2.Int63n(n)
 }
 
-//随机数[n1,n2)
+// 随机数[n1,n2)
 func Randomd64(n1, n2 int64) int64 {
 	return n1 + rand2.Int63n(n2-n1)
 }
@@ -67,27 +67,27 @@ func Clamp(n, min, max int) int {
 	return n
 }
 
-//当前格式化时间字符串
+// 当前格式化时间字符串
 func TimeStr() string {
 	return time.Now().Format("2006-01-02 15:04:05")
 }
 
-//当前格式化时间字符串
+// 当前格式化时间字符串
 func TimeStrFormat(mat string) string {
 	return time.Now().Format(mat)
 }
 
-//时间戳秒
+// 时间戳秒
 func TimeStampSec() int64 {
 	return time.Now().Unix()
 }
 
-//时间戳毫秒
+// 时间戳毫秒
 func TimeStamp() int64 {
 	return time.Now().UnixNano() / int64(time.Millisecond)
 }
 
-//指定日期的时间戳毫秒
+// 指定日期的时间戳毫秒
 func TimeStampTarget(y int, m time.Month, d int, h int, mt int, s int) int64 {
 	return time.Date(y, m, d, h, mt, s, 0, time.Local).UnixNano() / int64(time.Millisecond)
 }
@@ -248,7 +248,7 @@ func String2Array(str string) []int {
 	return arr
 }
 
-//@version: format 1.0.1,max value is 999
+// @version: format 1.0.1,max value is 999
 func GetVersionCode(version string) int {
 	arr := strings.Split(version, ".")
 	vcode := Atoi(arr[0])*1000*1000 + Atoi(arr[1])*1000 + Atoi(arr[2])

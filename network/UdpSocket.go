@@ -2,9 +2,10 @@ package network
 
 import (
 	"encoding/binary"
-	"fmt"
 	"github.com/snowyyj001/loumiao/base"
+	"github.com/snowyyj001/loumiao/config"
 	"github.com/snowyyj001/loumiao/llog"
+	"github.com/snowyyj001/loumiao/nodemgr"
 	"github.com/snowyyj001/loumiao/util"
 	"net"
 	"strings"
@@ -30,8 +31,8 @@ type IUdpServerSocket interface {
 type UdpServerSocket struct {
 	Socket
 	m_nClientCount  int
-	m_nMaxClients   int
-	m_nMinClients   int
+	mMaxClients     int
+	mMinClients     int
 	m_nIdSeed       int64
 	m_bShuttingDown bool
 	mClientList     map[int]*UdpSocketClient //clientid -> UdpSocketClient
@@ -47,7 +48,7 @@ func (self *UdpServerSocket) Init(saddr string) bool {
 	self.m_ClientLocker = &sync.RWMutex{}
 	self.m_bShuttingDown = true
 	self.m_nState = SSF_INIT
-	self.mBuffChan = make(chan UdpBufferTransport, self.m_nMaxClients)
+	self.mBuffChan = make(chan UdpBufferTransport, self.mMaxClients)
 
 	ThisUdpServerSocket = self
 	return true
@@ -139,7 +140,10 @@ func (self *UdpServerSocket) SendById(id int, buff []byte) int {
 	if pClient != nil {
 		ThisUdpServerSocket.mUpdConn.WriteTo(buff, pClient.RemoteAddr)
 	} else {
-		llog.Warningf("UdpServerSocket SendById: no client [%d]", id)
+		if !config.SERVER_RELEASE {
+			llog.Warningf("UdpServerSocket SendById: no client [%d]", id)
+		}
+
 	}
 	return 0
 }
@@ -170,11 +174,12 @@ func (self *UdpServerSocket) OnNetFail(int) {
 func (self *UdpServerSocket) Close() {
 	self.mUpdConn.Close()
 	self.Clear()
+	nodemgr.ServerEnabled = false
 
 }
 
 func (self *UdpServerSocket) SetMaxClients(maxnum int) {
-	self.m_nMaxClients = maxnum
+	self.mMaxClients = maxnum
 }
 
 func handlerUdpMsg() {
@@ -189,13 +194,25 @@ func udpserverRoutine() {
 	var buff = make([]byte, ThisUdpServerSocket.m_MaxReceiveBufferSize)
 	for {
 		n, udpAddr, err := ThisUdpServerSocket.mUpdConn.ReadFromUDP(buff)
-		fmt.Println("udpserverRoutine: ", n, udpAddr.String())
-		if err != nil || n <= 10 {
-			llog.Errorf("udpserverRoutine ReadFromUDP error: %s, read = %d", err.Error(), n)
+		if err != nil {
+
 			continue
 		}
+		if err != nil {
+			if err.(net.Error).Timeout() {
+				llog.Warningf("udpserverRoutine ReadFromUDP error: %s", err.Error())
+				continue
+			} else {
+				llog.Errorf("udpserverRoutine ReadFromUDP error: %s", err.Error())
+				break
+			}
+		}
+
 		clientid := int(base.BytesToInt64(buff, binary.BigEndian))
-		fmt.Println("udpserverRoutine clientid ", clientid)
+		if n <= 10 {
+			continue
+		}
+		//fmt.Println("udpserverRoutine clientid ", clientid)
 		client, ok := ThisUdpServerSocket.mClientList[clientid]
 		if !ok {
 			ThisUdpServerSocket.AddClient(clientid, udpAddr)
@@ -208,4 +225,5 @@ func udpserverRoutine() {
 		copy(st.Buff, buff[:n])
 		ThisUdpServerSocket.mBuffChan <- st
 	}
+	ThisUdpServerSocket.Close()
 }

@@ -12,9 +12,9 @@ import (
 type KcpClient struct {
 	Socket
 
-	mHeartTimer *time.Timer
-	mMsgRecved  bool
-	mHeartDone  chan bool
+	mHeartTimer  *time.Timer
+	mMsgReceived bool
+	mHeartDone   chan bool
 }
 
 func (self *KcpClient) Init(saddr string) bool {
@@ -113,9 +113,9 @@ func (self *KcpClient) OnNetConn() {
 		for {
 			select {
 			case <-self.mHeartTimer.C:
-				if self.mMsgRecved {
+				if self.mMsgReceived {
 					self.mHeartTimer.Reset(delat)
-					self.mMsgRecved = false
+					self.mMsgReceived = false
 				} else {
 					if self.m_KcpConn != nil {
 						self.m_KcpConn.Close()
@@ -171,7 +171,7 @@ func clientKcpRoutine(pClient *KcpClient) bool {
 				break
 			}
 		}
-		pClient.mMsgRecved = true
+		pClient.mMsgReceived = true
 	}
 
 	pClient.Close()

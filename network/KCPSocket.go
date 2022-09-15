@@ -2,6 +2,7 @@ package network
 
 import (
 	"github.com/snowyyj001/loumiao/llog"
+	"github.com/snowyyj001/loumiao/nodemgr"
 	"github.com/xtaci/kcp-go"
 	"sync"
 	"sync/atomic"
@@ -41,8 +42,8 @@ const (
 type KcpSocket struct {
 	Socket
 	m_nClientCount  int
-	m_nMaxClients   int
-	m_nMinClients   int
+	mMaxClients     int
+	mMinClients     int
 	m_nIdSeed       int32
 	m_bShuttingDown bool
 	m_ClientList    map[int]*KCPSocketClient
@@ -141,7 +142,7 @@ func (self *KcpSocket) BroadCast(buff []byte) {
 }
 
 func (self *KcpSocket) SetMaxClients(maxnum int) {
-	self.m_nMaxClients = maxnum
+	self.mMaxClients = maxnum
 }
 
 func (self *KcpSocket) SendById(id int, buff []byte) int {
@@ -179,6 +180,7 @@ func (self *KcpSocket) Stop() bool {
 func (self *KcpSocket) Close() {
 	self.m_Listen.Close()
 	self.Clear()
+	nodemgr.ServerEnabled = false
 }
 
 func (self *KcpSocket) AddClinet(kcpConn *kcp.UDPSession, addr string, connectType int) *KCPSocketClient {
@@ -212,7 +214,7 @@ func kcpRoutine(server *KcpSocket) {
 			continue
 		}
 
-		if server.m_nClientCount >= server.m_nMaxClients {
+		if server.m_nClientCount >= server.mMaxClients {
 			kcpConn.Close()
 			llog.Warning("kcpRoutine: too many conns")
 			continue

@@ -1,12 +1,14 @@
 package udpgate
 
 import (
+	"fmt"
 	"github.com/snowyyj001/loumiao/config"
 	"github.com/snowyyj001/loumiao/gorpc"
 	"github.com/snowyyj001/loumiao/llog"
 	"github.com/snowyyj001/loumiao/message"
 	"github.com/snowyyj001/loumiao/network"
 	"github.com/snowyyj001/loumiao/util"
+	"strings"
 	"sync"
 )
 
@@ -25,8 +27,8 @@ type UdpGateServer struct {
 }
 
 type UdpHandlerIgo struct {
-	Igo      gorpc.IGoRoutine
-	FuncNmae string
+	Igo     gorpc.IGoRoutine
+	Handler gorpc.HanlderNetFunc
 }
 
 type UdpSendSt struct {
@@ -36,7 +38,7 @@ type UdpSendSt struct {
 
 var (
 	This         *UdpGateServer
-	handlerMap   map[int64]*UdpHandlerIgo //userid ->igo
+	handlerMap   map[int64]*UdpHandlerIgo //userid -> HanlderNetFunc
 	rwMutex      sync.RWMutex
 	messagesChan chan *UdpSendSt
 )
@@ -45,7 +47,8 @@ func (self *UdpGateServer) DoInit() bool {
 	llog.Infof("%s DoInit", self.Name)
 	This = self
 	self.pService = new(network.UdpServerSocket)
-	self.pService.Init(self.ListenStr)
+	arr := strings.Split(self.ListenStr, ":")
+	self.pService.Init(fmt.Sprintf("0.0.0.0:%s", arr[1]))
 	self.pService.BindPacketFunc(packetFunc)
 	self.pService.SetConnectType(network.CLIENT_CONNECT)
 	self.pService.SetMaxClients(config.NET_MAX_CONNS)
@@ -84,10 +87,10 @@ func (self *UdpGateServer) closeClient(clientid int) {
 }
 
 // RegisterHandler 注册udp消息处理actor
-func RegisterHandler(userId int, funcName string, igo gorpc.IGoRoutine) {
+func RegisterHandler(userId int, igo gorpc.IGoRoutine, handler gorpc.HanlderNetFunc) {
 	defer rwMutex.Unlock()
 	rwMutex.Lock()
-	handlerMap[int64(userId)] = &UdpHandlerIgo{FuncNmae: funcName, Igo: igo}
+	handlerMap[int64(userId)] = &UdpHandlerIgo{Handler: handler, Igo: igo}
 }
 
 // UnRegisterHandler 取消注册udp消息处理actor
@@ -97,25 +100,26 @@ func UnRegisterHandler(userId int) {
 	delete(handlerMap, int64(userId))
 }
 
-//goroutine unsafe,此时已不涉及map的修改，直处理了，不用再去RecvPackMsg中处理
+// goroutine unsafe,此时已不涉及map的修改，直处理了，不用再去RecvPackMsg中处理
 func packetFunc(socketid int, buff []byte, nlen int) error {
 	defer util.Recover()
-	llog.Debugf("udp packetFunc: socketid=%d, bufferlen=%d", socketid, nlen)
-	msgId, clientId, body := message.UpPackUdp(buff)
+	llog.Debugf("udp packetFunc: socketid=%d", socketid)
+	msgId, clientId, body := message.UnPackUdp(buff)
 	rwMutex.RLock()
-	handler, ok := handlerMap[clientId]
+	actor, ok := handlerMap[clientId]
 	rwMutex.RUnlock()
-
 	if ok {
-		nm := &gorpc.M{Id: int(clientId), Name: handler.FuncNmae, Data: body}
-		handler.Igo.Send("ServiceHandler", nm)
+		actor.Handler(actor.Igo, int(clientId), body)
 	} else {
-		llog.Warningf("UdpGateServer packetFunc handler is nil, drop it[%d]", msgId)
+		if !config.SERVER_RELEASE {
+			llog.Warningf("UdpGateServer packetFunc handler is nil, drop it[%d]", msgId)
+		}
+
 	}
 	return nil
 }
 
-//SendClient 给clientid发消息
+// SendClient 给clientid发消息
 func SendClient(clientid int, buff []byte) {
 	st := &UdpSendSt{ClientId: clientid, Buffer: buff}
 	messagesChan <- st

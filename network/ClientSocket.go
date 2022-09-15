@@ -16,10 +16,10 @@ type IClientSocket interface {
 
 type ClientSocket struct {
 	Socket
-	m_nMaxClients int
-	m_nMinClients int
-	Uid           int
-	SendTimes     int
+	mMaxClients int
+	mMinClients int
+	Uid         int
+	SendTimes   int
 }
 
 func (self *ClientSocket) Init(saddr string) bool {

@@ -19,7 +19,7 @@ const (
 const (
 	CHAN_BUFFER_LEN   = 20000 //channel缓冲数量
 	WAIT_TIMEOUT      = 5     //wait超时时间,秒
-	CALL_TIMEOUT      = 3     //call超时时间,秒
+	CALL_TIMEOUT      = 10    //call超时时间,秒
 	CALL_RESP_TIMEOUT = 2     //call回复超时时间,秒
 	CHAN_LIMIT_TIMES  = 2     //异步协程上限倍数
 	CHAN_OVERLOW      = 30    //chan可能溢出，告警CD，秒
@@ -88,6 +88,7 @@ type GoRoutineLogic struct {
 	goFun        bool                      //true:使用go执行Cmd,GoRoutineLogic非协程安全;false:协程安全
 	cRoLimitChan chan struct{}             //异步协程上限控制
 	execTime     int64
+	callNum      int //当前call数量
 
 	rpcWaitchan map[string]chan interface{}
 
@@ -201,9 +202,9 @@ func (self *GoRoutineLogic) SelfStart(name string) {
 }
 
 // RunDelayJob 一次性定时任务，协程安全
-//@delta: 延迟时间，单位毫秒
-//@cb: 回调函数，在GoRoutineLogic中调用，协程安全
-//@param: 回调参数
+// @delta: 延迟时间，单位毫秒
+// @cb: 回调函数，在GoRoutineLogic中调用，协程安全
+// @param: 回调参数
 func (self *GoRoutineLogic) RunDelayJob(delta int, cb func(interface{}), param interface{}) {
 	defer self.delayJobLock.Unlock()
 	self.delayJobLock.Lock()
@@ -229,8 +230,8 @@ func (self *GoRoutineLogic) RunDelayJob(delta int, cb func(interface{}), param i
 }
 
 // RunTicker 同步定时任务，不是协程安全的
-//@delta: 时间间隔，单位毫秒
-//@f: 回调函数，在GoRoutineLogic中调用，协程安全
+// @delta: 时间间隔，单位毫秒
+// @f: 回调函数，在GoRoutineLogic中调用，协程安全
 func (self *GoRoutineLogic) RunTicker(delta int, f func(int64)) {
 	if self.IsRunning() {
 		llog.Fatalf("can not run a timer when the actor is running: %s", self.Name)
@@ -260,9 +261,16 @@ func (self *GoRoutineLogic) RunTicker(delta int, f func(int64)) {
 	self.timerFuncs[delta] = caller
 }
 
+func (self *GoRoutineLogic) StopTimerTicker(delta int) {
+	if tm, ok := self.timerFuncs[delta]; ok {
+		tm.timer.Stop()
+		delete(self.timerFuncs, delta)
+	}
+}
+
 // RunTimer 同步定时任务，不是协程安全的
-//@delta: 时间间隔，单位毫秒
-//@f: 回调函数，在GoRoutineLogic中调用，协程安全
+// @delta: 时间间隔，单位毫秒
+// @f: 回调函数，在GoRoutineLogic中调用，协程安全
 func (self *GoRoutineLogic) RunTimer(delta int, f func(int64)) {
 	if self.IsRunning() {
 		llog.Fatalf("can not run a timer when the actor is running: %s", self.Name)
@@ -292,7 +300,7 @@ func (self *GoRoutineLogic) RunTimer(delta int, f func(int64)) {
 	self.timerFuncs[delta] = caller
 }
 
-//工作队列
+// 工作队列
 func (self *GoRoutineLogic) woker() {
 	defer func() {
 		if r := recover(); r != nil {
@@ -385,13 +393,13 @@ LabelEnd:
 	self.stop()
 }
 
-//处理任务
+// 处理任务
 func (self *GoRoutineLogic) Run() {
 	//	self.started = true
 	go self.woker()
 }
 
-//关闭任务
+// 关闭任务
 func (self *GoRoutineLogic) stop() {
 	self.started = 0
 	self.closed = true
@@ -408,14 +416,14 @@ func (self *GoRoutineLogic) stop() {
 	close(self.actionChan)
 }
 
-//关闭任务
+// 关闭任务
 func (self *GoRoutineLogic) Close() {
 	self.started = 0 //先标记关闭
 	self.actionChan <- ACTION_CLOSE
 	llog.Debugf("GoRoutineLogic.Close: %s", self.Name)
 }
 
-//延迟关闭任务，等待工作队列清空
+// 延迟关闭任务，等待工作队列清空
 func (self *GoRoutineLogic) CloseCleanly() {
 	self.started = 0 //先标记关闭
 	//把定时器给关了
@@ -428,7 +436,7 @@ func (self *GoRoutineLogic) CloseCleanly() {
 		caller.timer.Stop()
 	}
 	timer.NewTicker(1000, func(dt int64) bool {
-		if self.LeftJobNumber() == 0 {
+		if self.LeftJobNumber() == 0 && self.callNum == 0 {
 			timer.DelayJob(1000, func() {
 				self.actionChan <- ACTION_CLOSE
 			}, true)
@@ -439,7 +447,7 @@ func (self *GoRoutineLogic) CloseCleanly() {
 	})
 }
 
-//投递任务，给自己
+// 投递任务，给自己
 func (self *GoRoutineLogic) Send(handler_name string, sdata *M) {
 	if self.started == 0 {
 		llog.Warningf("GoRoutineLogic.Send has not started: %s, %s, %v", self.Name, handler_name, sdata)
@@ -460,13 +468,13 @@ func (self *GoRoutineLogic) Send(handler_name string, sdata *M) {
 	self.GetJobChan() <- job
 }
 
-//投递任务，给自己
+// 投递任务，给自己
 func (self *GoRoutineLogic) SendActor(handler_name string, sdata interface{}) {
 	m := M{Data: sdata, Flag: true}
 	self.Send(handler_name, &m)
 }
 
-//投递任务,拥有回调
+// 投递任务,拥有回调
 func (self *GoRoutineLogic) SendBack(server IGoRoutine, handler_name string, sdata *M, Cb HanlderFunc) {
 	if self.started == 0 {
 		llog.Errorf("GoRoutineLogic.SendBack has not started: %s, %s, %v", self.Name, handler_name, sdata)
@@ -512,7 +520,10 @@ func (self *GoRoutineLogic) Call(server IGoRoutine, handler_name string, sdata *
 	if sdata != nil {
 		job.Data = *sdata
 	}
-
+	defer func() {
+		self.callNum--
+	}()
+	self.callNum++
 	before := util.TimeStamp()
 	server.GetJobChan() <- job
 	select {
@@ -614,7 +625,7 @@ func (self *GoRoutineLogic) init(name string) {
 	self.delayJobs = make(map[int64]*RoutineTimer)
 }
 
-//wait for another gorpc resp
+// wait for another gorpc resp
 func (self *GoRoutineLogic) WaitResp(name string) interface{} {
 	ch, ok := self.rpcWaitchan[name]
 	if ok == false {
@@ -630,7 +641,7 @@ func (self *GoRoutineLogic) WaitResp(name string) interface{} {
 	}
 }
 
-//signal the resp is ok
+// signal the resp is ok
 func (self *GoRoutineLogic) SignalResp(name string, data interface{}) {
 	ch, ok := self.rpcWaitchan[name]
 	if ok == false {
