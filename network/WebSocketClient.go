@@ -87,7 +87,7 @@ func wserverclientRoutine(pClient *WebSocketClient) bool {
 			break
 		}
 		if mt != websocket.BinaryMessage {
-			llog.Infof("远程read错误: %s！ %s", pClient.GetSAddr(), err.Error())
+			llog.Infof("远程read 格式错误: %s！ %s", pClient.GetSAddr(), string(message))
 			pClient.OnNetFail(2)
 			break
 		}
