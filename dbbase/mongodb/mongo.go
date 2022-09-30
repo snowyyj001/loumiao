@@ -45,7 +45,7 @@ func connectDB() error {
 	return nil
 }
 
-//连接数据库
+// 连接数据库
 func DialDefault() error {
 	err := connectDB()
 	if err != nil {
@@ -101,8 +101,8 @@ func CountDocuments(dbname, colname string, filter bson.D) (int64, error) {
 	return collection.CountDocuments(context.TODO(), filter)
 }
 
-//InsertOneDefault 添加单个document
-//colname：集合名
+// InsertOneDefault 添加单个document
+// colname：集合名
 func InsertOneDefault(colname string, document interface{}) error {
 	return InsertOne(DbName, colname, document)
 }
@@ -145,7 +145,7 @@ func InsertMany(dbname, colname string, documents []interface{}) ([]string, erro
 }
 
 // FindOneByIdDefault 查询单个document
-//args : filter, projection
+// args : filter, projection
 func FindOneByIdDefault(colname string, result interface{}, id string, args ...bson.D) error {
 	if mClient == nil {
 		return fmt.Errorf("FindOneByIdDefault db connected")
@@ -161,15 +161,15 @@ func FindOneByIdDefault(colname string, result interface{}, id string, args ...b
 }
 
 // FindOneDefault 查询单个document
-//args : filter, projection
+// args : filter, projection
 func FindOneDefault(colname string, result interface{}, args ...bson.D) error {
 	return FindOne(DbName, colname, result, args...)
 }
 
 // FindOne 查询单个document
-//colname：集合名
-//result：查询结果
-//args : filter, projection
+// colname：集合名
+// result：查询结果
+// args : filter, projection
 func FindOne(dbname, colname string, result interface{}, args ...bson.D) error {
 	if mClient == nil {
 		return fmt.Errorf("FindOne db connected")
@@ -196,13 +196,13 @@ func FindOne(dbname, colname string, result interface{}, args ...bson.D) error {
 }
 
 // FindManyDefault 查询多个document
-//args : filter, projection, sort
+// args : filter, projection, sort
 func FindManyDefault(colname string, result interface{}, args ...bson.D) error {
 	return FindMany(DbName, colname, result, args...)
 }
 
 // FindMany 查询多个document
-//args : filter, projection, sort
+// args : filter, projection, sort
 func FindMany(dbname, colname string, result interface{}, args ...bson.D) error {
 	if mClient == nil {
 		return fmt.Errorf("FindMany db connected")
@@ -255,9 +255,36 @@ func UpdateByID(dbname, colname string, id string, document interface{}) error {
 	return nil
 }
 
+// IncOneDefault  更新单个document
+// 这里要十分注意不更新的字段document中要设置为0
+func IncOneDefault(colname string, document interface{}, filter bson.D) error {
+	return UpdateOneOpDefault(colname, document, "$inc", filter)
+}
+
 // UpdateOneDefault  更新单个document
 func UpdateOneDefault(colname string, document interface{}, filter bson.D) error {
 	return UpdateOne(DbName, colname, document, filter)
+}
+
+// UpdateOneOpDefault  更新单个document
+func UpdateOneOpDefault(colname string, document interface{}, option string, filter bson.D) error {
+	return UpdateOptionOne(DbName, colname, document, option, filter)
+}
+
+// UpdateOne  更新单个document
+func UpdateOptionOne(dbname, colname string, document interface{}, option string, filter bson.D) error {
+	if mClient == nil {
+		return fmt.Errorf("UpdateOne db connected")
+	}
+	collection := mClient.Database(dbname).Collection(colname)
+	opts := options.Update().SetUpsert(true)
+	update := bson.D{{option, document}}
+	_, err := collection.UpdateOne(context.TODO(), filter, update, opts)
+	if err != nil {
+		//llog.Errorf("UpdateOne: %s", err.Error())
+		return err
+	}
+	return nil
 }
 
 // UpdateOne  更新单个document
