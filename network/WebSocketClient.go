@@ -32,7 +32,7 @@ func (self *WebSocketClient) Start() bool {
 	self.m_bShuttingDown = false
 	self.m_nState = SSF_ACCEPT
 
-	//self.OnNetConn()
+	self.OnNetConn()
 	go wserverclientRoutine(self)
 	return true
 }
@@ -87,7 +87,7 @@ func wserverclientRoutine(pClient *WebSocketClient) bool {
 			break
 		}
 		if mt != websocket.BinaryMessage {
-			llog.Infof("远程read 格式错误: %s！ %s", pClient.GetSAddr(), string(message))
+			llog.Infof("远程read内容格式错误: %s！ %s", pClient.GetSAddr(), string(message))
 			pClient.OnNetFail(2)
 			break
 		}
