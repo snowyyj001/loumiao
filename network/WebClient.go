@@ -3,6 +3,7 @@ package network
 import (
 	"net/url"
 	"runtime"
+	"sync"
 
 	"github.com/gorilla/websocket"
 	"github.com/snowyyj001/loumiao/llog"
@@ -13,6 +14,8 @@ type WebClient struct {
 	Socket
 	mMaxClients int
 	mMinClients int
+
+	mSendLocker sync.Mutex
 }
 
 func (self *WebClient) Init(saddr string) bool {
@@ -57,6 +60,8 @@ func (self *WebClient) Send(buff []byte) int {
 	if self.m_WsConn == nil {
 		return 0
 	}
+	defer self.mSendLocker.Unlock()
+	self.mSendLocker.Lock()
 	err := self.m_WsConn.WriteMessage(websocket.BinaryMessage, buff)
 	handleError(err)
 	//self.m_Writer.Flush()
@@ -76,6 +81,7 @@ func (self *WebClient) Connect() bool {
 	conn, _, err := websocket.DefaultDialer.Dial(wsAddr.String(), nil)
 	//fmt.Println("2222222222")
 	if err != nil {
+		llog.Errorf("WebClient Connect: %s", err.Error())
 		return false
 	}
 	self.m_nState = SSF_CONNECT
