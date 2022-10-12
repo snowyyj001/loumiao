@@ -30,10 +30,10 @@ func tRecover() {
 	}
 }
 
-//创建一个定时器
-//@dt: 时间间隔，毫秒
-//@cb：触发回调
-//@repeat：是否循环触发
+// 创建一个定时器
+// @dt: 时间间隔，毫秒
+// @cb：触发回调
+// @repeat：是否循环触发
 func NewTimer(dt int, cb func(dt int64) bool, repeat bool) *Timer {
 	delat := time.Duration(dt) * time.Millisecond
 
@@ -64,8 +64,9 @@ func NewTimer(dt int, cb func(dt int64) bool, repeat bool) *Timer {
 				utm = utmPre
 				if t.loop {
 					t.t2.Reset(delat)
+				} else {
+					return
 				}
-
 			case <-t.done:
 				return
 			}
@@ -75,9 +76,9 @@ func NewTimer(dt int, cb func(dt int64) bool, repeat bool) *Timer {
 	return t
 }
 
-//创建一个定时器
-//@dt: 时间间隔，毫秒
-//@cb：触发回调
+// 创建一个定时器
+// @dt: 时间间隔，毫秒
+// @cb：触发回调
 func NewTicker(dt int, cb func(dt int64) bool) *Timer {
 
 	t := new(Timer)
@@ -121,10 +122,10 @@ func (self *Timer) Stop() {
 	self.done <- true
 }
 
-//延迟dt毫秒，执行一个任务
-//@dt:延迟时间，毫秒
-//@cb:任务
-//@sync:是否同步执行
+// 延迟dt毫秒，执行一个任务
+// @dt:延迟时间，毫秒
+// @cb:任务
+// @sync:是否同步执行
 func DelayJob(dt int64, cb func(), sync bool) {
 	if sync {
 		<-time.After(time.Duration(dt) * time.Millisecond)
@@ -138,8 +139,8 @@ func DelayJob(dt int64, cb func(), sync bool) {
 	}
 }
 
-//获取当天的0点和24点时间
-//@st：指定那一天，0默认当天
+// 获取当天的0点和24点时间
+// @st：指定那一天，0默认当天
 func GetDayTime(st int64) (int64, int64) {
 	var timeStr string
 	if st == 0 {
@@ -153,8 +154,8 @@ func GetDayTime(st int64) (int64, int64) {
 	return beginTimeNum, endTimeNum
 }
 
-//是否是同一天
-//请确保stmp2 > stmp1
+// 是否是同一天
+// 请确保stmp2 > stmp1
 func IsSameDay(stmp1, stmp2 int64) bool {
 	if stmp2-stmp1 >= DAY_SECONDS {
 		return false
