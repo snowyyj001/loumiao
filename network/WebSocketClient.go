@@ -1,10 +1,9 @@
 package network
 
 import (
+	"github.com/gorilla/websocket"
 	"github.com/snowyyj001/loumiao/llog"
 	"github.com/snowyyj001/loumiao/message"
-
-	"github.com/gorilla/websocket"
 )
 
 type IWebSocketClient interface {
@@ -31,6 +30,8 @@ func (self *WebSocketClient) Start() bool {
 	}
 	self.m_bShuttingDown = false
 	self.m_nState = SSF_ACCEPT
+
+	//self.m_WsConn.SetReadDeadline(time.Now().Add(10 * time.Second))
 
 	self.OnNetConn()
 	go wserverclientRoutine(self)
