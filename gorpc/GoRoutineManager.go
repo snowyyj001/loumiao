@@ -5,8 +5,8 @@ import (
 	"github.com/snowyyj001/loumiao/timer"
 )
 
-//服务启动后，不允许再开新的service
-//这样就不用考虑go_name_Map的全局调用问题了，保证线程安全
+// 服务启动后，不允许再开新的service
+// 这样就不用考虑go_name_Map的全局调用问题了，保证线程安全
 type GoRoutineMgr struct {
 	go_name_Map map[string]IGoRoutine //持久化actor
 	go_name_Tmp map[string]IGoRoutine //临时actor
@@ -17,16 +17,6 @@ type GoRoutineMgr struct {
 const (
 	CHAN_Statistics_Time = 60 * 1000 //每60s统计一次actor的未读数量
 )
-
-var (
-	MGR *GoRoutineMgr
-)
-
-func init() {
-	MGR = &GoRoutineMgr{}
-	MGR.go_name_Map = make(map[string]IGoRoutine)
-	MGR.go_name_Tmp = make(map[string]IGoRoutine)
-}
 
 func (self *GoRoutineMgr) AddRoutine(rou IGoRoutine, name string) {
 	if self.go_name_Map[name] != nil || self.go_name_Tmp[name] != nil {
@@ -41,7 +31,7 @@ func (self *GoRoutineMgr) AddRoutine(rou IGoRoutine, name string) {
 	}
 }
 
-//只会获得永久存在的actor
+// 只会获得永久存在的actor
 func (self *GoRoutineMgr) GetRoutine(name string) IGoRoutine {
 	igo, ok := self.go_name_Map[name]
 	if ok {
@@ -50,7 +40,7 @@ func (self *GoRoutineMgr) GetRoutine(name string) IGoRoutine {
 	return nil
 }
 
-//关闭单个服务
+// 关闭单个服务
 func (self *GoRoutineMgr) Close(name string) {
 	igo := self.GetRoutine(name)
 	if igo != nil {
@@ -59,7 +49,7 @@ func (self *GoRoutineMgr) Close(name string) {
 	}
 }
 
-//关闭所有服务
+// 关闭所有服务
 func (self *GoRoutineMgr) CloseAll() {
 	for _, igo := range self.go_name_Map {
 		igo.DoDestory()
@@ -69,7 +59,7 @@ func (self *GoRoutineMgr) CloseAll() {
 	}
 }
 
-//创建初始化服务
+// 创建初始化服务
 func (self *GoRoutineMgr) Start(igo IGoRoutine, name string) {
 
 	//GoRoutineLogic
@@ -87,8 +77,8 @@ func (self *GoRoutineMgr) Start(igo IGoRoutine, name string) {
 	self.AddRoutine(igo, name)
 }
 
-//开启服务
-//开启所有服务
+// 开启服务
+// 开启所有服务
 func (self *GoRoutineMgr) DoStart() {
 	self.is_starting = true
 	for _, igo := range self.go_name_Map {
@@ -121,8 +111,8 @@ func (self *GoRoutineMgr) DoStart() {
 	self.Statistics()
 }
 
-//开启服务
-//启动单个服务
+// 开启服务
+// 启动单个服务
 func (self *GoRoutineMgr) DoSingleStart(name string) {
 	igo, has := self.go_name_Map[name]
 	if has {
@@ -138,10 +128,10 @@ func (self *GoRoutineMgr) DoSingleStart(name string) {
 	}
 }
 
-//内部rpc调用
-//@target: 目标actor
-//@funcName: rpc函数
-//@data: 函数参数
+// 内部rpc调用
+// @target: 目标actor
+// @funcName: rpc函数
+// @data: 函数参数
 func (self *GoRoutineMgr) Send(target string, funcName string, data *M) {
 	igo := self.GetRoutine(target)
 	if igo == nil {
@@ -151,10 +141,10 @@ func (self *GoRoutineMgr) Send(target string, funcName string, data *M) {
 	igo.Send(funcName, data)
 }
 
-//内部rpc调用
-//@target: 目标actor
-//@funcName: rpc函数
-//@data: 函数参数
+// 内部rpc调用
+// @target: 目标actor
+// @funcName: rpc函数
+// @data: 函数参数
 func (self *GoRoutineMgr) SendActor(target string, funcName string, data interface{}) {
 	igo := self.GetRoutine(target)
 	if igo == nil {
@@ -164,7 +154,7 @@ func (self *GoRoutineMgr) SendActor(target string, funcName string, data interfa
 	igo.SendActor(funcName, data)
 }
 
-//统计每个actor的job队列情况
+// 统计每个actor的job队列情况
 func (self *GoRoutineMgr) Statistics() {
 	timer.NewTimer(CHAN_Statistics_Time, func(dt int64) bool { //60s统计一次
 		for _, igo := range self.go_name_Map {

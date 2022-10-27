@@ -88,7 +88,6 @@ type GoRoutineLogic struct {
 	goFun        bool                      //true:使用go执行Cmd,GoRoutineLogic非协程安全;false:协程安全
 	cRoLimitChan chan struct{}             //异步协程上限控制
 	execTime     int64
-	callNum      int //当前call数量
 
 	rpcWaitchan map[string]chan interface{}
 
@@ -106,6 +105,7 @@ type GoRoutineLogic struct {
 	ChanSize        int  //job chan size
 	chanWarningSize int  //
 	lastWarningTime int64
+	HasCrashMsg     bool //标记有panic信息
 }
 
 func (self *GoRoutineLogic) DoInit() bool {
@@ -176,7 +176,11 @@ func (self *GoRoutineLogic) SetWarningTime(cd int64) {
 	self.lastWarningTime = cd
 }
 func (self *GoRoutineLogic) CallNetFunc(m *M) {
-	self.NetHandler[m.Name](self, m.Id, m.Data.([]byte))
+	if handler, ok := self.NetHandler[m.Name]; ok {
+		handler(self, m.Id, m.Data.([]byte))
+	} else {
+		llog.Errorf("GoRoutineLogic.CallNetFunc no net handler: %s, %d", m.Name, m.Id)
+	}
 }
 
 func (self *GoRoutineLogic) SelfStart(name string) {
@@ -218,6 +222,7 @@ func (self *GoRoutineLogic) RunDelayJob(delta int, cb func(interface{}), param i
 				buf := make([]byte, 2048)
 				l := runtime.Stack(buf, false)
 				llog.Errorf("GoRoutineLogic.RunTicker[%s] %v: %s", self.Name, r, buf[:l])
+				self.HasCrashMsg = true
 			}
 		}()
 		cb(caller.param)
@@ -249,6 +254,7 @@ func (self *GoRoutineLogic) RunTicker(delta int, f func(int64)) {
 				buf := make([]byte, 2048)
 				l := runtime.Stack(buf, false)
 				llog.Errorf("GoRoutineLogic.RunTimer[%s] %v: %s", self.Name, r, buf[:l])
+				self.HasCrashMsg = true
 			}
 		}()
 		f(dt)
@@ -288,6 +294,7 @@ func (self *GoRoutineLogic) RunTimer(delta int, f func(int64)) {
 				buf := make([]byte, 2048)
 				l := runtime.Stack(buf, false)
 				llog.Errorf("GoRoutineLogic.RunTimer[%s] %v: %s", self.Name, r, buf[:l])
+				self.HasCrashMsg = true
 			}
 		}()
 		f(dt)
@@ -307,6 +314,7 @@ func (self *GoRoutineLogic) woker() {
 			buf := make([]byte, 2048)
 			l := runtime.Stack(buf, false)
 			llog.Errorf("GoRoutineLogic.woker[%s] %v: %s", self.Name, r, buf[:l])
+			self.HasCrashMsg = true
 		}
 	}()
 	//utm := util.TimeStamp()
@@ -436,7 +444,7 @@ func (self *GoRoutineLogic) CloseCleanly() {
 		caller.timer.Stop()
 	}
 	timer.NewTicker(1000, func(dt int64) bool {
-		if self.LeftJobNumber() == 0 && self.callNum == 0 {
+		if self.LeftJobNumber() == 0 {
 			timer.DelayJob(1000, func() {
 				self.actionChan <- ACTION_CLOSE
 			}, true)
@@ -520,10 +528,7 @@ func (self *GoRoutineLogic) Call(server IGoRoutine, handler_name string, sdata *
 	if sdata != nil {
 		job.Data = *sdata
 	}
-	defer func() {
-		self.callNum--
-	}()
-	self.callNum++
+
 	before := util.TimeStamp()
 	server.GetJobChan() <- job
 	select {

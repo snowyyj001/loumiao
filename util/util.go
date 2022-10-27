@@ -289,4 +289,6 @@ func DumpPid() {
 		llog.Errorf("OpenFile err: %s", err.Error())
 	}
 	pidFile.WriteString(fmt.Sprint(pid))
+
+	pidFile.Close()
 }

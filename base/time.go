@@ -66,7 +66,8 @@ func WeekDayNormal() int {
 	return day
 }
 
-// IsToday stamp是否是当天
+// IsToday 是否是当天
+// @stamp 时间戳秒
 func IsToday(stamp int64) bool {
 	t := time.Now()
 	_, timeOffset := t.Zone()

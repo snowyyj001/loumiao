@@ -50,15 +50,15 @@ func EqualBit64(val int64, flag int64) bool {
 
 // AddFlag 给n1添加n2 bit位标识
 func AddFlag(n1 int64, n2 int64) int64 {
-	return Bit64Or(n1, n2)
+	return Bit64Or(n1, Bit64(n2))
 }
 
 // RemoveFlag 给n1去掉n2 bit位标识
 func RemoveFlag(n1 int64, n2 int64) int64 {
-	return Bit64NAnd(n1, n2)
+	return Bit64NAnd(n1, Bit64(n2))
 }
 
 // HasFlag n1是否有n2 bit位标识
 func HasFlag(n1 int64, n2 int64) bool {
-	return Bit64And(n1, n2) != 0
+	return Bit64And(n1, Bit64(n2)) != 0
 }

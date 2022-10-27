@@ -90,7 +90,7 @@ func Run() {
 	sig := <-c
 	llog.Infof("loumiao closing down (signal: %v)", sig)
 
-	gorpc.MGR.CloseAll()
+	gorpc.Close()
 
 	llog.Infof("loumiao done !")
 }
