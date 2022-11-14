@@ -6,7 +6,6 @@ import (
 	"github.com/snowyyj001/loumiao/base/maps"
 	"github.com/snowyyj001/loumiao/lnats"
 	"github.com/snowyyj001/loumiao/message"
-	"github.com/snowyyj001/loumiao/timer"
 	"sync"
 
 	"github.com/snowyyj001/loumiao/config"
@@ -119,8 +118,8 @@ func (self *GateServer) DoInit() bool {
 func (self *GateServer) DoRegsiter() {
 	llog.Infof("%s DoRegsiter", self.Name)
 
-	//	self.Register("RegisterNet", RegisterNet)
-	//	self.Register("UnRegisterNet", unRegisterNet)
+	//self.Register("RegisterNet", registerNet)
+	//self.Register("UnRegisterNet", unRegisterNet)
 	self.Register("SendClient", sendClient)
 	self.Register("SendMulClient", sendMulClient)
 	self.Register("NewClient", newClient)
@@ -184,11 +183,9 @@ func (self *GateServer) DoStart() {
 
 	if config.NET_NODE_TYPE != config.ServerType_WEB_LOGIN {
 		if self.pService != nil {
-			llog.Debug("ServerSocket.Start o")
 			util.Assert(self.pService.Start(), fmt.Sprintf("GateServer listen failed: saddr=%s", self.pService.GetSAddr()))
 		}
 		if self.pInnerService != nil { //内部组网监听，地址自动切换也没关系
-			llog.Debug("ServerSocket.Start i")
 			util.Assert(self.pInnerService.Start(), fmt.Sprintf("GateServer listen failed: saddr=%s", self.pInnerService.GetSAddr()))
 		}
 	}
@@ -231,15 +228,15 @@ func (self *GateServer) DoOpen() {
 		llog.Fatalf("etcd watch NET_GATE_SADDR error: %s", err.Error())
 	}
 
-	timer.DelayJob(1000, func() { //delay 1000ms, rpc or other actor should be ok
-		//应该首先watch，注册rpc消息，再把自己put进去
-		//register to etcd when the socket is ok
-		if err := etcd.Client.PutNode(); err != nil {
-			llog.Fatalf("etcd PutService error %v", err)
-		}
-		nodemgr.ServerEnabled = true
-		llog.Infof("GateServer DoOpen success: name=%s, saddr=%s, uid=%d", self.Name, config.NET_GATE_SADDR, config.SERVER_NODE_UID)
-	}, false)
+	//timer.DelayJob(100, func() { //delay 100ms, that all RegisterRpcHandler should be compled
+	//应该首先watch，注册rpc消息，再把自己put进去
+	//register to etcd when the socket is ok
+	if err := etcd.Client.PutNode(); err != nil {
+		llog.Fatalf("etcd PutService error %v", err)
+	}
+	nodemgr.ServerEnabled = true
+	llog.Infof("GateServer DoOpen success: name=%s, saddr=%s, uid=%d", self.Name, config.NET_GATE_SADDR, config.SERVER_NODE_UID)
+	//	}, false)
 
 	lnats.ReportMail(define.MAIL_TYPE_START, "服务器完成启动")
 }
@@ -601,5 +598,13 @@ func (self *GateServer) SendServer(target int, buff []byte) {
 		rpcClient.Send(buff)
 	} else {
 		llog.Warningf("GateServer.SendServer target error: target=%d", target)
+	}
+}
+
+func GetSocketNum() int {
+	if config.NET_WEBSOCKET {
+		return This.pService.(*network.WebSocket).GetClientNumber()
+	} else {
+		return This.pService.(*network.ServerSocket).GetClientNumber()
 	}
 }

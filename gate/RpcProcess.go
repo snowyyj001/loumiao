@@ -24,21 +24,11 @@ import (
 // client connect
 func innerConnect(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	llog.Debugf("GateServer innerConnect: %d", socketId)
-	//对于account/gate来说，socket连接数就是在线人数
-	//本质上来说差别不大
-	//对于world来说，内存中玩家数就是在线数，包括暂时离线缓存的那一部分
-	//对于zone来说，就是参与战斗的玩家数
-	if This.ServerType == network.CLIENT_CONNECT { //对外(login,gate)
-		nodemgr.OnlineNum++
-	}
 }
 
 // client disconnect
 func innerDisConnect(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	llog.Debugf("GateServer innerDisConnect: %d", socketId)
-	if This.ServerType == network.CLIENT_CONNECT { //对外(login,gate)
-		nodemgr.OnlineNum--
-	}
 	if This.ServerType == network.SERVER_CONNECT { //the server lost connect with gate
 		This.UnBindGate(socketId)
 	} else { //the client lost connect with gate or account
