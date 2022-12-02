@@ -176,6 +176,18 @@ player = AgentMgr.GetAgent(1000)
 player.SendActor("addItem", item)
 ```
 
+## 服务器内部架构
+
+客户端直连gate
+gate和world zone queue保持socket tcp专线连接，用来转发来自客户端的网络消息，如有其他业务节点也需要接受客户端网络消息，在gate中配置即可
+
+如有帧同步需要，client还需保持与zone的一个udp专线连接，否则依靠gate的网络转发
+
+除login gm keypoint三个web节点外，所有的服务器节点都建立与rpc server和nats的tcp连接
+
+![image](https://github.com/snowyyj001/loumiao/blob/master/doc/%E6%80%BB%E6%9E%84%E5%9B%BE.jpg?raw=true)
+
+
 ## 通用服务器架构
 
 ![image](https://github.com/snowyyj001/loumiao/blob/master/doc/%E6%80%BB%E6%9E%84%E5%9B%BE.jpg?raw=true)
