@@ -14,57 +14,60 @@ import (
 )
 
 const (
-	ServerType_None       = iota //0 物理机控制节点
-	ServerType_Gate              //1 网关
-	ServerType_Account           //2 账号
-	ServerType_World             //3 世界
-	ServerType_Zone              //4 地图
-	ServerType_DB                //5 数据库
-	ServerType_Log               //6 日志
-	ServerType_Public            //7 唯一公共服
-	ServerType_WEB_GM            //8 web gm
-	ServerType_WEB_LOGIN         //9 web login
-	ServerType_RPCGate           //10 rpc gate
-	ServerType_ETCF              //11 配置中心
-	ServerType_LOGINQUEUE        //12 排队
-	ServerType_Match             //13 匹配
-	ServerType_Robot             //14 机器人
+	ServerType_None        = iota //0 物理机控制节点
+	ServerType_Gate               //1 网关
+	ServerType_Account            //2 账号
+	ServerType_World              //3 世界
+	ServerType_Zone               //4 地图
+	ServerType_DB                 //5 数据库
+	ServerType_Log                //6 日志
+	ServerType_Public             //7 唯一公共服
+	ServerType_WEB_GM             //8 web gm
+	ServerType_WEB_LOGIN          //9 web login
+	ServerType_RPCGate            //10 rpc gate
+	ServerType_ETCF               //11 配置中心
+	ServerType_LOGINQUEUE         //12 排队
+	ServerType_Match              //13 匹配
+	ServerType_Robot              //14 机器人
+	ServerType_WebKeyPoint        //15 web 数据埋点
 )
 
 var (
 	ServerNames = map[int]string{
-		ServerType_None:       "pod",
-		ServerType_Gate:       "gate",
-		ServerType_Account:    "login",
-		ServerType_World:      "lobby",
-		ServerType_Zone:       "zone",
-		ServerType_DB:         "dbserver",
-		ServerType_Log:        "logserver",
-		ServerType_Public:     "publicserver",
-		ServerType_WEB_GM:     "webserver",
-		ServerType_WEB_LOGIN:  "weblogin",
-		ServerType_RPCGate:    "rpcserver",
-		ServerType_ETCF:       "etcfserver",
-		ServerType_LOGINQUEUE: "queueserver",
-		ServerType_Match:      "matchserver",
-		ServerType_Robot:      "robot",
+		ServerType_None:        "pod",
+		ServerType_Gate:        "gate",
+		ServerType_Account:     "login",
+		ServerType_World:       "lobby",
+		ServerType_Zone:        "zone",
+		ServerType_DB:          "dbserver",
+		ServerType_Log:         "logserver",
+		ServerType_Public:      "publicserver",
+		ServerType_WEB_GM:      "webserver",
+		ServerType_WEB_LOGIN:   "weblogin",
+		ServerType_RPCGate:     "rpcserver",
+		ServerType_ETCF:        "etcfserver",
+		ServerType_LOGINQUEUE:  "queueserver",
+		ServerType_Match:       "matchserver",
+		ServerType_Robot:       "robot",
+		ServerType_WebKeyPoint: "keypoint",
 	}
 	ServerDesc = map[int]string{
-		ServerType_None:       "运行在每个物理机上的节点k8s-pod",
-		ServerType_Gate:       "网关",
-		ServerType_Account:    "tcp账号",
-		ServerType_World:      "大厅",
-		ServerType_Zone:       "战斗",
-		ServerType_DB:         "数据库",
-		ServerType_Log:        "日志",
-		ServerType_Public:     "公共服",
-		ServerType_WEB_GM:     "gm后台",
-		ServerType_WEB_LOGIN:  "web账号",
-		ServerType_RPCGate:    "rpc调度中心",
-		ServerType_ETCF:       "注册中心",
-		ServerType_LOGINQUEUE: "排队服",
-		ServerType_Match:      "匹配",
-		ServerType_Robot:      "机器人",
+		ServerType_None:        "运行在每个物理机上的节点k8s-pod",
+		ServerType_Gate:        "网关",
+		ServerType_Account:     "tcp账号",
+		ServerType_World:       "大厅",
+		ServerType_Zone:        "战斗",
+		ServerType_DB:          "数据库",
+		ServerType_Log:         "日志",
+		ServerType_Public:      "公共服",
+		ServerType_WEB_GM:      "gm后台",
+		ServerType_WEB_LOGIN:   "web账号",
+		ServerType_RPCGate:     "rpc调度中心",
+		ServerType_ETCF:        "注册中心",
+		ServerType_LOGINQUEUE:  "排队服",
+		ServerType_Match:       "匹配",
+		ServerType_Robot:       "机器人",
+		ServerType_WebKeyPoint: "数据埋点",
 	}
 )
 
@@ -151,6 +154,7 @@ func init() {
 		yaml.NewDecoder(f).Decode(&Cfg)
 		fmt.Println(Cfg)
 	}
+
 	fmt.Println("本机公网ip：", PUBLIC_IP_ADDR)
 	argv := len(os.Args)
 	fmt.Println("启动参数个数argv: ", argv)
