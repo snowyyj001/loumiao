@@ -185,7 +185,7 @@ gate和world zone queue保持socket tcp专线连接，用来转发来自客户�
 
 除login gm keypoint三个web节点外，所有的服务器节点都建立与rpc server和nats的tcp连接
 
-![image](https://github.com/snowyyj001/loumiao/blob/master/doc/%E6%80%BB%E6%9E%84%E5%9B%BE.jpg?raw=true)
+![image](https://github.com/snowyyj001/loumiao/blob/master/doc/%E6%9C%8D%E5%8A%A1%E5%99%A8%E7%BB%93%E6%9E%84.png?raw=true)
 
 
 ## 通用服务器架构
