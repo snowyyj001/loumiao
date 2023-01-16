@@ -1,6 +1,7 @@
 package timer
 
 import (
+	"github.com/snowyyj001/loumiao/config"
 	"github.com/snowyyj001/loumiao/llog"
 	"github.com/snowyyj001/loumiao/util"
 	"runtime"
@@ -148,9 +149,9 @@ func GetDayTime(st int64) (int64, int64) {
 	} else {
 		timeStr = time.Unix(st, 0).Format(RFC3339Day)
 	}
-	t, _ := time.ParseInLocation(RFC3339Day, timeStr, time.Local)
-	var beginTimeNum int64 = t.Unix()
-	var endTimeNum int64 = beginTimeNum + DAY_SECONDS
+	t, _ := time.ParseInLocation(RFC3339Day, timeStr, config.TIME_LOCATION)
+	var beginTimeNum = t.Unix()
+	var endTimeNum = beginTimeNum + DAY_SECONDS
 	return beginTimeNum, endTimeNum
 }
 
@@ -165,4 +166,29 @@ func IsSameDay(stmp1, stmp2 int64) bool {
 		return false
 	}
 	return true
+}
+
+// 当前格式化时间字符串
+func TimeStr() string {
+	return time.Now().Format("2006-01-02 15:04:05")
+}
+
+// 当前格式化时间字符串
+func TimeStrFormat(mat string) string {
+	return time.Now().Format(mat)
+}
+
+// 时间戳秒
+func TimeStampSec() int64 {
+	return time.Now().Unix()
+}
+
+// 时间戳毫秒
+func TimeStamp() int64 {
+	return time.Now().UnixNano() / int64(time.Millisecond)
+}
+
+// 指定日期的时间戳毫秒
+func TimeStampTarget(y int, m time.Month, d int, h int, mt int, s int) int64 {
+	return time.Date(y, m, d, h, mt, s, 0, config.TIME_LOCATION).UnixNano() / int64(time.Millisecond)
 }

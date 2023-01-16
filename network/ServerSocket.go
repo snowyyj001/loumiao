@@ -91,6 +91,10 @@ func (self *ServerSocket) GetClientById(id int) *ServerSocketClient {
 	return nil
 }
 
+func (self *ServerSocket) GetClientNumber() int {
+	return self.m_nClientCount
+}
+
 func (self *ServerSocket) ClientRemoteAddr(clientid int) string {
 	pClinet := self.GetClientById(clientid)
 	if pClinet != nil {

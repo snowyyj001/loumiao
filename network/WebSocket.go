@@ -96,6 +96,10 @@ func (self *WebSocket) AssignClientId() int {
 	return int(atomic.AddInt32(&self.m_nIdSeed, 1))
 }
 
+func (self *WebSocket) GetClientNumber() int {
+	return self.m_nClientCount
+}
+
 func (self *WebSocket) GetClientById(id int) *WebSocketClient {
 	self.m_ClientLocker.RLock()
 	client, exist := self.m_ClientList[id]

@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const (
@@ -96,7 +97,8 @@ var (
 	SERVER_DEBUGPORT = 0              //pprof的监听端口,0不监听
 	SERVER_PLATFORM  = "2144"         //平台
 
-	PUBLIC_IP_ADDR = "127.0.0.1" //公网ip
+	PUBLIC_IP_ADDR = "127.0.0.1"  //公网ip
+	TIME_LOCATION  *time.Location //时区
 )
 
 // NetNode uid通过etcd自动分配，一般不要手动分配uid，除非清楚知道自己在做什么,参考GetServerUid
@@ -118,6 +120,7 @@ type NetNode struct {
 
 type ServerCfg struct {
 	Platform string
+	TimeZone string
 	NetCfg   NetNode  `json:"net" yaml:"net"`
 	EtcdAddr []string `json:"etcd" yaml:"etcd"`
 	NatsAddr []string `json:"nats" yaml:"nats"`
@@ -170,6 +173,7 @@ func init() {
 			log.Fatalf("cfg fromat error: %s", err.Error())
 		}
 		Cfg.Platform = scfg.Platform
+		Cfg.TimeZone = scfg.TimeZone
 		Cfg.NetCfg.Id = scfg.NetCfg.Id
 		Cfg.NetCfg.Uid = scfg.NetCfg.Uid
 		Cfg.NetCfg.SAddr = scfg.NetCfg.SAddr
@@ -188,6 +192,16 @@ func init() {
 	}
 	if Cfg.NetCfg.Uid == 0 {
 		log.Fatalf("cfg content uid error: %d", Cfg.NetCfg.Uid)
+	}
+
+	if len(Cfg.TimeZone) > 0 {
+		if loc, err := time.LoadLocation(Cfg.TimeZone); err == nil {
+			TIME_LOCATION = loc
+		} else {
+			log.Fatalf("cfg time zone error: time zone:%s, err:%s", Cfg.TimeZone, err.Error())
+		}
+	} else {
+		TIME_LOCATION = time.Local
 	}
 
 	if globalCfg.NetCfg.Id > 0 {

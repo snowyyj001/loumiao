@@ -3,6 +3,7 @@ package etcf
 
 import (
 	"fmt"
+	"github.com/snowyyj001/loumiao/timer"
 	"strings"
 	"sync"
 
@@ -109,14 +110,14 @@ func (self *EtcfServer) DoDestory() {
 
 }
 
-////////////////////////////////////////////////////////////////////////////////
-//每秒钟更新一次
+// //////////////////////////////////////////////////////////////////////////////
+// 每秒钟更新一次
 func (self *EtcfServer) update_1000(dt int64) {
 	//llog.Debugf("%s update_1000: %d", self.Name, dt)
 	for sid, stmp := range self.mStoreValuesLeaseTime {
-		if util.TimeStampSec()-stmp >= LEASE_SERVER_TIMEOUT { //超时
+		if timer.TimeStampSec()-stmp >= LEASE_SERVER_TIMEOUT { //超时
 			uid, _ := siduid_Map[sid]
-			llog.Warningf("EtcfServer.update_1000: lease timeout, sid = %d, uid = %d, timeout = %d", sid, uid, util.TimeStampSec()-stmp)
+			llog.Warningf("EtcfServer.update_1000: lease timeout, sid = %d, uid = %d, timeout = %d", sid, uid, timer.TimeStampSec()-stmp)
 			//self.removeAllLeaseById(sid)
 			//delete(self.mStoreValuesLeaseTime, sid)
 		}
@@ -230,8 +231,8 @@ func (self *EtcfServer) lockTimeout(param interface{}) {
 	}
 }
 
-//goroutine unsafe
-//net msg handler,this func belong to socket's goroutine
+// goroutine unsafe
+// net msg handler,this func belong to socket's goroutine
 func packetFunc(socketid int, buff []byte, nlen int) error {
 	//llog.Debugf("packetFunc: socketid=%d, bufferlen=%d", socketid, nlen)
 	_, name, buffbody, err := message.UnPackHead(buff, nlen)

@@ -6,17 +6,16 @@ import (
 	"github.com/snowyyj001/loumiao/message"
 	"github.com/snowyyj001/loumiao/msg"
 	"github.com/snowyyj001/loumiao/timer"
-	"github.com/snowyyj001/loumiao/util"
 	"strings"
 )
 
-//client connect
+// client connect
 func innerConnect(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	llog.Debugf("etcf server innerConnect: %d", socketId)
 
 }
 
-//client disconnect
+// client disconnect
 func innerDisConnect(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	llog.Debugf("etcf server innerDisConnect: %d", socketId)
 	This.removeAllWatchById(socketId)
@@ -24,7 +23,7 @@ func innerDisConnect(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	delete(This.mStoreValuesLeaseTime, socketId)
 }
 
-//watch/remove key
+// watch/remove key
 func innerLouMiaoWatchKey(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	req := &msg.LouMiaoWatchKey{}
 	if message.UnPackProto(req, data) != nil {
@@ -39,7 +38,7 @@ func innerLouMiaoWatchKey(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	}
 }
 
-//put/remove value
+// put/remove value
 func innerLouMiaoPutValue(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	req := &msg.LouMiaoPutValue{}
 	if message.UnPackProto(req, data) != nil {
@@ -53,7 +52,7 @@ func innerLouMiaoPutValue(igo gorpc.IGoRoutine, socketId int, data []byte) {
 			} else {
 				This.putValue(req.Prefix, req.Value)
 				This.mStoreValuesLease[req.Prefix] = ETKeyLease{req.Prefix, socketId}
-				This.mStoreValuesLeaseTime[socketId] = util.TimeStampSec()
+				This.mStoreValuesLeaseTime[socketId] = timer.TimeStampSec()
 			}
 		} else {
 			This.putValue(req.Prefix, req.Value)
@@ -63,7 +62,7 @@ func innerLouMiaoPutValue(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	}
 }
 
-//get value
+// get value
 func innerLouMiaoGetValue(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	req := &msg.LouMiaoGetValue{}
 	if message.UnPackProto(req, data) != nil {
@@ -86,7 +85,7 @@ func innerLouMiaoGetValue(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	This.pInnerService.SendById(socketId, buff)
 }
 
-//aquire lock
+// aquire lock
 func innerLouMiaoAquireLock(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	req := &msg.LouMiaoAquireLock{}
 	if message.UnPackProto(req, data) != nil {
@@ -112,7 +111,7 @@ func innerLouMiaoAquireLock(igo gorpc.IGoRoutine, socketId int, data []byte) {
 			}, false)
 		}
 	} else {
-		nt := util.TimeStamp()
+		nt := timer.TimeStamp()
 		stam, ok := This.mStoreLocks[req.Prefix]
 		if !ok {
 			stam = int(nt) + int(req.TimeOut)
@@ -128,7 +127,7 @@ func innerLouMiaoAquireLock(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	}
 }
 
-//release lock
+// release lock
 func innerLouMiaoReleaseLock(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	req := &msg.LouMiaoReleaseLock{}
 	if message.UnPackProto(req, data) != nil {
@@ -141,7 +140,7 @@ func innerLouMiaoReleaseLock(igo gorpc.IGoRoutine, socketId int, data []byte) {
 		return
 	}
 
-	nt := int(util.TimeStamp())
+	nt := int(timer.TimeStamp())
 
 	arr, ok := This.mStoreLockWaiters[req.Prefix]
 	if ok {
@@ -161,7 +160,7 @@ func innerLouMiaoReleaseLock(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	}
 }
 
-//lease
+// lease
 func innerLouMiaoLease(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	req := &msg.LouMiaoLease{}
 	if message.UnPackProto(req, data) != nil {
@@ -169,7 +168,7 @@ func innerLouMiaoLease(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	}
 	//llog.Debugf("innerLouMiaoLease: %v", req)
 
-	This.mStoreValuesLeaseTime[socketId] = util.TimeStampSec()
+	This.mStoreValuesLeaseTime[socketId] = timer.TimeStampSec()
 
 	resp := &msg.LouMiaoLease{}
 	resp.Uid = req.Uid

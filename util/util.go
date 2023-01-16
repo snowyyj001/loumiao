@@ -67,31 +67,6 @@ func Clamp(n, min, max int) int {
 	return n
 }
 
-// 当前格式化时间字符串
-func TimeStr() string {
-	return time.Now().Format("2006-01-02 15:04:05")
-}
-
-// 当前格式化时间字符串
-func TimeStrFormat(mat string) string {
-	return time.Now().Format(mat)
-}
-
-// 时间戳秒
-func TimeStampSec() int64 {
-	return time.Now().Unix()
-}
-
-// 时间戳毫秒
-func TimeStamp() int64 {
-	return time.Now().UnixNano() / int64(time.Millisecond)
-}
-
-// 指定日期的时间戳毫秒
-func TimeStampTarget(y int, m time.Month, d int, h int, mt int, s int) int64 {
-	return time.Date(y, m, d, h, mt, s, 0, time.Local).UnixNano() / int64(time.Millisecond)
-}
-
 func Assert(x bool, y string) {
 	if x == false {
 		llog.Fatalf("util.Assert: %s", y)
