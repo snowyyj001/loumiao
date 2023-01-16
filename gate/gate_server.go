@@ -118,8 +118,8 @@ func (self *GateServer) DoInit() bool {
 func (self *GateServer) DoRegsiter() {
 	llog.Infof("%s DoRegsiter", self.Name)
 
-	//self.Register("RegisterNet", registerNet)
-	//self.Register("UnRegisterNet", unRegisterNet)
+	//	self.Register("RegisterNet", RegisterNet)
+	//	self.Register("UnRegisterNet", unRegisterNet)
 	self.Register("SendClient", sendClient)
 	self.Register("SendMulClient", sendMulClient)
 	self.Register("NewClient", newClient)

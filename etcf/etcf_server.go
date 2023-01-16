@@ -3,7 +3,7 @@ package etcf
 
 import (
 	"fmt"
-	"github.com/snowyyj001/loumiao/timer"
+	"github.com/snowyyj001/loumiao/base"
 	"strings"
 	"sync"
 
@@ -115,9 +115,9 @@ func (self *EtcfServer) DoDestory() {
 func (self *EtcfServer) update_1000(dt int64) {
 	//llog.Debugf("%s update_1000: %d", self.Name, dt)
 	for sid, stmp := range self.mStoreValuesLeaseTime {
-		if timer.TimeStampSec()-stmp >= LEASE_SERVER_TIMEOUT { //超时
+		if base.TimeStampSec()-stmp >= LEASE_SERVER_TIMEOUT { //超时
 			uid, _ := siduid_Map[sid]
-			llog.Warningf("EtcfServer.update_1000: lease timeout, sid = %d, uid = %d, timeout = %d", sid, uid, timer.TimeStampSec()-stmp)
+			llog.Warningf("EtcfServer.update_1000: lease timeout, sid = %d, uid = %d, timeout = %d", sid, uid, base.TimeStampSec()-stmp)
 			//self.removeAllLeaseById(sid)
 			//delete(self.mStoreValuesLeaseTime, sid)
 		}

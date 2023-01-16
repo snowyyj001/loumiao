@@ -3,7 +3,7 @@ package redisdb
 
 import (
 	"fmt"
-	"github.com/snowyyj001/loumiao/timer"
+	"github.com/snowyyj001/loumiao/base"
 	"math/rand"
 	"runtime"
 	"strconv"
@@ -120,14 +120,14 @@ func AquireLock(key string, expiretime int) int {
 	}
 	ret, err := db.Do("SET", key, val, "NX", "PX", et)
 	if ret == nil && expiretime > 0 {
-		nt := timer.TimeStamp()
+		nt := base.TimeStamp()
 		for {
 			time.Sleep(30 * time.Millisecond) //等待30ms再次尝试
 			ret, err = db.Do("SET", key, val, "NX", "PX", et)
 			if ret != nil {
 				break
 			}
-			if timer.TimeStamp()-nt > int64(expiretime) {
+			if base.TimeStamp()-nt > int64(expiretime) {
 				break
 			}
 		}

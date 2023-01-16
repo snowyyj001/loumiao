@@ -2,6 +2,7 @@
 package gorpc
 
 import (
+	"github.com/snowyyj001/loumiao/base"
 	"runtime"
 	"sync"
 	"time"
@@ -247,7 +248,7 @@ func (self *GoRoutineLogic) RunTicker(delta int, f func(int64)) {
 		return
 	}
 	caller := new(RoutineTimer)
-	caller.lastCallTime = timer.TimeStamp()
+	caller.lastCallTime = base.TimeStamp()
 	caller.timerCall = func(dt int64) { //try catch errors here, do not effect woker
 		defer func() {
 			if r := recover(); r != nil {
@@ -287,7 +288,7 @@ func (self *GoRoutineLogic) RunTimer(delta int, f func(int64)) {
 		return
 	}
 	caller := new(RoutineTimer)
-	caller.lastCallTime = timer.TimeStamp()
+	caller.lastCallTime = base.TimeStamp()
 	caller.timerCall = func(dt int64) { //try catch errors here, do not effect woker
 		defer func() {
 			if r := recover(); r != nil {
@@ -317,7 +318,7 @@ func (self *GoRoutineLogic) woker() {
 			self.HasCrashMsg = true
 		}
 	}()
-	//utm := timer.TimeStamp()
+	//utm := base.TimeStamp()
 	//utmPre := utm
 
 	for {
@@ -336,9 +337,9 @@ func (self *GoRoutineLogic) woker() {
 						self.cRoLimitChan <- struct{}{}
 						go self.CallGoFunc(hd, &ct)
 					} else {
-						self.execTime = timer.TimeStamp()
+						self.execTime = base.TimeStamp()
 						ret := self.CallFunc(hd, &ct.Data)
-						endTime := timer.TimeStamp()
+						endTime := base.TimeStamp()
 						if endTime-self.execTime > ACTOR_EXEC_LONG {
 							llog.Warningf("GoRoutineLogic exec long time: %s, %d", ct.Handler, endTime-self.execTime)
 						}
@@ -368,7 +369,7 @@ func (self *GoRoutineLogic) woker() {
 			}
 			caller, ok := self.timerFuncs[index]
 			if ok {
-				nt := timer.TimeStamp()
+				nt := base.TimeStamp()
 				if self.goFun {
 					go caller.timerCall(nt - caller.lastCallTime)
 				} else {
@@ -462,9 +463,9 @@ func (self *GoRoutineLogic) Send(handler_name string, sdata *M) {
 		return
 	}
 	left := self.LeftJobNumber()
-	if left > self.GetWarnChanLen() && self.GetWarningTime() < timer.TimeStampSec() {
+	if left > self.GetWarnChanLen() && self.GetWarningTime() < base.TimeStampSec() {
 		llog.Errorf("GoRoutineLogic.Send:[src=%s,target=%s (chan may overlow[now=%d, max=%d])] func=%s", self.Name, self.GetName(), self.LeftJobNumber(), self.GetChanLen(), handler_name)
-		self.SetWarningTime(timer.TimeStampSec() + CHAN_OVERLOW)
+		self.SetWarningTime(base.TimeStampSec() + CHAN_OVERLOW)
 	}
 	if left > self.GetChanLen() {
 		llog.Errorf("GoRoutineLogic.Send:[src=%s,target=%s (chan overlow[now=%d, max=%d])] func=%s", self.Name, self.GetName(), self.LeftJobNumber(), self.GetChanLen(), handler_name)
@@ -493,9 +494,9 @@ func (self *GoRoutineLogic) SendBack(server IGoRoutine, handler_name string, sda
 		return
 	}
 	left := server.LeftJobNumber()
-	if left > server.GetWarnChanLen() && server.GetWarningTime() < timer.TimeStampSec() {
+	if left > server.GetWarnChanLen() && server.GetWarningTime() < base.TimeStampSec() {
 		llog.Noticef("GoRoutineLogic.SendBack:[src=%s,target=%s (chan may overlow[now=%d, max=%d])] func=%s", self.Name, server.GetName(), server.LeftJobNumber(), server.GetChanLen(), handler_name)
-		server.SetWarningTime(timer.TimeStampSec() + CHAN_OVERLOW)
+		server.SetWarningTime(base.TimeStampSec() + CHAN_OVERLOW)
 	}
 	if left > server.GetChanLen() {
 		llog.Noticef("GoRoutineLogic.SendBack:[src=%s,target=%s (chan overlow[now=%d, max=%d])] func=%s", self.Name, server.GetName(), server.LeftJobNumber(), server.GetChanLen(), handler_name)
@@ -515,9 +516,9 @@ func (self *GoRoutineLogic) Call(server IGoRoutine, handler_name string, sdata *
 		return nil, false
 	}
 	left := server.LeftJobNumber()
-	if left > server.GetWarnChanLen() && server.GetWarningTime() > timer.TimeStampSec() {
+	if left > server.GetWarnChanLen() && server.GetWarningTime() > base.TimeStampSec() {
 		llog.Noticef("GoRoutineLogic.Call:[src=%s,target=%s (chan may overlow[now=%d, max=%d])] func=%s", self.Name, server.GetName(), server.LeftJobNumber(), server.GetChanLen(), handler_name)
-		server.SetWarningTime(timer.TimeStampSec() + CHAN_OVERLOW)
+		server.SetWarningTime(base.TimeStampSec() + CHAN_OVERLOW)
 	}
 
 	if left > server.GetChanLen() {
@@ -532,11 +533,11 @@ func (self *GoRoutineLogic) Call(server IGoRoutine, handler_name string, sdata *
 		self.callNum--
 	}()
 	self.callNum++
-	before := util.TimeStamp()
+	before := base.TimeStamp()
 	server.GetJobChan() <- job
 	select {
 	case rdata := <-readChan:
-		after := timer.TimeStamp()
+		after := base.TimeStamp()
 		if after-before > CHAN_CALL_LONG {
 			llog.Noticef("GoRoutineLogic.Call:[src=%s,target=%s (use too long[time=%d])] func=%s", self.Name, server.GetName(), after-before, handler_name)
 		}
@@ -574,9 +575,9 @@ func (self *GoRoutineLogic) CallFunc(cb HanlderFunc, data *M) interface{} {
 }
 
 func (self *GoRoutineLogic) CallGoFunc(hd HanlderFunc, ct *ChannelContext) {
-	self.execTime = timer.TimeStamp()
+	self.execTime = base.TimeStamp()
 	ret := self.CallFunc(hd, &ct.Data)
-	endTime := timer.TimeStamp()
+	endTime := base.TimeStamp()
 	if endTime-self.execTime > ACTOR_EXEC_LONG {
 		llog.Warningf("GoRoutineLogic CallGoFunc exec long time: %s, %d", ct.Handler, endTime-self.execTime)
 	}

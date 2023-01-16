@@ -45,7 +45,7 @@ func connectDB() error {
 	return nil
 }
 
-// 连接数据库
+//连接数据库
 func DialDefault() error {
 	err := connectDB()
 	if err != nil {
@@ -101,8 +101,8 @@ func CountDocuments(dbname, colname string, filter bson.D) (int64, error) {
 	return collection.CountDocuments(context.TODO(), filter)
 }
 
-// InsertOneDefault 添加单个document
-// colname：集合名
+//InsertOneDefault 添加单个document
+//colname：集合名
 func InsertOneDefault(colname string, document interface{}) error {
 	return InsertOne(DbName, colname, document)
 }
@@ -145,7 +145,7 @@ func InsertMany(dbname, colname string, documents []interface{}) ([]string, erro
 }
 
 // FindOneByIdDefault 查询单个document
-// args : filter, projection
+//args : filter, projection
 func FindOneByIdDefault(colname string, result interface{}, id string, args ...bson.D) error {
 	if mClient == nil {
 		return fmt.Errorf("FindOneByIdDefault db connected")
