@@ -461,6 +461,18 @@ func HMSet(key string, fields ...interface{}) (err error) {
 	return
 }
 
+// 获取所有hash 中的值
+func HGetAll(key string) ([]string, error) {
+	db := pool.Get()
+	defer db.Close()
+
+	v, err := redis.Strings(db.Do("HGETALL ", key))
+	if err != nil {
+		llog.Errorf("HGetAll: key = %s, err = %s", key, err.Error())
+	}
+	return v, err
+}
+
 // 获取单个hash 中的值
 func HGetString(key, field string) (string, error) {
 	db := pool.Get()

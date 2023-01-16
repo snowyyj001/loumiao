@@ -112,7 +112,7 @@ func packetFunc(socketid int, buff []byte, nlen int) error {
 		actor.Handler(actor.Igo, int(clientId), body)
 	} else {
 		if !config.SERVER_RELEASE {
-			llog.Warningf("UdpGateServer packetFunc handler is nil, drop it[%d]", msgId)
+			llog.Warningf("UdpGateServer packetFunc handler is nil, drop it[%d][%d]", msgId, socketid)
 		}
 
 	}

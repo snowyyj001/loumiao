@@ -9,7 +9,7 @@ ServerType_None      = iota //0 物理机控制节点
 
 ServerType_Gate             //1 网关，集群
 
-ServerType_Account          //2 账号，集群
+ServerType_Match          //2 匹配，集群
 
 ServerType_World            //3 世界，集群
 

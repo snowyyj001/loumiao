@@ -87,6 +87,7 @@ type GoRoutineLogic struct {
 	goFun        bool                      //true:使用go执行Cmd,GoRoutineLogic非协程安全;false:协程安全
 	cRoLimitChan chan struct{}             //异步协程上限控制
 	execTime     int64
+	callNum      int //当前call数量
 
 	rpcWaitchan map[string]chan interface{}
 
@@ -443,7 +444,7 @@ func (self *GoRoutineLogic) CloseCleanly() {
 		caller.timer.Stop()
 	}
 	timer.NewTicker(1000, func(dt int64) bool {
-		if self.LeftJobNumber() == 0 {
+		if self.LeftJobNumber() == 0 && self.callNum == 0 {
 			timer.DelayJob(1000, func() {
 				self.actionChan <- ACTION_CLOSE
 			}, true)
@@ -527,8 +528,11 @@ func (self *GoRoutineLogic) Call(server IGoRoutine, handler_name string, sdata *
 	if sdata != nil {
 		job.Data = *sdata
 	}
-
-	before := timer.TimeStamp()
+	defer func() {
+		self.callNum--
+	}()
+	self.callNum++
+	before := util.TimeStamp()
 	server.GetJobChan() <- job
 	select {
 	case rdata := <-readChan:
