@@ -123,7 +123,7 @@ func (self *WebSocket) AddClinet(wConn *websocket.Conn, addr string, connectType
 	pClient := self.LoadClient()
 	if pClient != nil {
 		pClient.Socket.Init(addr)
-		pClient.m_pServer = self
+		pClient.pServer = self
 		pClient.m_ClientId = self.AssignClientId()
 		pClient.SetConnectType(connectType)
 		pClient.SetWsConn(wConn)
