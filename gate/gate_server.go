@@ -118,10 +118,8 @@ func (self *GateServer) DoInit() bool {
 func (self *GateServer) DoRegsiter() {
 	llog.Infof("%s DoRegsiter", self.Name)
 
-	//	self.Register("RegisterNet", RegisterNet)
-	//	self.Register("UnRegisterNet", unRegisterNet)
 	self.Register("SendClient", sendClient)
-	self.Register("SendMulClient", sendMulClient)
+	self.Register("BroadCastClients", broadCastClients)
 	self.Register("NewClient", newClient)
 	self.Register("SendRpc", sendRpc)
 	self.Register("SendGate", sendGate)
@@ -149,9 +147,6 @@ func (self *GateServer) DoRegsiter() {
 
 	handler_Map["LouMiaoRpcMsg"] = "GateServer"
 	self.RegisterGate("LouMiaoRpcMsg", innerLouMiaoRpcMsg)
-
-	handler_Map["LouMiaoBroadCastMsg"] = "GateServer"
-	self.RegisterGate("LouMiaoBroadCastMsg", innerLouMiaoBroadCastMsg)
 
 	handler_Map["LouMiaoNetMsg"] = "GateServer"
 	self.RegisterGate("LouMiaoNetMsg", innerLouMiaoNetMsg)

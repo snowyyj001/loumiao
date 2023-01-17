@@ -4,6 +4,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/snowyyj001/loumiao/llog"
 	"github.com/snowyyj001/loumiao/message"
+	"runtime"
 )
 
 type IWebSocketClient interface {
@@ -12,7 +13,7 @@ type IWebSocketClient interface {
 
 type WebSocketClient struct {
 	Socket
-	m_pServer    *WebSocket
+	pServer      *WebSocket
 	m_ClientAddr string
 }
 
@@ -25,7 +26,7 @@ func (self *WebSocketClient) Start() bool {
 		return false
 	}
 
-	if self.m_pServer == nil {
+	if self.pServer == nil {
 		return false
 	}
 	self.m_bShuttingDown = false
@@ -34,11 +35,11 @@ func (self *WebSocketClient) Start() bool {
 	//self.m_WsConn.SetReadDeadline(time.Now().Add(10 * time.Second))
 
 	self.OnNetConn()
-	go wserverclientRoutine(self)
+	wsServerClientRoutine(self)
 	return true
 }
 
-func (self *WebSocketClient) Send(buff []byte) int {
+func (self *WebSocketClient) sendClient(buff []byte) int {
 	if self.m_WsConn == nil {
 		return 0
 	}
@@ -62,14 +63,55 @@ func (self *WebSocketClient) OnNetFail(error int) {
 }
 
 func (self *WebSocketClient) Close() {
-	if self.m_pServer != nil {
-		self.m_pServer.DelClinet(self)
-		self.m_pServer = nil
+	if self.pServer != nil {
+		self.pServer.DelClinet(self)
+		self.pServer = nil
 	}
 	self.Socket.Close()
 }
+func wsServerClientWriteRoutine(pClient *WebSocketClient) bool {
+	defer func() {
+		if r := recover(); r != nil {
+			buf := make([]byte, 2048)
+			l := runtime.Stack(buf, false)
+			llog.Errorf("wsServerClientWriteRoutine %v: %s", r, buf[:l])
+		}
+	}()
+	if pClient.m_Conn == nil {
+		return false
+	}
 
-func wserverclientRoutine(pClient *WebSocketClient) bool {
+	bMsg := broadMsgArray[pClient.m_broadMsgId]
+	for {
+		if pClient.m_bShuttingDown {
+			break
+		}
+
+		if pClient.m_nState == SSF_SHUT_DOWN {
+			break
+		}
+
+		select {
+		case m := <-pClient.m_WriteChan:
+			pClient.sendClient(m)
+		case <-bMsg.c:
+			pClient.sendClient(bMsg.buffer)
+			pClient.m_broadMsgId++
+			bMsg = broadMsgArray[pClient.m_broadMsgId]
+		}
+	}
+
+	return true
+}
+
+func wsServerClientReadRoutine(pClient *WebSocketClient) bool {
+	defer func() {
+		if r := recover(); r != nil {
+			buf := make([]byte, 2048)
+			l := runtime.Stack(buf, false)
+			llog.Errorf("wsServerClientReadRoutine %v: %s", r, buf[:l])
+		}
+	}()
 	if pClient.m_WsConn == nil {
 		return false
 	}
@@ -103,4 +145,9 @@ func wserverclientRoutine(pClient *WebSocketClient) bool {
 
 	pClient.Close()
 	return true
+}
+
+func wsServerClientRoutine(pClient *WebSocketClient) {
+	go wsServerClientReadRoutine(pClient)
+	go wsServerClientWriteRoutine(pClient)
 }

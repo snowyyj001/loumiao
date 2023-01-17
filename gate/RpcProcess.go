@@ -140,38 +140,6 @@ func innerLouMiaoRpcMsg(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	}
 }
 
-// recv broad cast msg
-func innerLouMiaoBroadCastMsg(igo gorpc.IGoRoutine, socketId int, data []byte) {
-	req := &msg.LouMiaoBroadCastMsg{}
-	if message.UnPackProto(req, data) != nil {
-		return
-	}
-	llog.Debugf("innerLouMiaoBroadCastMsg=%s, type=%d", req.FuncName, req.Type)
-	if config.NET_NODE_TYPE == config.ServerType_Gate { //server -> gate
-		serverType := int(req.Type)
-		outdata := &msg.LouMiaoBroadCastMsg{Type: req.Type, FuncName: req.FuncName, Buffer: req.Buffer}
-		buff, _ := message.EncodeProBuff(0, "LouMiaoBroadCastMsg", outdata)
-		for _, client := range This.clients {
-			node := nodemgr.GetNodeByAddr(client.GetSAddr())
-			if node.Type == serverType {
-				client.Send(buff)
-			}
-		}
-	} else { //gate -> server or gate self
-		handler, ok := handler_Map[req.FuncName]
-		if ok {
-			m := &gorpc.M{Id: int(req.Type), Name: req.FuncName, Data: req.Buffer}
-			if handler == "GateServer" {
-				igo.CallNetFunc(m)
-			} else {
-				gorpc.MGR.Send(handler, "ServiceHandler", m)
-			}
-		} else {
-			llog.Warningf("3.innerLouMiaoBroadCastMsg no rpc hanlder %s, %d", req.FuncName, socketId)
-		}
-	}
-}
-
 // recv net msg
 func innerLouMiaoNetMsg(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	req := &msg.LouMiaoNetMsg{} //after decode LouMiaoNetMsg msg, post Buffer to next
@@ -182,18 +150,17 @@ func innerLouMiaoNetMsg(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	userid := int(req.ClientId)
 
 	if config.NET_NODE_TYPE == config.ServerType_Gate { //server -> gate, for msg to client
-		socketId := This.GetClientId(userid)         // get client's socketid by userid
-		This.pService.SendById(socketId, req.Buffer) //send to client
+		if userid == -1 { //broad msg
+			network.BoardSend(req.Buffer)
+		} else {
+			socketId := This.GetClientId(userid)         // get client's socketid by userid
+			This.pService.SendById(socketId, req.Buffer) //send to client
+		}
 	} else { // gate -> server
 		target, name, buffbody, err := message.UnPackHead(req.Buffer, len(req.Buffer))
 		if err != nil {
 			llog.Errorf("innerLouMiaoNetMsg Decode error: err=%s, uid=%d,target=%d", err.Error(), config.SERVER_NODE_UID, target)
 		} else {
-			//不校验target了，因为gate没有把server type 替换为server uid，内部转发，没必要校验
-			/*if target != config.SERVER_NODE_UID && target > 0 {
-				llog.Errorf("innerLouMiaoNetMsg target may be error: targetuid=%d, myuid=%d, name=%s", target, config.SERVER_NODE_UID, name)
-				return
-			}*/
 			handler, ok := handler_Map[name]
 			if ok {
 				if name == This.Name {
@@ -290,12 +257,11 @@ func unRegisterNet(igo gorpc.IGoRoutine, data interface{}) interface{} {
 }
 
 func sendClient(igo gorpc.IGoRoutine, data interface{}) interface{} {
-	m := data.(*gorpc.M)
 	if config.NET_NODE_TYPE == config.ServerType_Account || config.NET_NODE_TYPE == config.ServerType_Gate {
-		This.pService.SendById(m.Id, m.Data.([]byte)) //set to client
+		llog.Error("0.sendClient gate can not send client")
 		return nil
 	}
-
+	m := data.(*gorpc.M)
 	socketId := This.GetGateClientId(m.Id)
 	if socketId == 0 {
 		llog.Warningf("0.sendClient gate has been lost, userid = %d", m.Id)
@@ -310,29 +276,16 @@ func sendClient(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	return nil
 }
 
-func sendMulClient(igo gorpc.IGoRoutine, data interface{}) interface{} {
+func broadCastClients(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	m := data.(*gorpc.M)
 	if config.NET_NODE_TYPE == config.ServerType_Account || config.NET_NODE_TYPE == config.ServerType_Gate {
 		llog.Error("0.sendMulClient gate can not send client")
 		return nil
 	}
-	ms := m.Data.(*gorpc.MS)
-	if len(ms.Ids) == 0 { //全部客户端广播正常情况不因该有
-		llog.Warning("broadCastClients")
-		broadCastClients(m.Data.([]byte))
-	} else {
-		for _, v := range ms.Ids { //m.Ids should be client`s userid
-			socketId := This.GetGateClientId(v) // get gate's socketid by client's userid
-			if socketId == 0 {
-				llog.Infof("1.sendMulClient gate has been lost, userid = %d", v)
-				return nil
-			}
-			msg := &msg.LouMiaoNetMsg{ClientId: int64(v), Buffer: ms.Data.([]byte)}
-			buff, _ := message.EncodeProBuff(0, "LouMiaoNetMsg", msg)
-			This.pInnerService.SendById(socketId, buff)
-		}
-	}
 
+	msg := &msg.LouMiaoNetMsg{ClientId: -1, Buffer: m.Data.([]byte)} //m.Id should be -1
+	buff, _ := message.EncodeProBuff(0, "LouMiaoNetMsg", msg)
+	This.pInnerService.BroadCast(buff)
 	return nil
 }
 
@@ -457,17 +410,6 @@ func closeServer(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	This.rpcGates = util.RemoveSlice(This.rpcGates, uid) //删除rpc负载，如果是rpcserver被关闭的话
 	This.rpcUids.Delete(uid)
 	return nil
-}
-
-// gate send msg to all clients or
-// server send msg to all gates
-func broadCastClients(buff []byte) {
-	llog.Debugf("GateServer broadCastClients: %d", config.SERVER_NODE_UID)
-	if config.NET_NODE_TYPE == config.ServerType_Gate {
-		This.pService.BroadCast(buff)
-	} else {
-		This.pInnerService.BroadCast(buff)
-	}
 }
 
 func publish(igo gorpc.IGoRoutine, data interface{}) interface{} {

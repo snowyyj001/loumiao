@@ -78,13 +78,8 @@ var (
 	NET_NODE_TYPE   = -1               //节点类型ServerType_*
 	NET_GATE_SADDR  = "127.0.0.1:6789" //网关监听地址
 
-	NET_PROTOCOL            = "PROTOBUF"       //消息协议格式："PROTOBUF" or "JSON"
-	NET_WEBSOCKET           = false            //使用websocket or socket
-	NET_MAX_CONNS           = 50000            //最大连接数
-	NET_MAX_RPC_CONNS       = 1024             //rpc最大连接数
-	NET_BUFFER_SIZE         = 1024 * 32        //最大消息包长度32k(对外)
-	NET_CLUSTER_BUFFER_SIZE = 16 * 1024 * 1024 //最大消息包长度16M(对内)
-	NET_MAX_NUMBER          = 10000            //pcu
+	NET_PROTOCOL  = "PROTOBUF" //消息协议格式："PROTOBUF" or "JSON"
+	NET_WEBSOCKET = false      //使用websocket or socket
 
 	SERVER_GROUP     = "A"            //服务器分组
 	SERVER_NAME      = "server"       //服务器名字

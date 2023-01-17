@@ -6,7 +6,7 @@ package gorpc
 // 声明一个函数类型，
 type HanlderFunc func(igo IGoRoutine, data interface{}) interface{}
 
-//data是一个nil或指针类型，需要
+// data是一个nil或指针类型，需要
 type HanlderNetFunc func(igo IGoRoutine, clientid int, buffer []byte)
 
 // 声明一个数据类型

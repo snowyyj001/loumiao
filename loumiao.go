@@ -137,7 +137,7 @@ func UnRegisterUdpNetHandler(userId int) {
 	udpgate.UnRegisterHandler(userId)
 }
 
-// 发送给客户端消息
+// SendClient 发送给客户端消息
 // @clientid: 客户端userid
 // @data: 消息结构体指针
 func SendClient(clientid int, data interface{}) {
@@ -149,23 +149,15 @@ func SendClient(clientid int, data interface{}) {
 	gorpc.MGR.Send("GateServer", "SendClient", m)
 }
 
-// 发送给客户端消息
-// @clientids: 客户端userid, 空代表全服发送
+// BroadCastClients 广播给客户端消息
 // @data: 消息结构体指针
-func SendMulClient(clientids []int, data interface{}) {
+func BroadCastClients(data interface{}) {
 	buff, n := message.Encode(0, "", data)
 	if n == 0 {
 		return
 	}
-	ms := &gorpc.MS{Ids: clientids, Data: buff}
-	m := &gorpc.M{Data: ms}
-	gorpc.MGR.Send("GateServer", "SendMulClient", m)
-}
-
-// 广播消息
-// @data: 消息结构体指针
-func BroadCastMsg(data interface{}) {
-	SendMulClient(nil, data)
+	m := &gorpc.M{Data: buff}
+	gorpc.MGR.Send("GateServer", "BroadCastClients", m)
 }
 
 // RegisterRpcHandlerName 注册rpc消息，使用igo名字

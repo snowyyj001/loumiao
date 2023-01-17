@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"net"
 	"runtime"
+	"sync"
 
 	"github.com/snowyyj001/loumiao/base"
 	"github.com/xtaci/kcp-go"
@@ -27,9 +28,27 @@ const (
 	CHILD_CONNECT             //client
 )
 
-const (
-	MAX_WRITE_CHAN = 32
+type BroadMsg struct {
+	c      chan struct{}
+	buffer []byte
+}
+
+var (
+	broadMsgMapSync sync.Mutex
+	broadMsgArray   [65536]*BroadMsg
+	broadMsgId      uint16
 )
+
+func BoardSend(buffer []byte) {
+	defer broadMsgMapSync.Unlock()
+	broadMsgMapSync.Lock()
+
+	c := make(chan struct{})
+	bMsg := broadMsgArray[broadMsgId]
+	broadMsgArray[broadMsgId+1] = &BroadMsg{c: c, buffer: buffer}
+	broadMsgId++
+	close(bMsg.c)
+}
 
 func handleError(err error) {
 	if err == nil {
@@ -63,6 +82,8 @@ type (
 
 		m_pInBufferLen int
 		m_pInBuffer    []byte
+		m_WriteChan    chan []byte
+		m_broadMsgId   uint16
 	}
 
 	ISocket interface {
@@ -81,9 +102,7 @@ type (
 		GetSAddr() string
 
 		GetState() int
-		//SetMaxSendBufferSize(int)
 		GetMaxSendBufferSize() int
-		//SetMaxReceiveBufferSize(int)
 		GetMaxReceiveBufferSize() int
 		BindPacketFunc(HandleFunc)
 		SetConnectType(int)
@@ -127,7 +146,8 @@ func (self *Socket) SetState(state int) {
 	self.m_nState = state
 }
 
-func (self *Socket) Send([]byte) int {
+func (self *Socket) Send(buffer []byte) int {
+	self.m_WriteChan <- buffer
 	return 0
 }
 
@@ -189,6 +209,7 @@ func (self *Socket) SetConnectType(nType int) {
 		self.m_MaxReceiveBufferSize = config.NET_BUFFER_SIZE
 	}
 	self.m_pInBuffer = make([]byte, self.m_MaxReceiveBufferSize) //预先申请一份内存来换取临时申请，减少gc但每个socket会申请2倍的m_MaxReceiveBufferSize内存大小
+	self.m_WriteChan = make(chan []byte, config.NET_MAX_WRITE_CHANSIZE)
 }
 
 func (self *Socket) SetUdpConn(conn net.Conn) {

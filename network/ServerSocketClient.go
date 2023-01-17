@@ -13,7 +13,7 @@ type IServerSocketClient interface {
 
 type ServerSocketClient struct {
 	Socket
-	m_pServer *ServerSocket
+	pServer *ServerSocket
 }
 
 func (self *ServerSocketClient) Start() bool {
@@ -25,7 +25,7 @@ func (self *ServerSocketClient) Start() bool {
 		return false
 	}
 
-	if self.m_pServer == nil {
+	if self.pServer == nil {
 		return false
 	}
 	self.m_bShuttingDown = false
@@ -43,12 +43,12 @@ func (self *ServerSocketClient) Start() bool {
 	//SetReadBuffer()
 	//SetWriteBuffer()
 	self.OnNetConn()
-	go serverclientRoutine(self)
+	serverClientRoutine(self)
 
 	return true
 }
 
-func (self *ServerSocketClient) Send(buff []byte) int {
+func (self *ServerSocketClient) sendClient(buff []byte) int {
 	n, err := self.m_Conn.Write(buff)
 	handleError(err)
 	if n > 0 {
@@ -70,19 +70,56 @@ func (self *ServerSocketClient) OnNetFail(errcode int) {
 
 func (self *ServerSocketClient) Close() {
 
-	if self.m_pServer != nil {
-		self.m_pServer.DelClinet(self)
-		self.m_pServer = nil
+	if self.pServer != nil {
+		self.pServer.DelClinet(self)
+		self.pServer = nil
 	}
 	self.Socket.Close()
 }
 
-func serverclientRoutine(pClient *ServerSocketClient) bool {
+// write msg
+func serverWriteRoutine(pClient *ServerSocketClient) bool {
 	defer func() {
 		if r := recover(); r != nil {
 			buf := make([]byte, 2048)
 			l := runtime.Stack(buf, false)
-			llog.Errorf("ServerSocketClient.serverclientRoutine %v: %s", r, buf[:l])
+			llog.Errorf("ServerSocketClient.serverWriteRoutine %v: %s", r, buf[:l])
+		}
+	}()
+	if pClient.m_Conn == nil {
+		return false
+	}
+
+	bMsg := broadMsgArray[pClient.m_broadMsgId]
+	for {
+		if pClient.m_bShuttingDown {
+			break
+		}
+
+		if pClient.m_nState == SSF_SHUT_DOWN {
+			break
+		}
+
+		select {
+		case m := <-pClient.m_WriteChan:
+			pClient.sendClient(m)
+		case <-bMsg.c:
+			pClient.sendClient(bMsg.buffer)
+			pClient.m_broadMsgId++
+			bMsg = broadMsgArray[pClient.m_broadMsgId]
+		}
+	}
+
+	return true
+}
+
+// read msg
+func serverReadRoutine(pClient *ServerSocketClient) bool {
+	defer func() {
+		if r := recover(); r != nil {
+			buf := make([]byte, 2048)
+			l := runtime.Stack(buf, false)
+			llog.Errorf("ServerSocketClient.serverReadRoutine %v: %s", r, buf[:l])
 		}
 	}()
 	if pClient.m_Conn == nil {
@@ -95,7 +132,6 @@ func serverclientRoutine(pClient *ServerSocketClient) bool {
 			pClient.OnNetFail(0)
 			break
 		}
-
 		n, err := pClient.m_Conn.Read(buff)
 		if err == io.EOF {
 			llog.Infof("远程m_Conn：%s已经关闭！", pClient.GetSAddr())
@@ -119,4 +155,9 @@ func serverclientRoutine(pClient *ServerSocketClient) bool {
 
 	pClient.Close()
 	return true
+}
+
+func serverClientRoutine(pClient *ServerSocketClient) {
+	go serverReadRoutine(pClient)
+	go serverWriteRoutine(pClient)
 }

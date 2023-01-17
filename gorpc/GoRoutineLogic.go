@@ -95,7 +95,7 @@ type GoRoutineLogic struct {
 	timerChan  chan int //定时器chan
 	timerFuncs map[int]*RoutineTimer
 
-	tikerChan    chan int64 //定时器chan
+	tickerChan   chan int64 //定时器chan
 	delayJobs    map[int64]*RoutineTimer
 	tickerIndex  int64
 	delayJobLock sync.Mutex
@@ -229,7 +229,7 @@ func (self *GoRoutineLogic) RunDelayJob(delta int, cb func(interface{}), param i
 		cb(caller.param)
 	}
 	caller.timer = timer.NewTimer(delta, func(dt int64) bool {
-		self.tikerChan <- caller.lastCallTime
+		self.tickerChan <- caller.lastCallTime
 		return true
 	}, false)
 	self.delayJobs[caller.lastCallTime] = caller
@@ -377,7 +377,7 @@ func (self *GoRoutineLogic) woker() {
 				}
 				caller.lastCallTime = nt
 			}
-		case index := <-self.tikerChan:
+		case index := <-self.tickerChan:
 			if self.started == 0 {
 				break
 			}
@@ -612,16 +612,12 @@ func (self *GoRoutineLogic) UnRegisterGate(name string) {
 
 func (self *GoRoutineLogic) init(name string) {
 	self.Name = name
-	n := self.ChanSize
-	if n == 0 {
-		n = CHAN_BUFFER_LEN
-	}
-	self.ChanSize = n
-	self.chanWarningSize = n * 2 / 3
-	self.jobChan = make(chan ChannelContext, n)
+	self.ChanSize = CHAN_BUFFER_LEN
+	self.chanWarningSize = self.ChanSize * 2 / 3
+	self.jobChan = make(chan ChannelContext, self.ChanSize)
 	//self.readChan = make(chan ChannelContext)
 	self.actionChan = make(chan int, 1)
-	self.cRoLimitChan = make(chan struct{}, n*CHAN_LIMIT_TIMES)
+	self.cRoLimitChan = make(chan struct{}, self.ChanSize*CHAN_LIMIT_TIMES)
 	self.Cmd = make(Cmdtype)
 	self.NetHandler = make(map[string]HanlderNetFunc)
 	//self.timer = time.NewTimer(1<<63 - 1) //默认没有定时器
@@ -630,7 +626,7 @@ func (self *GoRoutineLogic) init(name string) {
 
 	self.timerChan = make(chan int, 1)
 	self.timerFuncs = make(map[int]*RoutineTimer)
-	self.tikerChan = make(chan int64, 1)
+	self.tickerChan = make(chan int64, 1)
 	self.delayJobs = make(map[int64]*RoutineTimer)
 }
 

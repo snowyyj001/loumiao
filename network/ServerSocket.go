@@ -107,7 +107,7 @@ func (self *ServerSocket) AddClinet(tcpConn *net.TCPConn, addr string, connectTy
 	pClient := self.LoadClient()
 	if pClient != nil {
 		pClient.Socket.Init(addr)
-		pClient.m_pServer = self
+		pClient.pServer = self
 		pClient.m_ClientId = self.AssignClientId()
 		pClient.SetConnectType(connectType)
 		pClient.SetTcpConn(tcpConn)
