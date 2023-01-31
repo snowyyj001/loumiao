@@ -2,9 +2,8 @@ package network
 
 import (
 	"encoding/binary"
-	"github.com/snowyyj001/loumiao/util"
 	"net"
-	"sync"
+	"runtime"
 
 	"github.com/snowyyj001/loumiao/base"
 	"github.com/xtaci/kcp-go"
@@ -28,27 +27,9 @@ const (
 	CHILD_CONNECT             //client
 )
 
-type BroadMsg struct {
-	c      chan struct{}
-	buffer []byte
-}
-
-var (
-	broadMsgMapSync sync.Mutex
-	broadMsgArray   [65536]*BroadMsg
-	broadMsgId      uint16
+const (
+	MAX_WRITE_CHAN = 32
 )
-
-func BoardSend(buffer []byte) {
-	defer broadMsgMapSync.Unlock()
-	broadMsgMapSync.Lock()
-
-	c := make(chan struct{})
-	bMsg := broadMsgArray[broadMsgId]
-	broadMsgArray[broadMsgId+1] = &BroadMsg{c: c, buffer: buffer}
-	broadMsgId++
-	close(bMsg.c)
-}
 
 func handleError(err error) {
 	if err == nil {
@@ -82,8 +63,6 @@ type (
 
 		m_pInBufferLen int
 		m_pInBuffer    []byte
-		m_WriteChan    chan []byte
-		m_broadMsgId   uint16
 	}
 
 	ISocket interface {
@@ -102,7 +81,9 @@ type (
 		GetSAddr() string
 
 		GetState() int
+		//SetMaxSendBufferSize(int)
 		GetMaxSendBufferSize() int
+		//SetMaxReceiveBufferSize(int)
 		GetMaxReceiveBufferSize() int
 		BindPacketFunc(HandleFunc)
 		SetConnectType(int)
@@ -146,8 +127,7 @@ func (self *Socket) SetState(state int) {
 	self.m_nState = state
 }
 
-func (self *Socket) Send(buffer []byte) int {
-	self.m_WriteChan <- buffer
+func (self *Socket) Send([]byte) int {
 	return 0
 }
 
@@ -209,7 +189,6 @@ func (self *Socket) SetConnectType(nType int) {
 		self.m_MaxReceiveBufferSize = config.NET_BUFFER_SIZE
 	}
 	self.m_pInBuffer = make([]byte, self.m_MaxReceiveBufferSize) //预先申请一份内存来换取临时申请，减少gc但每个socket会申请2倍的m_MaxReceiveBufferSize内存大小
-	self.m_WriteChan = make(chan []byte, config.NET_MAX_WRITE_CHANSIZE)
 }
 
 func (self *Socket) SetUdpConn(conn net.Conn) {
@@ -248,7 +227,13 @@ func (self *Socket) HandlePacket(Id int, buff []byte, nlen int) error {
 }
 
 func (self *Socket) ReceivePacket(Id int, dat []byte) bool {
-	defer util.Recover()
+	defer func() {
+		if r := recover(); r != nil {
+			buf := make([]byte, 2048)
+			l := runtime.Stack(buf, false)
+			llog.Errorf("Isocket.ReceivePacket %v: %s", r, buf[:l])
+		}
+	}()
 	//	llog.Debugf("收到消息包 %v %d", dat, len(dat))
 	copy(self.m_pInBuffer[self.m_pInBufferLen:], dat)
 	self.m_pInBufferLen += len(dat)

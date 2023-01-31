@@ -1,9 +1,7 @@
 package timer
 
 import (
-	"github.com/snowyyj001/loumiao/llog"
 	"github.com/snowyyj001/loumiao/util"
-	"runtime"
 	"time"
 )
 
@@ -13,14 +11,6 @@ type Timer struct {
 	done chan bool
 	loop bool
 	over bool
-}
-
-func tRecover() {
-	if r := recover(); r != nil {
-		buf := make([]byte, 2048)
-		l := runtime.Stack(buf, false)
-		llog.Errorf("time recover %v: %s", r, buf[:l])
-	}
 }
 
 // 创建一个定时器
@@ -38,7 +28,7 @@ func NewTimer(dt int, cb func(dt int64) bool, repeat bool) *Timer {
 
 	go func(t *Timer) {
 		defer func() {
-			tRecover()
+			util.Recover()
 			t.t2.Stop()
 		}()
 		utm := time.Now().UnixNano() / int64(time.Millisecond)
@@ -84,7 +74,7 @@ func NewTicker(dt int, cb func(dt int64) bool) *Timer {
 
 	go func(timer *Timer) {
 		defer func() {
-			tRecover()
+			util.Recover()
 			timer.t1.Stop()
 		}()
 		utm := time.Now().UnixNano() / int64(time.Millisecond)
@@ -125,8 +115,8 @@ func DelayJob(dt int64, cb func(), sync bool) {
 		cb()
 	} else {
 		go func() {
-			<-time.After(time.Duration(dt) * time.Millisecond)
 			defer util.Recover()
+			<-time.After(time.Duration(dt) * time.Millisecond)
 			cb()
 		}()
 	}

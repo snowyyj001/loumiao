@@ -34,7 +34,9 @@ func (self *UdpClient) Start() bool {
 	}
 
 	if self.Connect() {
-		go clientUdpRoutine(self)
+		util.Go(func() {
+			clientUdpRoutine(self)
+		})
 		return true
 	}
 	return false

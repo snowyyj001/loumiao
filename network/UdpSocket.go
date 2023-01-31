@@ -81,8 +81,12 @@ func (self *UdpServerSocket) Start() bool {
 	//延迟，监听关闭
 	//defer ln.Close()
 	self.m_nState = SSF_ACCEPT
-	go udpserverRoutine()
-	go handlerUdpMsg()
+	util.Go(func() {
+		udpserverRoutine()
+	})
+	util.Go(func() {
+		handlerUdpMsg()
+	})
 	return true
 }
 
@@ -190,7 +194,7 @@ func handlerUdpMsg() {
 }
 
 func udpserverRoutine() {
-	//defer util.Recover()
+	defer util.Recover()
 	var buff = make([]byte, ThisUdpServerSocket.m_MaxReceiveBufferSize)
 	for {
 		n, udpAddr, err := ThisUdpServerSocket.mUpdConn.ReadFromUDP(buff)

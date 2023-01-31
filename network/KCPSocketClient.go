@@ -1,7 +1,7 @@
 package network
 
 import (
-	"runtime"
+	"github.com/snowyyj001/loumiao/util"
 	"time"
 
 	"github.com/snowyyj001/loumiao/llog"
@@ -33,8 +33,9 @@ func (self *KCPSocketClient) Start() bool {
 	self.m_nState = SSF_CONNECT
 
 	self.OnNetConn()
-	go kcpclientRoutine(self)
-
+	util.Go(func() {
+		kcpclientRoutine(self)
+	})
 	return true
 }
 
@@ -58,7 +59,7 @@ func (self *KCPSocketClient) OnNetConn() {
 	self.mHeartTimer = time.NewTimer(delat)
 	self.mHeartDone = make(chan bool)
 
-	go func() {
+	util.Go(func() {
 		for {
 			select {
 			case <-self.mHeartTimer.C:
@@ -75,7 +76,7 @@ func (self *KCPSocketClient) OnNetConn() {
 				return
 			}
 		}
-	}()
+	})
 }
 
 func (self *KCPSocketClient) OnNetFail(errcode int) {
@@ -94,13 +95,7 @@ func (self *KCPSocketClient) Close() {
 }
 
 func kcpclientRoutine(pClient *KCPSocketClient) bool {
-	defer func() {
-		if r := recover(); r != nil {
-			buf := make([]byte, 2048)
-			l := runtime.Stack(buf, false)
-			llog.Errorf("KCPSocketClient.kcpclientRoutine %v: %s", r, buf[:l])
-		}
-	}()
+	defer util.Recover()
 	if pClient.m_KcpConn == nil {
 		return false
 	}

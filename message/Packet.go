@@ -81,6 +81,9 @@ func DecodeProBuff(uid int, buff []byte, length int) (error, int, string, interf
 	if nameLen <= 0 {
 		return fmt.Errorf("DecodeProBuff: msgname len is illegal: %d", nameLen), 0, "", nil
 	}
+	if 8+int(nameLen) > len(buff) {
+		return fmt.Errorf("DecodeProBuff: msgname len is too big: %d", nameLen), 0, "", nil
+	}
 	msgName := string(buff[8 : 8+nameLen])
 	if length == 8+len(msgName) { //just for on CONNECT/DISCONNECT or []byte{}
 		if filterWarning[msgName] {
@@ -148,6 +151,9 @@ func DecodeJson(uid int, buff []byte, length int) (error, int, string, interface
 	if nameLen <= 0 {
 		return fmt.Errorf("DecodeJson: msgname len is illegal: %d", nameLen), 0, "", nil
 	}
+	if 8+int(nameLen) > len(buff) {
+		return fmt.Errorf("DecodeJson: msgname len is too big: %d", nameLen), 0, "", nil
+	}
 	msgName := string(buff[8 : 8+nameLen])
 	if length == 8+int(nameLen) { //just for on CONNECT/DISCONNECT or []byte{}
 		if filterWarning[msgName] {
@@ -188,6 +194,9 @@ func UnPackHead(buff []byte, length int) (int, string, []byte, error) {
 	nameLen := base.BytesToUInt16(mbuff1, binary.BigEndian)
 	if nameLen <= 0 {
 		return 0, "", nil, fmt.Errorf("UnPackHead: msgname len is illegal: %d", nameLen)
+	}
+	if 8+int(nameLen) > len(buff) {
+		return 0, "", nil, fmt.Errorf("UnPackHead: msgname len is too big: %d", nameLen)
 	}
 	msgName := string(buff[8 : 8+nameLen])
 	return target, msgName, buff[8+nameLen : length], nil

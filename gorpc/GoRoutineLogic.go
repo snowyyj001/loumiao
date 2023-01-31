@@ -3,7 +3,7 @@ package gorpc
 
 import (
 	"github.com/snowyyj001/loumiao/base"
-	"runtime"
+	"github.com/snowyyj001/loumiao/util"
 	"sync"
 	"time"
 	"unsafe"
@@ -218,14 +218,6 @@ func (self *GoRoutineLogic) RunDelayJob(delta int, cb func(interface{}), param i
 	self.tickerIndex++
 	caller.lastCallTime = self.tickerIndex
 	caller.timerCall = func(dt int64) { //try catch errors here, do not effect woker
-		defer func() {
-			if r := recover(); r != nil {
-				buf := make([]byte, 2048)
-				l := runtime.Stack(buf, false)
-				llog.Errorf("GoRoutineLogic.RunTicker[%s] %v: %s", self.Name, r, buf[:l])
-				self.HasCrashMsg = true
-			}
-		}()
 		cb(caller.param)
 	}
 	caller.timer = timer.NewTimer(delta, func(dt int64) bool {
@@ -250,14 +242,6 @@ func (self *GoRoutineLogic) RunTicker(delta int, f func(int64)) {
 	caller := new(RoutineTimer)
 	caller.lastCallTime = base.TimeStamp()
 	caller.timerCall = func(dt int64) { //try catch errors here, do not effect woker
-		defer func() {
-			if r := recover(); r != nil {
-				buf := make([]byte, 2048)
-				l := runtime.Stack(buf, false)
-				llog.Errorf("GoRoutineLogic.RunTimer[%s] %v: %s", self.Name, r, buf[:l])
-				self.HasCrashMsg = true
-			}
-		}()
 		f(dt)
 	}
 	caller.timer = timer.NewTicker(delta, func(dt int64) bool {
@@ -290,14 +274,6 @@ func (self *GoRoutineLogic) RunTimer(delta int, f func(int64)) {
 	caller := new(RoutineTimer)
 	caller.lastCallTime = base.TimeStamp()
 	caller.timerCall = func(dt int64) { //try catch errors here, do not effect woker
-		defer func() {
-			if r := recover(); r != nil {
-				buf := make([]byte, 2048)
-				l := runtime.Stack(buf, false)
-				llog.Errorf("GoRoutineLogic.RunTimer[%s] %v: %s", self.Name, r, buf[:l])
-				self.HasCrashMsg = true
-			}
-		}()
 		f(dt)
 	}
 	caller.timer = timer.NewTimer(delta, func(dt int64) bool {
@@ -310,14 +286,7 @@ func (self *GoRoutineLogic) RunTimer(delta int, f func(int64)) {
 
 // 工作队列
 func (self *GoRoutineLogic) woker() {
-	defer func() {
-		if r := recover(); r != nil {
-			buf := make([]byte, 2048)
-			l := runtime.Stack(buf, false)
-			llog.Errorf("GoRoutineLogic.woker[%s] %v: %s", self.Name, r, buf[:l])
-			self.HasCrashMsg = true
-		}
-	}()
+	defer util.Recover()
 	//utm := base.TimeStamp()
 	//utmPre := utm
 
@@ -371,7 +340,9 @@ func (self *GoRoutineLogic) woker() {
 			if ok {
 				nt := base.TimeStamp()
 				if self.goFun {
-					go caller.timerCall(nt - caller.lastCallTime)
+					util.Go(func() {
+						caller.timerCall(nt - caller.lastCallTime)
+					})
 				} else {
 					caller.timerCall(nt - caller.lastCallTime)
 				}
@@ -387,7 +358,10 @@ func (self *GoRoutineLogic) woker() {
 				delete(self.delayJobs, index)
 				self.delayJobLock.Unlock()
 				if self.goFun {
-					go caller.timerCall(0)
+					util.Go(func() {
+						caller.timerCall(0)
+						self.HasCrashMsg = true
+					})
 				} else {
 					caller.timerCall(0)
 				}
@@ -560,13 +534,7 @@ func (self *GoRoutineLogic) CallActor(target string, handler_name string, sdata 
 }
 
 func (self *GoRoutineLogic) CallFunc(cb HanlderFunc, data *M) interface{} {
-	defer func() {
-		if r := recover(); r != nil {
-			buf := make([]byte, 2048)
-			l := runtime.Stack(buf, false)
-			llog.Errorf("GoRoutineLogic.CallFunc[%s] %v: %s", self.Name, r, buf[:l])
-		}
-	}()
+	defer util.Recover()
 	if data.Flag {
 		return cb(self, data.Data)
 	} else {

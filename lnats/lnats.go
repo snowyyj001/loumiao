@@ -34,13 +34,13 @@ func FormatTopic(topic, prefix string) string {
 //不带分组得消息订阅发布，会采用one-many的方式
 //带分组的方式，会采用one-one的方式
 
-//同步订阅消息,带分组
+// 同步订阅消息,带分组
 func QueueSubscribeTagSync(topic, prefix, queue string) ([]byte, error) {
 	newtopic := FormatTopic(topic, prefix)
 	return QueueSubscribeSync(newtopic, queue, TIMEOUT_NATS)
 }
 
-//同步订阅消息,带分组
+// 同步订阅消息,带分组
 func QueueSubscribeSync(topic, queue string, waittime int) ([]byte, error) {
 	// Subscribe
 	sub, err := lnc.QueueSubscribeSync(topic, queue)
@@ -55,7 +55,7 @@ func QueueSubscribeSync(topic, queue string, waittime int) ([]byte, error) {
 	return msg.Data, err
 }
 
-//异步订阅消息,带分组
+// 异步订阅消息,带分组
 func QueueSubscribe(topic, queue string, call func([]byte)) error {
 	// Subscribe
 	_, err := lnc.QueueSubscribe(topic, queue, func(m *nats.Msg) {
@@ -64,7 +64,7 @@ func QueueSubscribe(topic, queue string, call func([]byte)) error {
 	return err
 }
 
-//异步订阅消息,带分组
+// 异步订阅消息,带分组
 func QueueSubscribeTag(topic, prefix, queue string, call func([]byte)) error {
 	newtopic := FormatTopic(topic, prefix)
 	return QueueSubscribe(newtopic, queue, call)
@@ -107,28 +107,28 @@ func SubscribeAsync(topic string, call func([]byte)) error {
 	return err
 }
 
-//发布消息
+// 发布消息
 func PublishTag(topic string, prefix string, message []byte) error {
 	newtopic := FormatTopic(topic, prefix)
 	return lnc.Publish(newtopic, message)
 }
 
-//发布消息
+// 发布消息
 func Publish(topic string, message []byte) error {
 	return lnc.Publish(topic, message)
 }
 
-//发布消息
+// 发布消息
 func PublishString(topic, message string) error {
 	return lnc.Publish(topic, []byte(message))
 }
 
-//发布消息
+// 发布消息
 func PublishInt(topic string, message int) error {
 	return lnc.Publish(topic, base.Int64ToBytesDefault(int64(message)))
 }
 
-//请求消息
+// 请求消息
 func Request(topic string, message []byte, waittime int) []byte {
 	msg, err := lnc.Request(topic, message, time.Duration(waittime)*time.Second)
 	if err != nil {
@@ -137,7 +137,7 @@ func Request(topic string, message []byte, waittime int) []byte {
 	return msg.Data
 }
 
-//回复消息
+// 回复消息
 func Response(topic string, call func([]byte) []byte) error {
 	_, err := lnc.Subscribe(topic, func(m *nats.Msg) {
 		defer util.Recover()
@@ -147,7 +147,7 @@ func Response(topic string, call func([]byte) []byte) error {
 	return err
 }
 
-//请求消息
+// 请求消息
 func RequestTag(topic string, prefix string, message []byte, waittime int) ([]byte, error) {
 	newtopic := FormatTopic(topic, prefix)
 	msg, err := lnc.Request(newtopic, message, time.Duration(waittime)*time.Second)
@@ -157,7 +157,7 @@ func RequestTag(topic string, prefix string, message []byte, waittime int) ([]by
 	return msg.Data, nil
 }
 
-//回复消息
+// 回复消息
 func ResponseTag(topic string, prefix string, call func([]byte) []byte) error {
 	newtopic := FormatTopic(topic, prefix)
 	_, err := lnc.Subscribe(newtopic, func(m *nats.Msg) {
@@ -168,7 +168,7 @@ func ResponseTag(topic string, prefix string, call func([]byte) []byte) error {
 	return err
 }
 
-//回复消息带分组
+// 回复消息带分组
 func QueueResponse(topic string, queue string, call func([]byte) []byte) error {
 	_, err := lnc.QueueSubscribe(topic, queue, func(m *nats.Msg) {
 		defer util.Recover()
@@ -178,7 +178,7 @@ func QueueResponse(topic string, queue string, call func([]byte) []byte) error {
 	return err
 }
 
-//回复消息带分组
+// 回复消息带分组
 func QueueResponseTag(topic string, prefix string, queue string, call func([]byte) []byte) error {
 	newtopic := FormatTopic(topic, prefix)
 	_, err := lnc.QueueSubscribe(newtopic, queue, func(m *nats.Msg) {
@@ -232,8 +232,9 @@ func Init() {
 	errorLimiter = ratelimiter.Create(PermitsPerSecond, MaxPermits)
 }
 
-//上报服务器关键信息
+// 上报服务器关键信息
 func ReportMail(tag int, str string) {
+	defer util.Recover()
 	//这里说一下golang有意思的事情，errorLimiter为nil的话，是不会在241行报错的，会在RateLimiter的Acquire内部使用self时报错，这和其他语言例如cpp是不一样的
 	if errorLimiter == nil {
 		return

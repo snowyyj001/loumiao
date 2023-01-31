@@ -2,6 +2,7 @@ package network
 
 import (
 	"github.com/snowyyj001/loumiao/nodemgr"
+	"github.com/snowyyj001/loumiao/util"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -72,7 +73,9 @@ func (self *ServerSocket) Start() bool {
 	//延迟，监听关闭
 	//defer ln.Close()
 	self.m_nState = SSF_ACCEPT
-	go serverRoutine(self)
+	util.Go(func() {
+		serverRoutine(self)
+	})
 	return true
 }
 
@@ -129,7 +132,7 @@ func (self *ServerSocket) AddClinet(tcpConn *net.TCPConn, addr string, connectTy
 func (self *ServerSocket) DelClinet(pClient *ServerSocketClient) bool {
 	self.m_ClientLocker.Lock()
 	delete(self.m_ClientList, pClient.m_ClientId)
-	llog.Debugf("客户端：%s已断开连接[%d]", pClient.m_Conn.RemoteAddr().String(), pClient.m_ClientId)
+	llog.Debugf("客户端：已断开连接[%d]", pClient.m_ClientId)
 	self.m_ClientLocker.Unlock()
 	self.m_nClientCount--
 	return true
@@ -193,6 +196,7 @@ func (self *ServerSocket) SetMaxClients(maxnum int) {
 }
 
 func serverRoutine(server *ServerSocket) {
+	defer util.Recover()
 	var tempDelay time.Duration
 	for {
 		tcpConn, err := server.m_Listen.AcceptTCP()

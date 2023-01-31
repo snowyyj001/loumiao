@@ -1,8 +1,8 @@
 package network
 
 import (
+	"github.com/snowyyj001/loumiao/util"
 	"net/url"
-	"runtime"
 	"sync"
 
 	"github.com/gorilla/websocket"
@@ -38,7 +38,9 @@ func (self *WebClient) Start() bool {
 	}
 
 	if self.Connect() {
-		go wsclientRoutine(self)
+		util.Go(func() {
+			wsclientRoutine(self)
+		})
 	} else {
 		llog.Errorf("WebClient.Start error : can not connect %s", self.m_sAddr)
 	}
@@ -105,13 +107,7 @@ func (self *WebClient) OnNetFail(int) {
 }
 
 func wsclientRoutine(pClient *WebClient) bool {
-	defer func() {
-		if r := recover(); r != nil {
-			buf := make([]byte, 2048)
-			l := runtime.Stack(buf, false)
-			llog.Errorf("WebClient.wsclientRoutine %v: %s", r, buf[:l])
-		}
-	}()
+	defer util.Recover()
 	if pClient.m_WsConn == nil {
 		return false
 	}

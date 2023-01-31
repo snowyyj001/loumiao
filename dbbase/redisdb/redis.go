@@ -40,7 +40,7 @@ func Dial(url, pass string) error {
 				llog.Errorf("redis[%s] ping error: %s", url, err.Error())
 				//这里重连
 				llog.Infof("redis begin reconnected")
-				go func() {
+				util.Go(func() {
 					for {
 						err = DialDefault()
 						if err != nil {
@@ -50,7 +50,7 @@ func Dial(url, pass string) error {
 							break
 						}
 					}
-				}()
+				})
 			}
 			return err
 		},

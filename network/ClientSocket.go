@@ -1,11 +1,10 @@
 package network
 
 import (
+	"github.com/snowyyj001/loumiao/llog"
+	"github.com/snowyyj001/loumiao/util"
 	"io"
 	"net"
-	"runtime"
-
-	"github.com/snowyyj001/loumiao/llog"
 
 	"github.com/snowyyj001/loumiao/message"
 )
@@ -41,7 +40,9 @@ func (self *ClientSocket) Start() bool {
 
 	if self.Connect() {
 		self.m_Conn.(*net.TCPConn).SetNoDelay(true)
-		go clientRoutine(self)
+		util.Go(func() {
+			clientRoutine(self)
+		})
 
 		return true
 	}
@@ -113,13 +114,7 @@ func (self *ClientSocket) OnNetFail(int) {
 }
 
 func clientRoutine(pClient *ClientSocket) bool {
-	defer func() {
-		if r := recover(); r != nil {
-			buf := make([]byte, 2048)
-			l := runtime.Stack(buf, false)
-			llog.Errorf("ClientSocket.clientRoutine %v: %s", r, buf[:l])
-		}
-	}()
+	defer util.Recover()
 	if pClient.m_Conn == nil {
 		llog.Errorf("client has no conn: %s", pClient.m_sAddr)
 		return false

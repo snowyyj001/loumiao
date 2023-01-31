@@ -12,7 +12,6 @@ import (
 	"os"
 	"os/signal"
 	"reflect"
-	"runtime"
 	"strings"
 	"syscall"
 
@@ -59,13 +58,7 @@ func Start(igo gorpc.IGoRoutine, name string, sync bool) {
 
 // 开启游戏
 func Run() {
-	defer func() {
-		if r := recover(); r != nil {
-			buf := make([]byte, 2048)
-			l := runtime.Stack(buf, false)
-			llog.Errorf("loumiao run error: name=%s, error=%v, stack=%s", config.SERVER_NAME, r, buf[:l])
-		}
-	}()
+	defer util.Recover()
 
 	util.DumpPid()
 

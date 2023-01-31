@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/gob"
 	"fmt"
+	"github.com/snowyyj001/loumiao/util"
 	"gorm.io/gorm/clause"
 	"hash/crc32"
 	"reflect"
@@ -56,7 +57,7 @@ func init() {
 	Master = engine
 }
 
-//生成call调用后的执行的mysql语句
+// 生成call调用后的执行的mysql语句
 func Explain(call func() *gorm.DB) (string, bool) {
 	tx := call()
 	if tx.Error != nil {
@@ -76,7 +77,7 @@ func (self *ORMDB) DB() *gorm.DB {
 	return self.m_Db
 }
 
-//主数据库
+// 主数据库
 func DBM() *gorm.DB {
 	return Master
 }
@@ -85,7 +86,7 @@ func MTble(tname string) *gorm.DB {
 	return Master.Table(tname)
 }
 
-//从数据库
+// 从数据库
 func DBS() *gorm.DB {
 	if SLen == 0 {
 		return Master
@@ -106,7 +107,7 @@ func STble(tname string) *gorm.DB {
 	return DBS().Table(tname)
 }
 
-//连接数据库,使用config-mysql参数,同时创建修改表
+// 连接数据库,使用config-mysql参数,同时创建修改表
 func Dial(tbs []interface{}) error {
 
 	//account:pass@tcp(url)/dbname
@@ -132,7 +133,7 @@ func Dial(tbs []interface{}) error {
 		create(Master, tbs)
 	}
 
-	go func() { //每秒钟检测一次数据库连接状态
+	util.Go(func() { //每秒钟检测一次数据库连接状态
 		for {
 			sqlDB, _ := Master.DB()
 			if err := sqlDB.Ping(); err != nil {
@@ -153,19 +154,19 @@ func Dial(tbs []interface{}) error {
 			}
 			time.Sleep(time.Second * 3)
 		}
-	}()
+	})
 
 	llog.Infof("mysql dail success: %v", config.Cfg.DBUri)
 
 	return nil
 }
 
-//连接数据库,使用config-mysql参数,不创建修改表
+// 连接数据库,使用config-mysql参数,不创建修改表
 func DialDefault() error {
 	return Dial(nil)
 }
 
-//创建数据表
+// 创建数据表
 func create(db *gorm.DB, tbs []interface{}) {
 	for _, tb := range tbs {
 		err := db.Table(tb.(schema.Tabler).TableName()).Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(tb)
@@ -175,7 +176,7 @@ func create(db *gorm.DB, tbs []interface{}) {
 	}
 }
 
-//使用主库添加st结构
+// 使用主库添加st结构
 func MInsert(st schema.Tabler) bool {
 	err := Master.Table(st.TableName()).Create(st).Error
 	if err != nil {
@@ -185,7 +186,7 @@ func MInsert(st schema.Tabler) bool {
 	return true
 }
 
-//使用主库添加st结构
+// 使用主库添加st结构
 func MFirstOrCreate(st interface{}, conds ...interface{}) bool {
 	err := Master.FirstOrCreate(st, conds...).Error
 	if err != nil {
@@ -195,8 +196,8 @@ func MFirstOrCreate(st interface{}, conds ...interface{}) bool {
 	return true
 }
 
-//使用主库更新pst结构,pst是指针，指示key，st支持 struct 和 map[string]interface{} 参数
-//st为结构体时，只会更新非零值的字段
+// 使用主库更新pst结构,pst是指针，指示key，st支持 struct 和 map[string]interface{} 参数
+// st为结构体时，只会更新非零值的字段
 func MUpdates(pst schema.Tabler, st interface{}) bool {
 	err := Master.Model(pst).Updates(st).Error
 	if err != nil {
@@ -206,7 +207,7 @@ func MUpdates(pst schema.Tabler, st interface{}) bool {
 	return true
 }
 
-//使用主库更新st结构的attrs字段
+// 使用主库更新st结构的attrs字段
 func MUpdate(st schema.Tabler, attrs ...interface{}) bool {
 	sz := len(attrs)
 	if sz == 0 {
@@ -232,7 +233,7 @@ func MUpdate(st schema.Tabler, attrs ...interface{}) bool {
 	return true
 }
 
-//使用主库删除st结构
+// 使用主库删除st结构
 func MDelete(st schema.Tabler) bool {
 	err := Master.Table(st.TableName()).Delete(st).Error
 	if err != nil {
@@ -242,7 +243,7 @@ func MDelete(st schema.Tabler) bool {
 	return true
 }
 
-//使用主库执行一个事务
+// 使用主库执行一个事务
 func MTransaction(call func(db *gorm.DB, params ...interface{}) error, params ...interface{}) error {
 	err := Master.Transaction(func(tx *gorm.DB) error {
 		return call(tx, params...)
@@ -254,8 +255,8 @@ func MTransaction(call func(db *gorm.DB, params ...interface{}) error, params ..
 	return err
 }
 
-//使用主库添加数据，冲突的话更新 ON DUPLICATE KEY UPDATE
-//coloms为空时，更新除主键以外的所有列到新值
+// 使用主库添加数据，冲突的话更新 ON DUPLICATE KEY UPDATE
+// coloms为空时，更新除主键以外的所有列到新值
 func MDuplicate(st schema.Tabler, coloms []string) bool {
 	if len(coloms) == 0 {
 		Master.Clauses(clause.OnConflict{
@@ -269,7 +270,7 @@ func MDuplicate(st schema.Tabler, coloms []string) bool {
 	return true
 }
 
-//计算orm结构的CRC32值
+// 计算orm结构的CRC32值
 func MGetCRCCode(st schema.Tabler) uint32 {
 	v := reflect.ValueOf(st)
 	tv := v.FieldByName("TFlag")

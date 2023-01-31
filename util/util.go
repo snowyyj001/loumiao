@@ -29,6 +29,13 @@ func Recover() {
 	}
 }
 
+func Go(fn func()) {
+	go func() {
+		defer Recover()
+		fn()
+	}()
+}
+
 // 获得rpc注册名
 func RpcFuncName(call interface{}) string {
 	//base64str := base64.StdEncoding.EncodeToString([]byte(funcName))

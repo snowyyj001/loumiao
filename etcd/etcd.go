@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/snowyyj001/loumiao/util"
 
 	"sync"
 	"time"
@@ -165,7 +166,9 @@ func (self *EtcdBase) SetLease(timeNum int64, keepalive bool) error {
 		self.canclefunc = cancelFunc
 		self.keepAliveChan = leaseRespChan
 
-		go self.listenLeaseRespChan()
+		util.Go(func() {
+			self.listenLeaseRespChan()
+		})
 	}
 
 	self.lease = lease
@@ -313,7 +316,9 @@ func (self *ClientDis) WatchCommon(prefix string, hanlder func(string, string, b
 	self.otherFunc.Store(prefix, hanlder)
 	self.extractOthers(hanlder, resp)
 
-	go self.watcher(prefix)
+	util.Go(func() {
+		self.watcher(prefix)
+	})
 	return nil
 }
 

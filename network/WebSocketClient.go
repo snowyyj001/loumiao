@@ -4,7 +4,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/snowyyj001/loumiao/llog"
 	"github.com/snowyyj001/loumiao/message"
-	"runtime"
+	"github.com/snowyyj001/loumiao/util"
 )
 
 type IWebSocketClient interface {
@@ -70,13 +70,7 @@ func (self *WebSocketClient) Close() {
 	self.Socket.Close()
 }
 func wsServerClientWriteRoutine(pClient *WebSocketClient) bool {
-	defer func() {
-		if r := recover(); r != nil {
-			buf := make([]byte, 2048)
-			l := runtime.Stack(buf, false)
-			llog.Errorf("wsServerClientWriteRoutine %v: %s", r, buf[:l])
-		}
-	}()
+	defer util.Recover()
 	if pClient.m_Conn == nil {
 		return false
 	}
@@ -105,13 +99,7 @@ func wsServerClientWriteRoutine(pClient *WebSocketClient) bool {
 }
 
 func wsServerClientReadRoutine(pClient *WebSocketClient) bool {
-	defer func() {
-		if r := recover(); r != nil {
-			buf := make([]byte, 2048)
-			l := runtime.Stack(buf, false)
-			llog.Errorf("wsServerClientReadRoutine %v: %s", r, buf[:l])
-		}
-	}()
+	defer util.Recover()
 	if pClient.m_WsConn == nil {
 		return false
 	}
@@ -148,6 +136,10 @@ func wsServerClientReadRoutine(pClient *WebSocketClient) bool {
 }
 
 func wsServerClientRoutine(pClient *WebSocketClient) {
-	go wsServerClientReadRoutine(pClient)
-	go wsServerClientWriteRoutine(pClient)
+	util.Go(func() {
+		wsServerClientReadRoutine(pClient)
+	})
+	util.Go(func() {
+		wsServerClientWriteRoutine(pClient)
+	})
 }

@@ -3,8 +3,8 @@ package network
 import (
 	"github.com/snowyyj001/loumiao/llog"
 	"github.com/snowyyj001/loumiao/message"
+	"github.com/snowyyj001/loumiao/util"
 	"io"
-	"runtime"
 )
 
 type IServerSocketClient interface {
@@ -79,13 +79,7 @@ func (self *ServerSocketClient) Close() {
 
 // write msg
 func serverWriteRoutine(pClient *ServerSocketClient) bool {
-	defer func() {
-		if r := recover(); r != nil {
-			buf := make([]byte, 2048)
-			l := runtime.Stack(buf, false)
-			llog.Errorf("ServerSocketClient.serverWriteRoutine %v: %s", r, buf[:l])
-		}
-	}()
+	defer util.Recover()
 	if pClient.m_Conn == nil {
 		return false
 	}
@@ -115,13 +109,7 @@ func serverWriteRoutine(pClient *ServerSocketClient) bool {
 
 // read msg
 func serverReadRoutine(pClient *ServerSocketClient) bool {
-	defer func() {
-		if r := recover(); r != nil {
-			buf := make([]byte, 2048)
-			l := runtime.Stack(buf, false)
-			llog.Errorf("ServerSocketClient.serverReadRoutine %v: %s", r, buf[:l])
-		}
-	}()
+	defer util.Recover()
 	if pClient.m_Conn == nil {
 		return false
 	}
@@ -158,6 +146,10 @@ func serverReadRoutine(pClient *ServerSocketClient) bool {
 }
 
 func serverClientRoutine(pClient *ServerSocketClient) {
-	go serverReadRoutine(pClient)
-	go serverWriteRoutine(pClient)
+	util.Go(func() {
+		serverReadRoutine(pClient)
+	})
+	util.Go(func() {
+		serverWriteRoutine(pClient)
+	})
 }

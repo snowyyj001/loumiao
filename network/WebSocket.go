@@ -2,6 +2,7 @@ package network
 
 import (
 	"github.com/snowyyj001/loumiao/nodemgr"
+	"github.com/snowyyj001/loumiao/util"
 	"net/http"
 	"sync"
 	"sync/atomic"
@@ -71,14 +72,14 @@ func (self *WebSocket) Start() bool {
 	http.HandleFunc("/ws", serveWs)
 	self.m_httpServer = &http.Server{Addr: self.m_sAddr}
 	succ := true
-	go func() {
+	util.Go(func() {
 		err := self.m_httpServer.ListenAndServe()
 		if err != nil {
 			succ = false
 			llog.Errorf("WebSocket ListenAndServe: %v", err)
 			return
 		}
-	}()
+	})
 	time.Sleep(time.Second)
 	if succ == false {
 		return false

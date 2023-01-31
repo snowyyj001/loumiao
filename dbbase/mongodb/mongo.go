@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/snowyyj001/loumiao/config"
 	"github.com/snowyyj001/loumiao/llog"
+	"github.com/snowyyj001/loumiao/util"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -45,14 +46,14 @@ func connectDB() error {
 	return nil
 }
 
-//连接数据库
+// 连接数据库
 func DialDefault() error {
 	err := connectDB()
 	if err != nil {
 		llog.Fatalf("connectDB: %s", err.Error())
 	}
 
-	go func() { //每秒钟检测一次数据库连接状态
+	util.Go(func() { //每秒钟检测一次数据库连接状态
 		for {
 			if mClient != nil {
 				//ctx, _ := context.WithTimeout(context.Background(), CONN_TIMEOUT*time.Second)
@@ -74,7 +75,7 @@ func DialDefault() error {
 			}
 			time.Sleep(time.Second * 3)
 		}
-	}()
+	})
 	return nil
 }
 
@@ -101,8 +102,8 @@ func CountDocuments(dbname, colname string, filter bson.D) (int64, error) {
 	return collection.CountDocuments(context.TODO(), filter)
 }
 
-//InsertOneDefault 添加单个document
-//colname：集合名
+// InsertOneDefault 添加单个document
+// colname：集合名
 func InsertOneDefault(colname string, document interface{}) error {
 	return InsertOne(DbName, colname, document)
 }
@@ -145,7 +146,7 @@ func InsertMany(dbname, colname string, documents []interface{}) ([]string, erro
 }
 
 // FindOneByIdDefault 查询单个document
-//args : filter, projection
+// args : filter, projection
 func FindOneByIdDefault(colname string, result interface{}, id string, args ...bson.D) error {
 	if mClient == nil {
 		return fmt.Errorf("FindOneByIdDefault db connected")

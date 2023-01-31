@@ -74,7 +74,9 @@ func (self *UdpGateServer) DoStart() {
 	}
 	llog.Infof("UdpGateServer DoStart success: name=%s,saddr=%s,uid=%d", self.Name, config.SERVER_PLATFORM, config.SERVER_NODE_UID)
 
-	go BufferSend()
+	util.Go(func() {
+		BufferSend()
+	})
 }
 
 func (self *UdpGateServer) DoDestory() {
