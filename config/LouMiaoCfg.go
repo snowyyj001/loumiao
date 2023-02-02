@@ -29,8 +29,9 @@ const (
 	ServerType_ETCF               //11 配置中心
 	ServerType_LOGINQUEUE         //12 排队
 	ServerType_Match              //13 匹配
-	ServerType_Robot              //14 机器人
+	ServerType_Robot              //14 测试机器人
 	ServerType_WebKeyPoint        //15 web 数据埋点
+	ServerType_WebCharge          //16 web 充值
 )
 
 var (
@@ -51,6 +52,7 @@ var (
 		ServerType_Match:       "matchserver",
 		ServerType_Robot:       "robot",
 		ServerType_WebKeyPoint: "keypoint",
+		ServerType_WebCharge:   "chargeserver",
 	}
 	ServerDesc = map[int]string{
 		ServerType_None:        "运行在每个物理机上的节点k8s-pod",
@@ -67,8 +69,9 @@ var (
 		ServerType_ETCF:        "注册中心",
 		ServerType_LOGINQUEUE:  "排队服",
 		ServerType_Match:       "匹配",
-		ServerType_Robot:       "机器人",
+		ServerType_Robot:       "测试机器人",
 		ServerType_WebKeyPoint: "数据埋点",
+		ServerType_WebCharge:   "充值",
 	}
 )
 

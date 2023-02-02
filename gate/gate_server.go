@@ -305,7 +305,8 @@ func (self *GateServer) newServerDiscover(key, val string, dis bool) {
 	}
 
 	if node.Type == config.ServerType_WEB_LOGIN ||
-		node.Type == config.ServerType_WEB_GM { //filter weblogin/webserver,他们不参与rpc调用，不参与集群组网
+		node.Type == config.ServerType_WEB_GM ||
+		node.Type == config.ServerType_WebKeyPoint { //filter 他们不参与rpc调用，不参与集群组网，其实参与了也没啥影响
 		return
 	}
 

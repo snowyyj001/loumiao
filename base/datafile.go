@@ -56,7 +56,7 @@ type (
 	}
 )
 
-type BufferLoader func(file string) []byte
+type BufferLoader func(file string) ([]byte, error)
 
 func DataBufferLoader(file string) []byte {
 	fmt.Println("DataBufferLoader: ", file)

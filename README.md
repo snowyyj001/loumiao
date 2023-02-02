@@ -37,6 +37,8 @@ ServerType_Robot             //14 机器人
 
 ServerType_WebKeyPoint       //15 数据埋点
 
+ServerType_WebCharge          //16 web 充值
+
 
 ## 服务内部actor通信
 
@@ -183,7 +185,7 @@ gate和world zone queue保持socket tcp专线连接，用来转发来自客户�
 
 如有帧同步需要，client还需保持与zone的一个udp专线连接，否则依靠gate的网络转发
 
-除login gm keypoint三个web节点外，所有的服务器节点都建立与rpc server和nats的tcp连接
+除login gm keypoint三个web节点外，所有的服务器节点都参与rpc组网
 
 ![image](https://github.com/snowyyj001/loumiao/blob/master/doc/%E6%9C%8D%E5%8A%A1%E5%99%A8%E7%BB%93%E6%9E%84.png?raw=true)
 
