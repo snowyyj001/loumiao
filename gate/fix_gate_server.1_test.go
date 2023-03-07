@@ -2,12 +2,12 @@ package gate
 
 import (
 	"github.com/snowyyj001/loumiao/config"
-	"github.com/snowyyj001/loumiao/message"
-	"github.com/snowyyj001/loumiao/msg"
-	"github.com/snowyyj001/loumiao/nodemgr"
-	"github.com/snowyyj001/loumiao/network"
 	"github.com/snowyyj001/loumiao/gorpc"
 	"github.com/snowyyj001/loumiao/llog"
+	"github.com/snowyyj001/loumiao/message"
+	"github.com/snowyyj001/loumiao/network"
+	"github.com/snowyyj001/loumiao/nodemgr"
+	"github.com/snowyyj001/loumiao/pbmsg"
 )
 
 func innerConnect_hotfix(igo gorpc.IGoRoutine, socketId int, data []byte) {
@@ -24,7 +24,7 @@ func innerConnect_hotfix(igo gorpc.IGoRoutine, socketId int, data []byte) {
 
 func sendRpc_hotfix(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	llog.Debugf("GateServer sendRpc_hotfix: %v", data)
-	
+
 	m := data.(*gorpc.M)
 	clientuid := This.getCluserRpcGateUid()
 	if clientuid <= 0 {
@@ -33,20 +33,20 @@ func sendRpc_hotfix(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	}
 	//llog.Debugf("sendRpc: %d", clientuid)
 	client := This.GetRpcClient(clientuid)
-	outdata := &msg.LouMiaoRpcMsg{TargetId: int32(m.Id), FuncName: m.Name, Buffer: m.Data.([]byte), SourceId: int32(config.SERVER_NODE_UID), Flag: int32(m.Param)}
+	outdata := &pbmsg.LouMiaoRpcMsg{TargetId: int32(m.Id), FuncName: m.Name, Buffer: m.Data.([]byte), SourceId: int32(config.SERVER_NODE_UID), Flag: int32(m.Param)}
 	buff, _ := message.EncodeProBuff(0, "LouMiaoRpcMsg", outdata)
 	client.Send(buff)
 
 	return nil
 }
 
-//开方给hotfix的调用接口
+// 开方给hotfix的调用接口
 func Fix_bug_1() {
 	igo := gorpc.MGR.GetRoutine("GateServer")
 
 	//覆盖gate_server的innerConnect
 	igo.RegisterGate("innerConnect", innerConnect_hotfix)
-	
+
 	//覆盖gate_server的SendRpc
 	igo.Register("SendRpc", sendRpc_hotfix)
 }

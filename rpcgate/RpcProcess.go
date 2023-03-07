@@ -5,18 +5,18 @@ import (
 	"github.com/snowyyj001/loumiao/gorpc"
 	"github.com/snowyyj001/loumiao/llog"
 	"github.com/snowyyj001/loumiao/message"
-	"github.com/snowyyj001/loumiao/msg"
 	"github.com/snowyyj001/loumiao/nodemgr"
+	"github.com/snowyyj001/loumiao/pbmsg"
 	"github.com/snowyyj001/loumiao/util"
 )
 
-//client connect
+// client connect
 func innerConnect(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	llog.Debugf("RpcGateServer innerConnect: %d", socketId)
 	nodemgr.OnlineNum++
 }
 
-//client disconnect
+// client disconnect
 func innerDisConnect(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	llog.Debugf("RpcGateServer innerDisConnect: %d", socketId)
 	nodemgr.OnlineNum--
@@ -24,9 +24,9 @@ func innerDisConnect(igo gorpc.IGoRoutine, socketId int, data []byte) {
 
 }
 
-//rpc register
+// rpc register
 func innerLouMiaoRpcRegister(igo gorpc.IGoRoutine, socketId int, data []byte) {
-	req := &msg.LouMiaoRpcRegister{}
+	req := &pbmsg.LouMiaoRpcRegister{}
 	if message.UnPackProto(req, data) != nil {
 		return
 	}
@@ -48,9 +48,9 @@ func innerLouMiaoRpcRegister(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	}
 }
 
-//recv rpc msg
+// recv rpc msg
 func innerLouMiaoRpcMsg(igo gorpc.IGoRoutine, socketId int, data []byte) {
-	req := &msg.LouMiaoRpcMsg{}
+	req := &pbmsg.LouMiaoRpcMsg{}
 	if message.UnPackProto(req, data) != nil {
 		return
 	}
@@ -113,7 +113,7 @@ func closeServer(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	//仅仅不参与新的rpc负载调用，节点还是照样可用，节点的真实关闭依赖于socket的断开
 	socketId := This.getClientId(uid)
 	//remove rpc handler
-	This.removeRpcHanlder(socketId)
+	This.removeRpchandler(socketId)
 	This.rpcUids.Delete(uid)
 	return nil
 }

@@ -44,7 +44,7 @@ func (self *GoRoutineMgr) GetRoutine(name string) IGoRoutine {
 func (self *GoRoutineMgr) Close(name string) {
 	igo := self.GetRoutine(name)
 	if igo != nil {
-		igo.DoDestory()
+		igo.DoDestroy()
 		igo.Close()
 	}
 }
@@ -52,7 +52,7 @@ func (self *GoRoutineMgr) Close(name string) {
 // 关闭所有服务
 func (self *GoRoutineMgr) CloseAll() {
 	for _, igo := range self.go_name_Map {
-		igo.DoDestory()
+		igo.DoDestroy()
 	}
 	for _, igo := range self.go_name_Map {
 		igo.Close()
@@ -72,7 +72,7 @@ func (self *GoRoutineMgr) Start(igo IGoRoutine, name string) {
 	igo.SetInited(true)
 
 	//register handler msg
-	igo.DoRegsiter()
+	igo.DoRegister()
 
 	self.AddRoutine(igo, name)
 }

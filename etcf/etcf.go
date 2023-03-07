@@ -5,11 +5,11 @@ func NewEtcf() (*EtcfClient, error) {
 	return newEtcfClient()
 }
 
-//通用发现
-//@prefix: 监听key值
-//@hanlder: key值变化回调
-func (self *EtcfClient) WatchCommon(prefix string, hanlder func(string, string, bool)) error {
-	WatchKey(prefix, hanlder)
+// 通用发现
+// @prefix: 监听key值
+// @handler: key值变化回调
+func (self *EtcfClient) WatchCommon(prefix string, handler func(string, string, bool)) error {
+	WatchKey(prefix, handler)
 	return nil
 }
 
@@ -32,7 +32,7 @@ func (self *EtcfClient) GetAll(prefix string) ([]string, error) {
 	return GetAll(prefix)
 }
 
-//撤销租约
+// 撤销租约
 func (self *EtcfClient) RevokeLease() error {
 
 	return nil

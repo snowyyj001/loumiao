@@ -4,6 +4,7 @@ package etcf
 import (
 	"fmt"
 	"github.com/snowyyj001/loumiao/base"
+	"github.com/snowyyj001/loumiao/pbmsg"
 	"strings"
 	"sync"
 
@@ -11,7 +12,6 @@ import (
 	"github.com/snowyyj001/loumiao/gorpc"
 	"github.com/snowyyj001/loumiao/llog"
 	"github.com/snowyyj001/loumiao/message"
-	"github.com/snowyyj001/loumiao/msg"
 	"github.com/snowyyj001/loumiao/network"
 	"github.com/snowyyj001/loumiao/util"
 )
@@ -68,8 +68,8 @@ func (self *EtcfServer) DoInit() bool {
 	return true
 }
 
-func (self *EtcfServer) DoRegsiter() {
-	llog.Info("EtcfServer DoRegsiter")
+func (self *EtcfServer) DoRegister() {
+	llog.Info("EtcfServer DoRegister")
 
 	handler_Map["CONNECT"] = "EtcfServer" //server connect with rpc server
 	self.RegisterGate("CONNECT", innerConnect)
@@ -105,8 +105,8 @@ func (self *EtcfServer) DoStart() {
 	//self.RunTimer(1000, self.update_1000)
 }
 
-func (self *EtcfServer) DoDestory() {
-	llog.Info("EtcfServer DoDestory")
+func (self *EtcfServer) DoDestroy() {
+	llog.Info("EtcfServer DoDestroy")
 
 }
 
@@ -189,7 +189,7 @@ func (self *EtcfServer) removeValue(prefix string) {
 }
 
 func (self *EtcfServer) broadCastValue(prefix string, value string) {
-	req := new(msg.LouMiaoNoticeValue)
+	req := new(pbmsg.LouMiaoNoticeValue)
 	req.Prefix = prefix
 	req.Value = value
 	buff, _ := message.EncodeProBuff(0, "LouMiaoNoticeValue", req)
@@ -204,7 +204,7 @@ func (self *EtcfServer) broadCastValue(prefix string, value string) {
 }
 
 func (self *EtcfServer) noticeValue(sid int, prefix string, value string) {
-	req := new(msg.LouMiaoNoticeValue)
+	req := new(pbmsg.LouMiaoNoticeValue)
 	req.Prefix = prefix
 	req.Value = value
 	buff, _ := message.EncodeProBuff(0, "LouMiaoNoticeValue", req)
@@ -221,7 +221,7 @@ func (self *EtcfServer) lockTimeout(param interface{}) {
 	arr, ok := self.mStoreLockWaiters[prefix]
 	if ok {
 		//通知还在等待的锁超时
-		req := &msg.LouMiaoAquireLock{Prefix: prefix, TimeOut: 0}
+		req := &pbmsg.LouMiaoAquireLock{Prefix: prefix, TimeOut: 0}
 		buff, _ := message.EncodeProBuff(0, "LouMiaoAquireLock", req)
 		for i := 0; i < len(arr); i++ {
 			socketId := arr[i]

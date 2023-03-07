@@ -48,7 +48,7 @@ func NewClient() error {
 type IClientDis interface {
 	PutStatus() error
 	PutNode() error
-	WatchCommon(prefix string, hanlder func(string, string, bool)) error
+	WatchCommon(prefix string, handler func(string, string, bool)) error
 	RevokeLease() error
 	SetValue(prefix, val string) error
 	GetOne(key string) (string, error)
@@ -275,7 +275,7 @@ func AquireLeader(prefix string, value string) (isleader bool) {
 // 服发现
 type ClientDis struct {
 	EtcdBase
-	otherFunc sync.Map //[string]HanlderFunc
+	otherFunc sync.Map //[string]HandlerFunc
 
 	etcdKey   string
 	statusKey string
@@ -307,14 +307,14 @@ func (self *ClientDis) watcher(prefix string) {
 
 // 通用发现
 // @prefix: 监听key值
-// @hanlder: key值变化回调
-func (self *ClientDis) WatchCommon(prefix string, hanlder func(string, string, bool)) error {
+// @handler: key值变化回调
+func (self *ClientDis) WatchCommon(prefix string, handler func(string, string, bool)) error {
 	resp, err := self.client.Get(context.Background(), prefix, clientv3.WithPrefix())
 	if err != nil {
 		return err
 	}
-	self.otherFunc.Store(prefix, hanlder)
-	self.extractOthers(hanlder, resp)
+	self.otherFunc.Store(prefix, handler)
+	self.extractOthers(handler, resp)
 
 	util.Go(func() {
 		self.watcher(prefix)
@@ -322,13 +322,13 @@ func (self *ClientDis) WatchCommon(prefix string, hanlder func(string, string, b
 	return nil
 }
 
-func (self *ClientDis) extractOthers(hanlder func(string, string, bool), resp *clientv3.GetResponse) {
+func (self *ClientDis) extractOthers(handler func(string, string, bool), resp *clientv3.GetResponse) {
 	if resp == nil || resp.Kvs == nil {
 		return
 	}
 	for i := range resp.Kvs {
 		if v := resp.Kvs[i].Value; v != nil {
-			hanlder(string(resp.Kvs[i].Key), string(resp.Kvs[i].Value), true)
+			handler(string(resp.Kvs[i].Key), string(resp.Kvs[i].Value), true)
 		}
 	}
 }

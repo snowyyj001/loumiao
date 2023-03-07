@@ -107,10 +107,27 @@ func Set(args ...interface{}) (interface{}, error) {
 	return v, err
 }
 
-// redis分布式锁,尝试expiretime毫秒后拿不到锁就返回0,否则返回锁的随机值
+// TryAcquireLock redis分布式锁,尝试获取一个分布式锁
 // @key: 锁key
-// @expiretime: 锁的过期时间,毫秒,0代表立即返回锁结果
-func AquireLock(key string, expiretime int) int {
+func TryAcquireLock(key string) int {
+	db := pool.Get()
+	defer db.Close()
+	val := rand.Intn(20000000) + 1
+	ret, err := db.Do("SET", key, val, "NX", "PX", 2000)
+	if err != nil {
+		llog.Errorf("redis Lock error: key=%s, error=%s", key, err.Error())
+		return 0
+	}
+	if ret != nil {
+		return val
+	}
+	return 0 //没有拿到锁
+}
+
+// AcquireLock redis分布式锁,尝试expiretime毫秒后拿不到锁就返回0,否则返回锁的随机值
+// @key: 锁key
+// @expiretime: 锁的过期时间,毫秒
+func AcquireLock(key string, expiretime int) int {
 	db := pool.Get()
 	defer db.Close()
 	val := rand.Intn(20000000) + 1
@@ -119,7 +136,7 @@ func AquireLock(key string, expiretime int) int {
 		et = 2000
 	}
 	ret, err := db.Do("SET", key, val, "NX", "PX", et)
-	if ret == nil && expiretime > 0 {
+	if ret == nil {
 		nt := base.TimeStamp()
 		for {
 			time.Sleep(30 * time.Millisecond) //等待30ms再次尝试
@@ -127,13 +144,14 @@ func AquireLock(key string, expiretime int) int {
 			if ret != nil {
 				break
 			}
-			if base.TimeStamp()-nt > int64(expiretime) {
+			if base.TimeStamp()-nt > int64(et) {
 				break
 			}
 		}
 	}
 	if err != nil {
 		llog.Errorf("redis Lock error: key=%s, error=%s", key, err.Error())
+		return 0
 	}
 	if ret != nil {
 		return val
@@ -712,12 +730,12 @@ func Llen(key string) (int, error) {
 	return v, err
 }
 
-// AquireLeader 选举leader，所有参与选举的人使用相同的value和prefix，leader负责设置value
+// AcquireLeader 选举leader，所有参与选举的人使用相同的value和prefix，leader负责设置value
 // @prefix: 选举区分标识
 // @value: 本次选举的值，每次发起选举，value应该和上次选举时的value不同
-func AquireLeader(prefix string, value int) (isleader bool) {
+func AcquireLeader(prefix string, value int) (isleader bool) {
 	isleader = false
-	val := AquireLock(prefix, 1000)
+	val := AcquireLock(prefix, 1000)
 	if val > 0 { //拿到锁了
 		key := "leader:" + prefix + ":" + util.Itoa(value)
 		val, _ = GetInt(key)

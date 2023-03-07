@@ -267,13 +267,13 @@ func (self *CDataFile) GetData() (interface{}, error) {
 		str := self.fstream.ReadString()
 		arr := strings.Split(str, ",")
 		sz := len(arr)
-		vals := make([]int32, sz, sz)
+		vals := make([]int, sz, sz)
 		for i := 0; i < sz; i++ {
 			v, err := Int(arr[i])
 			if err != nil {
 				return nil, fmt.Errorf("GetData: col = %d, row = %d, err = %s", self.currentColumnIndex, self.currentRowIndex, err.Error())
 			}
-			vals[i] = int32(v)
+			vals[i] = v
 		}
 		return vals, nil
 	case DType_S64Array:
@@ -299,7 +299,7 @@ func (self *CDataFile) GetData() (interface{}, error) {
 			if len(narr) != 2 {
 				return nil, fmt.Errorf("GetData: col = %d, row = %d, err = %s is not a format (*;*), %s", self.currentColumnIndex, self.currentRowIndex, str, arr[i])
 			}
-			r = append(r, &KeyValueS{arr[0], arr[1]})
+			r = append(r, &KeyValueS{narr[0], narr[1]})
 		}
 		return r, nil
 	case DType_KVNumberArray:
@@ -312,11 +312,11 @@ func (self *CDataFile) GetData() (interface{}, error) {
 			if len(narr) != 2 {
 				return nil, fmt.Errorf("GetData: col = %d, row = %d, err = %s is not a format (*;*), %s", self.currentColumnIndex, self.currentRowIndex, str, arr[i])
 			}
-			v1, err := Int(arr[0])
+			v1, err := Int(narr[0])
 			if err != nil {
 				return nil, fmt.Errorf("GetData: col = %d, row = %d, err = %s", self.currentColumnIndex, self.currentRowIndex, err.Error())
 			}
-			v2, err := Int(arr[1])
+			v2, err := Int(narr[1])
 			if err != nil {
 				return nil, fmt.Errorf("GetData: col = %d, row = %d, err = %s", self.currentColumnIndex, self.currentRowIndex, err.Error())
 			}

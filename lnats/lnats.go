@@ -255,5 +255,5 @@ func ReportMail(tag int, str string) {
 }
 
 func init() {
-	llog.ReportMailHanlder = ReportMail
+	llog.ReportMailhandler = ReportMail
 }

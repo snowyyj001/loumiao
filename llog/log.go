@@ -26,66 +26,66 @@ var (
 	logLevel    int
 	//remoteLog   *LogRemoteWrite
 
-	ReportMailHanlder func (tag int, str string)
+	ReportMailhandler func(tag int, str string)
 )
 
 /*
-type LogRemoteWrite struct {
-	clientLog  net.Conn
-	lineNum    int64
-	remoteAddr string
-}
+	type LogRemoteWrite struct {
+		clientLog  net.Conn
+		lineNum    int64
+		remoteAddr string
+	}
 
-func (l *LogRemoteWrite) connectUdp() error {
-	if l.clientLog != nil {
-		l.clientLog.Close()
-		l.clientLog = nil
-	}
-	l.remoteAddr = config.NET_LOG_SADDR()
-	if len(l.remoteAddr) == 0 {
-		return fmt.Errorf("no log udp server")
-	}
-	if conn, err := net.Dial("udp", l.remoteAddr); err == nil {
-		l.clientLog = conn
-	} else {
-		return err
-	}
-	return nil
-}
-
-func (l *LogRemoteWrite) Write(p []byte) (n int, err error) {
-	if l.clientLog == nil {
-		err = l.connectUdp()
-		if err != nil {
-			err = fmt.Errorf(string(p[:]))
-			return
+	func (l *LogRemoteWrite) connectUdp() error {
+		if l.clientLog != nil {
+			l.clientLog.Close()
+			l.clientLog = nil
 		}
-	}
-	bstream := base.NewBitStream_1(len(p) + len(config.SERVER_NAME) + 64)
-	var sb strings.Builder
-	atomic.AddInt64(&l.lineNum, 1)
-	sb.WriteString(strconv.Itoa(int(l.lineNum)))
-	sb.WriteString(" ")
-	sb.Write(p)
-	bstream.WriteString(config.SERVER_NAME)
-	bstream.WriteString(sb.String())
-	n, err = l.clientLog.Write(bstream.GetBuffer())
-	if err != nil {
-		//udp的connect并不真和远端server建立连接，只是在内核保存了对端的ip和端口
-		//检查是否存在立即可知的错误（一个明显不可达的目的地）
-		//接收端应该设置SO_RCVBUF，较大的接收缓冲区可以适当减少丢包，但是一般不需要设置，因为大部分linux系统默认值就是可设置的最大值
-		//发送端无需设置SO_SNDBUF，因为udp whatever you send goes directly out to the network
-		if l.connectUdp() == nil {
-			n, err = l.clientLog.Write(bstream.GetBuffer())
-			if err != nil {
-				fmt.Println("0.write filecollect log failed: ",err.Error())
-			}
+		l.remoteAddr = config.NET_LOG_SADDR()
+		if len(l.remoteAddr) == 0 {
+			return fmt.Errorf("no log udp server")
+		}
+		if conn, err := net.Dial("udp", l.remoteAddr); err == nil {
+			l.clientLog = conn
 		} else {
-			fmt.Println("1.write filecollect log failed: ",err.Error())
+			return err
 		}
+		return nil
 	}
-	return
-}
+
+	func (l *LogRemoteWrite) Write(p []byte) (n int, err error) {
+		if l.clientLog == nil {
+			err = l.connectUdp()
+			if err != nil {
+				err = fmt.Errorf(string(p[:]))
+				return
+			}
+		}
+		bstream := base.NewBitStream_1(len(p) + len(config.SERVER_NAME) + 64)
+		var sb strings.Builder
+		atomic.AddInt64(&l.lineNum, 1)
+		sb.WriteString(strconv.Itoa(int(l.lineNum)))
+		sb.WriteString(" ")
+		sb.Write(p)
+		bstream.WriteString(config.SERVER_NAME)
+		bstream.WriteString(sb.String())
+		n, err = l.clientLog.Write(bstream.GetBuffer())
+		if err != nil {
+			//udp的connect并不真和远端server建立连接，只是在内核保存了对端的ip和端口
+			//检查是否存在立即可知的错误（一个明显不可达的目的地）
+			//接收端应该设置SO_RCVBUF，较大的接收缓冲区可以适当减少丢包，但是一般不需要设置，因为大部分linux系统默认值就是可设置的最大值
+			//发送端无需设置SO_SNDBUF，因为udp whatever you send goes directly out to the network
+			if l.connectUdp() == nil {
+				n, err = l.clientLog.Write(bstream.GetBuffer())
+				if err != nil {
+					fmt.Println("0.write filecollect log failed: ",err.Error())
+				}
+			} else {
+				fmt.Println("1.write filecollect log failed: ",err.Error())
+			}
+		}
+		return
+	}
 */
 func getLogWriter(fileName string) zapcore.WriteSyncer {
 	lumberJackLogger := &lumberjack.Logger{
@@ -139,49 +139,49 @@ func init() {
 	sugarLogger = logger.Sugar()
 }
 
-//llog Panic level
+// llog Panic level
 func Panic(msg string) {
-	ReportMailHanlder(define.MAIL_TYPE_ERR, msg)
+	ReportMailhandler(define.MAIL_TYPE_ERR, msg)
 	logger.Panic(msg)
 }
 
-//llog Panic format
+// llog Panic format
 func Panicf(format string, a ...interface{}) {
 	msg := fmt.Sprintf(format, a...)
 	Panic(msg)
 }
 
-//llog error level
+// llog error level
 func Error(msg string) {
-	go ReportMailHanlder(define.MAIL_TYPE_ERR, msg)
+	go ReportMailhandler(define.MAIL_TYPE_ERR, msg)
 	logger.Error(msg)
 	if clogger != nil {
 		clogger.Error(msg)
 	}
 }
 
-//llog error format
+// llog error format
 func Errorf(format string, a ...interface{}) {
 	msg := fmt.Sprintf(format, a...)
 	Error(msg)
 }
 
-//llog notice level
+// llog notice level
 func Notice(msg string) {
-	go ReportMailHanlder(define.MAIL_TYPE_WARING, msg)
+	go ReportMailhandler(define.MAIL_TYPE_WARING, msg)
 	logger.Warn(msg)
 	if clogger != nil {
 		clogger.Notice(msg)
 	}
 }
 
-//llog Notice format
+// llog Notice format
 func Noticef(format string, a ...interface{}) {
 	msg := fmt.Sprintf(format, a...)
 	Notice(msg)
 }
 
-//llog warning level
+// llog warning level
 func Warning(msg string) {
 	if logLevel >= ErrorLevel {
 		return
@@ -192,13 +192,13 @@ func Warning(msg string) {
 	}
 }
 
-//llog warning format
+// llog warning format
 func Warningf(format string, a ...interface{}) {
 	msg := fmt.Sprintf(format, a...)
 	Warning(msg)
 }
 
-//llog info level
+// llog info level
 func Info(msg string) {
 	if logLevel >= WarnLevel {
 		return
@@ -209,13 +209,13 @@ func Info(msg string) {
 	}
 }
 
-//llog info format
+// llog info format
 func Infof(format string, a ...interface{}) {
 	msg := fmt.Sprintf(format, a...)
 	Info(msg)
 }
 
-//llog debug level
+// llog debug level
 func Debug(msg string) {
 	if logLevel >= InfoLevel {
 		return
@@ -226,19 +226,19 @@ func Debug(msg string) {
 	}
 }
 
-//llog debug format
+// llog debug format
 func Debugf(format string, a ...interface{}) {
 	msg := fmt.Sprintf(format, a...)
 	Debug(msg)
 }
 
-//llog Fatal
+// llog Fatal
 func Fatal(msg string) {
-	ReportMailHanlder(define.MAIL_TYPE_ERR, msg)
+	ReportMailhandler(define.MAIL_TYPE_ERR, msg)
 	logger.Fatal(msg)
 }
 
-//llog Fatal
+// llog Fatal
 func Fatalf(format string, a ...interface{}) {
 	msg := fmt.Sprintf(format, a...)
 	Fatal(msg)

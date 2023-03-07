@@ -1,26 +1,26 @@
 package define
 
-//分布式锁-uid
+// 分布式锁-uid
 const ETCD_LOCKUID string = "/lockuid/"
 
-//服务器信息注册
+// 服务器信息注册
 const ETCD_NODEINFO string = "/nodeinfos/" // /nodeinfos/areaid/host/
 
-//node状态
+// node状态
 const ETCD_NODESTATUS string = "/nodestatus/" // /nodestatus/areaid/host/
-
-//分布式锁-world position
-const KEY_LOCKWORLD string = "/lockworldpos/"
-
-const (
-	TIME_LOCK_WUID = 3000 //分布式锁超时时间-ETCD_LOCKWORLD
-)
 
 const (
 	CLIENT_NONE       = iota
 	CLIENT_CONNECT    //客户端建立连接
 	CLIENT_DISCONNECT //客户端断开连接
 )
+
+const ( //	操作选项
+	ACTION_ZERO = 0
+	ACTION_ONE  = 1
+	ACTION_TWO  = 2
+)
+
 const ( //kafka消息topic
 	TOPIC_SERVER_MAIL = "tp:servermail" //server关键信息，发送邮件
 	TOPIC_SERVER_LOG  = "tp:loglevel"   //日志级别调整

@@ -3,6 +3,7 @@ package gate
 
 import (
 	"fmt"
+	"github.com/snowyyj001/loumiao/agent"
 	"github.com/snowyyj001/loumiao/base/maps"
 	"github.com/snowyyj001/loumiao/lnats"
 	"github.com/snowyyj001/loumiao/message"
@@ -19,16 +20,9 @@ import (
 )
 
 var (
-	This        *GateServer
-	handler_Map map[string]string //goroutine unsafe
+	This       *GateServer
+	handlerMap map[string]string //goroutine unsafe
 )
-
-type Token struct {
-	UserId  int    //userid
-	WouldId int    //world uid
-	ZoneUid int    //zone uid
-	TokenId string //合法性校验tokenid
-}
 
 /*tokens, tokens_u, users_u说明
 当loumiao是account时:
@@ -54,9 +48,17 @@ type GateServer struct {
 	pInnerService network.ISocket
 	ServerType    int
 	//
-	tokens   map[int]*Token
-	tokens_u map[int]int
-	users_u  map[int]int
+	tokensLocker sync.RWMutex
+
+	//only for SERVER_CONNECT
+	gatesUid        sync.Map //gate socket id -> gate uid
+	gatesSocketId   sync.Map //gate uid -> gate socket id
+	userGates       sync.Map //user id -> gate uid
+	userGateSockets sync.Map //user id -> gate socket id
+
+	//only for CLIENT_CONNECT
+	uidAgents sync.Map //user id -> socket id
+	sidAgents sync.Map //socket id -> *agent.LouMiaoAgent
 
 	//rpc相关
 	rpcMap   map[string]string //rpc functon -> actor name
@@ -70,8 +72,6 @@ type GateServer struct {
 	QueueServerUid int
 
 	lock sync.Mutex
-
-	InitFunc func() //需要额外处理的函数回调
 }
 
 func (self *GateServer) DoInit() bool {
@@ -99,65 +99,43 @@ func (self *GateServer) DoInit() bool {
 
 	self.clients = make(map[int]*network.ClientSocket)
 
-	self.tokens = make(map[int]*Token)
-	self.tokens_u = make(map[int]int)
-	self.users_u = make(map[int]int)
 	self.rpcMap = make(map[string]string)
 	self.rpcGates = make([]int, 0)
 	self.msgQueueMap = make(map[string]*maps.Map) //key -> [actorname,actorname,...]
 
-	handler_Map = make(map[string]string)
-
-	if self.InitFunc != nil {
-		self.InitFunc()
-	}
+	handlerMap = make(map[string]string)
 
 	return true
 }
 
-func (self *GateServer) DoRegsiter() {
-	llog.Infof("%s DoRegsiter", self.Name)
+func (self *GateServer) DoRegister() {
+	llog.Infof("%s DoRegister", self.Name)
 
-	self.Register("SendClient", sendClient)
-	self.Register("BroadCastClients", broadCastClients)
+	//self.Register("SendClient", sendClient)
 	self.Register("NewClient", newClient)
 	self.Register("SendRpc", sendRpc)
-	self.Register("SendGate", sendGate)
 	self.Register("RecvPackMsgClient", recvPackMsgClient)
 	self.Register("CloseServer", closeServer)
 	self.Register("Publish", publish)
 	self.Register("Subscribe", subscribe)
-	self.Register("BindGate", bindGate)
 
-	//equal to RegisterSelfNet
-	handler_Map["CONNECT"] = "GateServer" //in gate, client connect with gate, in server, gate(as client) connect with server
-	self.RegisterGate("CONNECT", innerConnect)
+	//in gate, client connect with gate, in server, gate(as client) connect with server
+	self.RegisterSelfNet("CONNECT", innerConnect)
+	self.RegisterSelfNet("DISCONNECT", innerDisConnect)
 
-	handler_Map["DISCONNECT"] = "GateServer"
-	self.RegisterGate("DISCONNECT", innerDisConnect)
+	//in gate, gate connect with server, no in server
+	self.RegisterSelfNet("C_CONNECT", outerConnect)
+	self.RegisterSelfNet("C_DISCONNECT", outerDisConnect)
 
-	handler_Map["C_CONNECT"] = "GateServer" //in gate, gate connect with server, no in server
-	self.RegisterGate("C_CONNECT", outerConnect)
+	self.RegisterSelfNet("LouMiaoLoginGate", innerLouMiaoLoginGate)
 
-	handler_Map["C_DISCONNECT"] = "GateServer"
-	self.RegisterGate("C_DISCONNECT", outerDisConnect)
+	self.RegisterSelfNet("LouMiaoRpcMsg", innerLouMiaoRpcMsg)
 
-	handler_Map["LouMiaoLoginGate"] = "GateServer"
-	self.RegisterGate("LouMiaoLoginGate", innerLouMiaoLoginGate)
+	self.RegisterSelfNet("LouMiaoNetMsg", innerLouMiaoNetMsg)
 
-	handler_Map["LouMiaoRpcMsg"] = "GateServer"
-	self.RegisterGate("LouMiaoRpcMsg", innerLouMiaoRpcMsg)
+	self.RegisterSelfNet("LouMiaoKickOut", innerLouMiaoKickOut)
 
-	handler_Map["LouMiaoNetMsg"] = "GateServer"
-	self.RegisterGate("LouMiaoNetMsg", innerLouMiaoNetMsg)
-
-	handler_Map["LouMiaoKickOut"] = "GateServer"
-	self.RegisterGate("LouMiaoKickOut", innerLouMiaoKickOut)
-
-	handler_Map["LouMiaoClientConnect"] = "GateServer"
-	self.RegisterGate("LouMiaoClientConnect", innerLouMiaoClientConnect)
-
-	self.RegisterSelfCallRpc(bindServer)
+	self.RegisterSelfNet("LouMiaoClientConnect", innerLouMiaoClientConnect)
 }
 
 // begin communicate with other nodes
@@ -237,44 +215,44 @@ func (self *GateServer) DoOpen() {
 }
 
 // RegisterSelfNet
-// simple register self net hanlder, this func can only be called before igo started
-func (self *GateServer) RegisterSelfNet(hanlderName string, hanlderFunc gorpc.HanlderNetFunc) {
+// simple register self net handler, this func can only be called before igo started
+func (self *GateServer) RegisterSelfNet(handlerName string, HandlerFunc gorpc.HandlerNetFunc) {
 	if self.IsRunning() {
 		llog.Fatal("RegisterSelfNet error, igo has already started")
 		return
 	}
-	handler_Map[hanlderName] = "GateServer"
-	self.RegisterGate(hanlderName, hanlderFunc)
+	handlerMap[handlerName] = "GateServer"
+	self.RegisterGate(handlerName, HandlerFunc)
 }
 
 // RegisterSelfRpc
-// simple register self rpc hanlder, this func can only be called before igo started
-func (self *GateServer) RegisterSelfRpc(hanlderFunc gorpc.HanlderNetFunc) {
+// simple register self rpc handler, this func can only be called before igo started
+func (self *GateServer) RegisterSelfRpc(handlerFunc gorpc.HandlerNetFunc) {
 	if self.IsRunning() {
 		llog.Fatal("RegisterSelfNet error, igo has already started")
 		return
 	}
-	funcName := util.RpcFuncName(hanlderFunc)
-	handler_Map[funcName] = "GateServer"
+	funcName := util.RpcFuncName(handlerFunc)
+	handlerMap[funcName] = "GateServer"
 	This.rpcMap[funcName] = "GateServer"
-	self.RegisterGate(funcName, hanlderFunc)
+	self.RegisterGate(funcName, handlerFunc)
 }
 
 // RegisterSelfCallRpc
-// simple register self rpc hanlder, this func can only be called before igo started
-func (self *GateServer) RegisterSelfCallRpc(hanlderFunc gorpc.HanlderFunc) {
+// simple register self rpc handler, this func can only be called before igo started
+func (self *GateServer) RegisterSelfCallRpc(handlerFunc gorpc.HandlerFunc) {
 	if self.IsRunning() {
 		llog.Fatal("RegisterSelfNet error, igo has already started")
 		return
 	}
-	funcName := util.RpcFuncName(hanlderFunc)
+	funcName := util.RpcFuncName(handlerFunc)
 	//fmt.Println("funcName", funcName)
-	self.Register(funcName, hanlderFunc)
-	handler_Map[funcName] = "GateServer"
+	self.Register(funcName, handlerFunc)
+	handlerMap[funcName] = "GateServer"
 	This.rpcMap[funcName] = "GateServer"
 }
 
-func (self *GateServer) getServerService() network.ISocket {
+func (self *GateServer) GetServerService() network.ISocket {
 	if self.ServerType == network.CLIENT_CONNECT { //对外(login,gate)
 		return self.pService
 	} else {
@@ -360,8 +338,8 @@ func (self *GateServer) enableClient(client *network.ClientSocket) bool {
 	return true
 }
 
-func (self *GateServer) DoDestory() {
-	llog.Info("GateServer DoDestory")
+func (self *GateServer) DoDestroy() {
+	llog.Info("GateServer DoDestroy")
 	nodemgr.ServerEnabled = false
 	etcd.Client.RevokeLease()
 }
@@ -377,7 +355,7 @@ func packetFunc_client(socketid int, buff []byte, nlen int) error {
 		//This.closeClient(socketid)
 	} else {
 		if target == config.NET_NODE_TYPE || target <= 0 { //msg to me，client使用的是server type
-			handler, ok := handler_Map[name]
+			handler, ok := handlerMap[name]
 			if ok {
 				nm := &gorpc.M{Id: socketid, Name: name, Data: buffbody}
 				gorpc.MGR.Send(handler, "ServiceHandler", nm)
@@ -406,7 +384,7 @@ func packetFunc_server(socketid int, buff []byte, nlen int) error {
 		//This.closeClient(socketid)
 	} else {
 		if target == config.SERVER_NODE_UID || target <= 0 { //server使用的是server uid
-			handler, ok := handler_Map[name] //handler_Map will not changed, so use here is ok
+			handler, ok := handlerMap[name] //handler_Map will not changed, so use here is ok
 			if ok {
 				nm := &gorpc.M{Id: socketid, Name: name, Data: buffbody}
 				gorpc.MGR.Send(handler, "ServiceHandler", nm)
@@ -445,10 +423,6 @@ func (self *GateServer) removeClient(uid int) {
 	self.rpcUids.Delete(uid)
 }
 
-func HasRpcGate() bool {
-	return len(This.rpcGates) > 0
-}
-
 func (self *GateServer) GetRpcClient(uid int) *network.ClientSocket {
 	client, ok := self.clients[uid]
 	if ok {
@@ -472,117 +446,57 @@ func (self *GateServer) getCluserRpcGateUid() int {
 	return 0
 }
 
-func (self *GateServer) GetClientToken(socketId int) *Token {
-	if token, ok := self.tokens[socketId]; ok {
-		return token
-	}
-	return nil
-}
-
-func (self *GateServer) GetClientId(userid int) int {
-	socketId, _ := self.tokens_u[userid]
-	return socketId
-}
-
-func (self *GateServer) GetGateUid(userid int) int {
-	uid, _ := self.users_u[userid]
-	return uid
-}
-
-// get gate's socketid by client's userid, for server
-func (self *GateServer) GetGateClientId(userid int) int {
-	uid, _ := self.users_u[userid]
-	socketId, _ := self.tokens_u[uid]
-	return socketId
-}
-
-// 关闭客户端
-// @sync 是否等立即清除连接记录
-// @userId 客户端uid
-func (self *GateServer) StopClient(sync bool, userId int) {
-	sid := This.tokens_u[userId]
-	if sid > 0 {
-		if sync { //时序异步问题，直接关闭，不等socket的DISCONNECT消息
-			innerDisConnect(self, sid, nil)
-		}
-		self.closeClient(sid)
+// StopClientByUserId 关闭客户端
+func (self *GateServer) StopClientByUserId(userId int) {
+	if socketId, ok := self.uidAgents.Load(userId); ok {
+		self.closeClient(socketId.(int))
 	}
 }
 
-func (self *GateServer) closeClient(clientid int) {
+func (self *GateServer) closeClient(clientId int) {
 	if self.ServerType == network.CLIENT_CONNECT {
 		if config.NET_WEBSOCKET {
-			self.pService.(*network.WebSocket).StopClient(clientid)
+			self.pService.(*network.WebSocket).StopClient(clientId)
 		} else {
-			self.pService.(*network.ServerSocket).StopClient(clientid)
+			self.pService.(*network.ServerSocket).StopClient(clientId)
 		}
 	} else {
-		self.pInnerService.(*network.ServerSocket).StopClient(clientid)
+		self.pInnerService.(*network.ServerSocket).StopClient(clientId)
 	}
 }
 
-// gate向client发送消息
+// SendClient gate向client发送消息
 func (self *GateServer) SendClient(clientid int, buff []byte) {
-	//llog.Debugf("GateServer.SendClient: clientid=%d, bufflen=%d, buff=%v", clientid, len(buff), buff)
 	self.pService.SendById(clientid, buff)
 }
 
-// BindZone 客户端绑定zone，gate使用
-func (self *GateServer) BindZone(userid, Zoneuid int) {
-	socketid := self.GetClientId(userid)
-	token := self.GetClientToken(socketid)
-	if token == nil {
-		return
-	}
-	token.ZoneUid = Zoneuid
-}
-
-// 客户端绑定gate，gate使用
-func (self *GateServer) BindClient(socketId, userid, worlduid int, tokenid string) {
-	self.tokens[socketId] = &Token{TokenId: tokenid, UserId: userid, WouldId: worlduid}
-	self.tokens_u[userid] = socketId
-	onClientConnected(userid, worlduid)
-}
-
-// 客户端解绑gate，gate使用
-func (self *GateServer) UnBindClient(socketId int) {
-	token := self.GetClientToken(socketId)
-	if token != nil {
-		delete(self.tokens, socketId)
-		delete(self.tokens_u, token.UserId)
-		onClientDisConnected(token.UserId, token.WouldId)
-	}
-}
-
-// gate绑定server，server使用
-func (self *GateServer) BindServerGate(socketId, userid int, tokenid string) {
-	self.tokens[socketId] = &Token{TokenId: tokenid, UserId: userid}
-	self.tokens_u[userid] = socketId
-}
-
-// 解除/绑定client所属的gate, server使用
-func (self *GateServer) BindGate(userid, gateuid int) {
-	if gateuid > 0 {
-		self.users_u[userid] = gateuid
-	} else {
-		delete(self.users_u, userid)
-	}
-}
-
-// 解除gate的绑定，server使用
-func (self *GateServer) UnBindGate(socketId int) {
-	token := This.GetClientToken(socketId)
-	if token != nil {
-		gateuid := token.UserId
-		delete(This.tokens, socketId) //和gate解绑
-		delete(This.tokens_u, gateuid)
-
-		for userid, mygateuid := range This.users_u { //在这个gate上的user都应该掉线
-			if mygateuid == gateuid {
-				onClientDisConnected(userid, gateuid)
-				self.BindGate(userid, 0)
-			}
+// onSocketDisconnected socket连接断开
+func (self *GateServer) onSocketDisconnected(socketId int) {
+	if self.ServerType == network.SERVER_CONNECT { //the server lost connect with gate
+		if value, ok := self.gatesUid.LoadAndDelete(socketId); ok {
+			gateUid := value.(int)
+			self.gatesSocketId.Delete(gateUid)
+			self.userGates.Range(func(key, value any) bool { //在这个gate上的user都应该掉线
+				if value.(int) == gateUid {
+					igoTarget := gorpc.MGR.GetRoutine("GameServer") //告诉GameServer，client断开了，让GameServer决定如何处理，所以GameServer要注册这个actor
+					if igoTarget != nil {
+						igoTarget.SendActor("ON_DISCONNECT", key)
+					}
+					self.userGates.Delete(key)
+				}
+				return true
+			})
 		}
+	} else { //the client lost connect with gate or account
+		if value, ok := self.sidAgents.LoadAndDelete(socketId); ok {
+			user := value.(*agent.LouMiaoAgent)
+			self.uidAgents.Delete(user.UserId)
+			if user.LobbyUid > 0 {
+				onClientDisConnected(int(user.UserId), int(user.LobbyUid))
+			}
+
+		}
+
 	}
 }
 
@@ -597,10 +511,48 @@ func (self *GateServer) SendServer(target int, buff []byte) {
 	}
 }
 
-func GetSocketNum() int {
-	if config.NET_WEBSOCKET {
-		return This.pService.(*network.WebSocket).GetClientNumber()
-	} else {
-		return This.pService.(*network.ServerSocket).GetClientNumber()
+func (self *GateServer) GetClientAgent(socketId int) *agent.LouMiaoAgent {
+	if v, ok := self.sidAgents.Load(socketId); ok {
+		return v.(*agent.LouMiaoAgent)
+	}
+	return nil
+}
+
+func (self *GateServer) GetUserSocketId(userid int) int {
+	if socketId, ok := self.uidAgents.Load(userid); ok {
+		return socketId.(int)
+	}
+	return 0
+}
+
+func (self *GateServer) GetGateSocketId(userId int) int {
+	if socketId, ok := self.userGateSockets.Load(userId); ok {
+		return socketId.(int)
+	}
+	return 0
+}
+
+// BindWorld 建立client的profile，并通知server, gate使用
+func (self *GateServer) BindWorld(socketId, userId, worldUid int, tokenId string) {
+	user := &agent.LouMiaoAgent{
+		UserId:     int64(userId),
+		LobbyUid:   worldUid,
+		ZoneUid:    0,
+		MatchUid:   0,
+		GateUid:    config.SERVER_NODE_UID,
+		SocketId:   socketId,
+		WorldToken: tokenId,
+	}
+	self.sidAgents.Store(socketId, user)
+	self.uidAgents.Store(userId, socketId)
+	onClientConnected(userId, worldUid)
+}
+
+// BindZone 绑定client所属的zone, gate使用
+func (self *GateServer) BindZone(userId, zoneUid int) {
+	if sid, ok := self.uidAgents.Load(userId); ok {
+		if user, ok := self.sidAgents.Load(sid); ok {
+			user.(*agent.LouMiaoAgent).ZoneUid = zoneUid
+		}
 	}
 }

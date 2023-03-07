@@ -22,15 +22,15 @@ func (self *CallRpcServer) DoInit() bool {
 	return true
 }
 
-func (self *CallRpcServer) DoRegsiter() {
-	llog.Infof("%s DoRegsiter", self.Name)
+func (self *CallRpcServer) DoRegister() {
+	llog.Infof("%s DoRegister", self.Name)
 
 	self.Register("CallRpc", callRpc)         //A 直接call
 	self.Register("ReqRpcCall", reqRpcCall)   //B 收到 A的call
 	self.Register("RespRpcCall", respRpcCall) // A 收到 B的resp
 }
 
-//begin communicate with other nodes
+// begin communicate with other nodes
 func (self *CallRpcServer) DoStart() {
 	llog.Infof("%s DoStart", self.Name)
 }

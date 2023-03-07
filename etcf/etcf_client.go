@@ -7,9 +7,9 @@ import (
 	"github.com/snowyyj001/loumiao/define"
 	"github.com/snowyyj001/loumiao/llog"
 	"github.com/snowyyj001/loumiao/message"
-	"github.com/snowyyj001/loumiao/msg"
 	"github.com/snowyyj001/loumiao/network"
 	"github.com/snowyyj001/loumiao/nodemgr"
+	"github.com/snowyyj001/loumiao/pbmsg"
 	"github.com/snowyyj001/loumiao/timer"
 	"github.com/snowyyj001/loumiao/util"
 	"strings"
@@ -17,11 +17,11 @@ import (
 	"time"
 )
 
-type hanlderNetFunc func(clientid int, buffer []byte)
+type HandlerNetFunc func(clientid int, buffer []byte)
 
 var (
 	Client             *EtcfClient
-	handler_client_Map map[string]hanlderNetFunc
+	handler_client_Map map[string]HandlerNetFunc
 )
 
 type ETKeyValue struct {
@@ -61,7 +61,7 @@ type EtcfClient struct {
 	etcdKey   string
 	statusKey string
 
-	otherFunc       sync.Map //[string]HanlderFunc
+	otherFunc       sync.Map //[string]HandlerFunc
 	mChanGetValue   sync.Map //map[string]chan []KeyValue
 	mChanAquireLock sync.Map //map[string]chan bool
 }
@@ -70,7 +70,7 @@ type EtcfClient struct {
 func (self *EtcfClient) Init() {
 	llog.Infof("EtcfClient Init")
 
-	handler_client_Map = make(map[string]hanlderNetFunc)
+	handler_client_Map = make(map[string]HandlerNetFunc)
 
 	handler_client_Map["C_CONNECT"] = innerClientConnect
 	handler_client_Map["C_DISCONNECT"] = innerClientDisConnect
@@ -110,9 +110,9 @@ func (self *EtcfClient) Start(reconnect bool) error {
 // 重新监听key
 func ReWatchKey() {
 	Client.otherFunc.Range(func(key, value interface{}) bool {
-		req := &msg.LouMiaoWatchKey{}
+		req := &pbmsg.LouMiaoWatchKey{}
 		req.Prefix = key.(string)
-		req.Opcode = msg.LouMiaoWatchKey_ADD
+		req.Opcode = pbmsg.LouMiaoWatchKey_ADD
 
 		buff, _ := message.EncodeProBuff(0, "LouMiaoWatchKey", req)
 		Client.pInnerService.Send(buff)
@@ -149,7 +149,7 @@ func leaseCallBack(dt int64) bool {
 	if !Client.netStatus {
 		return true
 	}
-	req := &msg.LouMiaoLease{}
+	req := &pbmsg.LouMiaoLease{}
 	req.Uid = int32(config.SERVER_NODE_UID)
 
 	buff, _ := message.EncodeProBuff(0, "LouMiaoLease", req)
@@ -164,7 +164,7 @@ func PutService(prefix, val string) error {
 	if !Client.netStatus {
 		return fmt.Errorf("EtcfClient.PutService: prefix = %s, server not connected", prefix)
 	}
-	req := &msg.LouMiaoPutValue{}
+	req := &pbmsg.LouMiaoPutValue{}
 	req.Prefix = prefix
 	req.Value = val
 	req.Lease = LEASE_TIME
@@ -182,7 +182,7 @@ func SetValue(prefix, val string) error {
 	if !Client.netStatus {
 		return fmt.Errorf("EtcfClient.SetValue: prefix = %s, server not connected", prefix)
 	}
-	req := &msg.LouMiaoPutValue{}
+	req := &pbmsg.LouMiaoPutValue{}
 	req.Prefix = prefix
 	req.Value = val
 	req.Lease = 0
@@ -202,7 +202,7 @@ func AquireLock(key string, expire int) int {
 		llog.Errorf("EtcfClient.AquireLock: key = %s, server not connected", key)
 		return 0
 	}
-	req := &msg.LouMiaoAquireLock{}
+	req := &pbmsg.LouMiaoAquireLock{}
 	req.Prefix = key
 	req.TimeOut = int32(expire)
 
@@ -234,7 +234,7 @@ func UnLock(key string) {
 		llog.Errorf("EtcfClient.UnLock: key = %s, server not connected", key)
 		return
 	}
-	req := &msg.LouMiaoReleaseLock{}
+	req := &pbmsg.LouMiaoReleaseLock{}
 	req.Prefix = key
 
 	buff, _ := message.EncodeProBuff(0, "LouMiaoReleaseLock", req)
@@ -253,7 +253,7 @@ func AquireLeader(key string, value string) (isleader bool) {
 		llog.Errorf("EtcfClient.AquireLeader: key = %s, server not connected", key)
 		return false
 	}
-	req := &msg.LouMiaoAquireLock{}
+	req := &pbmsg.LouMiaoAquireLock{}
 	req.Prefix = key
 	req.TimeOut = 1000
 	req.Value = value
@@ -283,7 +283,7 @@ func GetOne(prefix string) (string, error) {
 		return "", fmt.Errorf("EtcfClient.GetOne: prefix = %s, server not connected", prefix)
 	}
 
-	req := &msg.LouMiaoGetValue{}
+	req := &pbmsg.LouMiaoGetValue{}
 	req.Prefix = prefix
 	buff, _ := message.EncodeProBuff(0, "LouMiaoGetValue", req)
 	ch, ok := Client.mChanGetValue.Load(prefix)
@@ -316,7 +316,7 @@ func GetAll(prefix string) ([]string, error) {
 		return nil, fmt.Errorf("EtcfClient.GetAll: prefix = %s, server not connected", prefix)
 	}
 
-	req := &msg.LouMiaoGetValue{}
+	req := &pbmsg.LouMiaoGetValue{}
 	req.Prefix = prefix
 	req.Prefixs = append(req.Prefixs, "m")
 
@@ -347,18 +347,18 @@ func GetAll(prefix string) ([]string, error) {
 
 // 监听key
 // @prefix: 监听key值
-// @hanlder: key值变化回调
-func WatchKey(prefix string, hanlder func(string, string, bool)) bool {
+// @handler: key值变化回调
+func WatchKey(prefix string, handler func(string, string, bool)) bool {
 	if !Client.netStatus {
 		llog.Errorf("EtcfClient.WatchKey: prefix = %s, server not connected", prefix)
 		return false
 	}
 
-	Client.otherFunc.Store(prefix, hanlder)
+	Client.otherFunc.Store(prefix, handler)
 
-	req := &msg.LouMiaoWatchKey{}
+	req := &pbmsg.LouMiaoWatchKey{}
 	req.Prefix = prefix
-	req.Opcode = msg.LouMiaoWatchKey_ADD
+	req.Opcode = pbmsg.LouMiaoWatchKey_ADD
 	req.Uid = int32(config.SERVER_NODE_UID)
 
 	buff, _ := message.EncodeProBuff(0, "LouMiaoWatchKey", req)
@@ -375,9 +375,9 @@ func RemoveKey(prefix string) {
 		llog.Errorf("EtcfClient.WatchKey: prefix = %s, server not connected", prefix)
 		return
 	}
-	req := &msg.LouMiaoWatchKey{}
+	req := &pbmsg.LouMiaoWatchKey{}
 	req.Prefix = prefix
-	req.Opcode = msg.LouMiaoWatchKey_DEL
+	req.Opcode = pbmsg.LouMiaoWatchKey_DEL
 	req.Uid = int32(config.SERVER_NODE_UID)
 
 	buff, _ := message.EncodeProBuff(0, "LouMiaoWatchKey", req)
@@ -397,7 +397,7 @@ func innerClientDisConnect(socketId int, data []byte) {
 
 // aquire lock
 func innerClientLouMiaoAquireLock(socketId int, data []byte) {
-	req := &msg.LouMiaoAquireLock{}
+	req := &pbmsg.LouMiaoAquireLock{}
 	if message.UnPackProto(req, data) != nil {
 		return
 	}
@@ -418,7 +418,7 @@ func innerClientLouMiaoAquireLock(socketId int, data []byte) {
 
 // value changed
 func innerClientLouMiaoNoticeValue(socketId int, data []byte) {
-	req := new(msg.LouMiaoNoticeValue)
+	req := new(pbmsg.LouMiaoNoticeValue)
 	if message.UnPackProto(req, data) != nil {
 		return
 	}
@@ -439,7 +439,7 @@ func innerClientLouMiaoNoticeValue(socketId int, data []byte) {
 
 // get value
 func innerClientLouMiaoGetValue(socketId int, data []byte) {
-	req := new(msg.LouMiaoGetValue)
+	req := new(pbmsg.LouMiaoGetValue)
 	if message.UnPackProto(req, data) != nil {
 		return
 	}

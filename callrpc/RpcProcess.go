@@ -2,6 +2,7 @@ package callrpc
 
 import (
 	"github.com/golang/protobuf/proto"
+	"github.com/snowyyj001/loumiao/pbmsg"
 	"reflect"
 
 	"github.com/snowyyj001/loumiao/base"
@@ -9,7 +10,6 @@ import (
 	"github.com/snowyyj001/loumiao/gorpc"
 	"github.com/snowyyj001/loumiao/llog"
 	"github.com/snowyyj001/loumiao/message"
-	"github.com/snowyyj001/loumiao/msg"
 	"github.com/snowyyj001/loumiao/util"
 )
 
@@ -26,7 +26,7 @@ func callRpc(igo gorpc.IGoRoutine, data interface{}) interface{} {
 }
 
 func respRpcCall(igo gorpc.IGoRoutine, data interface{}) interface{} {
-	rpcmsg := data.(*msg.LouMiaoRpcMsg)
+	rpcmsg := data.(*pbmsg.LouMiaoRpcMsg)
 	bitstream := base.NewBitStream(rpcmsg.Buffer, len(rpcmsg.Buffer))
 	session := bitstream.ReadString()
 	respdata := bitstream.ReadBytes()
@@ -40,7 +40,7 @@ func respRpcCall(igo gorpc.IGoRoutine, data interface{}) interface{} {
 
 func reqRpcCall(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	req := data.(*gorpc.MM)
-	rpcmsg := req.Data.(*msg.LouMiaoRpcMsg)
+	rpcmsg := req.Data.(*pbmsg.LouMiaoRpcMsg)
 	bitstream := base.NewBitStream(rpcmsg.Buffer, len(rpcmsg.Buffer))
 	session := bitstream.ReadString()
 	respdata := bitstream.ReadBytes()

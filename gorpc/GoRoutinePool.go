@@ -103,7 +103,7 @@ func (self *GoRoutinePool) GetRoutine(name int64) IGoRoutine {
 func (self *GoRoutinePool) CloseRoutine(name int64) {
 	igo := self.GetAndDelRoutine(name)
 	if igo != nil {
-		igo.DoDestory()
+		igo.DoDestroy()
 		igo.Close() //直接关闭
 	}
 }
@@ -112,7 +112,7 @@ func (self *GoRoutinePool) CloseRoutine(name int64) {
 func (self *GoRoutinePool) CloseRoutineCleanly(name int64) {
 	igo := self.GetAndDelRoutine(name)
 	if igo != nil {
-		igo.DoDestory()
+		igo.DoDestroy()
 		igo.CloseCleanly() //协程池的关闭要优雅
 	}
 }
@@ -121,7 +121,7 @@ func (self *GoRoutinePool) CloseRoutineCleanly(name int64) {
 func (self *GoRoutinePool) CloseAll() {
 	self.actorLock.RLock()
 	for _, igo := range self.go_name_Tmp {
-		igo.DoDestory()
+		igo.DoDestroy()
 	}
 	for _, igo := range self.go_name_Tmp {
 		igo.Close()
@@ -130,10 +130,10 @@ func (self *GoRoutinePool) CloseAll() {
 }
 
 // 遍历所有actor，效率堪忧
-func (self *GoRoutinePool) RangeRoutine(hanlder func(igo IGoRoutine)) {
+func (self *GoRoutinePool) RangeRoutine(handler func(igo IGoRoutine)) {
 	self.actorLock.RLock()
 	for _, igo := range self.go_name_Tmp {
-		hanlder(igo)
+		handler(igo)
 	}
 	self.actorLock.RUnlock()
 }
@@ -153,7 +153,7 @@ func (self *GoRoutinePool) Start(igo IGoRoutine, name int64) bool {
 	}
 
 	//register handler msg
-	igo.DoRegsiter()
+	igo.DoRegister()
 
 	igo.Register("ServiceHandler", ServiceHandler)
 	return true

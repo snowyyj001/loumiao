@@ -3,11 +3,14 @@ package gorpc
 
 //"fmt"
 
+// 声明一个rpc函数类型，
+type HandlerRpcFunc func([]byte) []byte
+
 // 声明一个函数类型，
-type HanlderFunc func(igo IGoRoutine, data interface{}) interface{}
+type HandlerFunc func(igo IGoRoutine, data interface{}) interface{}
 
 // data是一个nil或指针类型，需要
-type HanlderNetFunc func(igo IGoRoutine, clientid int, buffer []byte)
+type HandlerNetFunc func(igo IGoRoutine, clientId int, buffer []byte)
 
 // 声明一个数据类型
 type M struct {
@@ -47,5 +50,5 @@ type ChannelContext struct {
 	Handler  string              //处理函数名字
 	Data     M                   //传送携带数据(如果使用Data interface{}，Data会escapes to heap)
 	ReadChan chan ChannelContext //读取chan
-	Cb       HanlderFunc         //回调
+	Cb       HandlerFunc         //回调
 }

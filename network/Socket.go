@@ -281,3 +281,7 @@ func (self *Socket) ReceivePacket(Id int, dat []byte) bool {
 	}
 	return true
 }
+
+func init() {
+	broadMsgArray[broadMsgId] = &BroadMsg{c: make(chan struct{})}
+}

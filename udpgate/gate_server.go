@@ -28,7 +28,7 @@ type UdpGateServer struct {
 
 type UdpHandlerIgo struct {
 	Igo     gorpc.IGoRoutine
-	Handler gorpc.HanlderNetFunc
+	Handler gorpc.HandlerNetFunc
 }
 
 type UdpSendSt struct {
@@ -38,7 +38,7 @@ type UdpSendSt struct {
 
 var (
 	This         *UdpGateServer
-	handlerMap   map[int64]*UdpHandlerIgo //userid -> HanlderNetFunc
+	handlerMap   map[int64]*UdpHandlerIgo //userid -> HandlerNetFunc
 	rwMutex      sync.RWMutex
 	messagesChan chan *UdpSendSt
 )
@@ -61,8 +61,8 @@ func (self *UdpGateServer) DoInit() bool {
 	return true
 }
 
-func (self *UdpGateServer) DoRegsiter() {
-	llog.Info("UdpGateServer DoRegsiter")
+func (self *UdpGateServer) DoRegister() {
+	llog.Info("UdpGateServer DoRegister")
 }
 
 func (self *UdpGateServer) DoStart() {
@@ -79,8 +79,8 @@ func (self *UdpGateServer) DoStart() {
 	})
 }
 
-func (self *UdpGateServer) DoDestory() {
-	llog.Info("UdpGateServer DoDestory")
+func (self *UdpGateServer) DoDestroy() {
+	llog.Info("UdpGateServer DoDestroy")
 	self.pService.Close()
 }
 
@@ -89,7 +89,7 @@ func (self *UdpGateServer) closeClient(clientid int) {
 }
 
 // RegisterHandler 注册udp消息处理actor
-func RegisterHandler(userId int, igo gorpc.IGoRoutine, handler gorpc.HanlderNetFunc) {
+func RegisterHandler(userId int, igo gorpc.IGoRoutine, handler gorpc.HandlerNetFunc) {
 	defer rwMutex.Unlock()
 	rwMutex.Lock()
 	handlerMap[int64(userId)] = &UdpHandlerIgo{Handler: handler, Igo: igo}

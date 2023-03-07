@@ -42,8 +42,8 @@ func (self *KcpGateServer) DoInit() bool {
 	return true
 }
 
-func (self *KcpGateServer) DoRegsiter() {
-	llog.Info("KcpGateServer DoRegsiter")
+func (self *KcpGateServer) DoRegister() {
+	llog.Info("KcpGateServer DoRegister")
 
 	//self.Register("RegisterNet", RegisterNet)
 
@@ -61,18 +61,18 @@ func (self *KcpGateServer) DoStart() {
 	}
 }
 
-func (self *KcpGateServer) DoDestory() {
-	llog.Info("KcpGateServer DoDestory")
+func (self *KcpGateServer) DoDestroy() {
+	llog.Info("KcpGateServer DoDestroy")
 }
 
 func (self *KcpGateServer) closeClient(clientid int) {
 	self.pService.StopClient(clientid)
 }
 
-// simple register self net hanlder, this func can only be called before igo started
-func (self *KcpGateServer) RegisterSelfNet(hanlderName string, hanlderFunc gorpc.HanlderNetFunc) {
-	handler_Map[hanlderName] = "KcpGateServer"
-	self.RegisterGate(hanlderName, hanlderFunc)
+// simple register self net handler, this func can only be called before igo started
+func (self *KcpGateServer) RegisterSelfNet(handlerName string, HandlerFunc gorpc.HandlerNetFunc) {
+	handler_Map[handlerName] = "KcpGateServer"
+	self.RegisterGate(handlerName, HandlerFunc)
 }
 
 // goroutine unsafe,此时已不涉及map的修改，直处理了，不用再去RecvPackMsg中处理

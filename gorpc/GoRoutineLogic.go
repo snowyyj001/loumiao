@@ -27,14 +27,14 @@ const (
 	ACTOR_EXEC_LONG   = 200   //actor执行时长过长，毫秒
 )
 
-type Cmdtype map[string]HanlderFunc
+type Cmdtype map[string]HandlerFunc
 
 type IGoRoutine interface {
 	DoInit() bool  //初始化数据//非线程安全
-	DoRegsiter()   //注册消息//非线程安全
+	DoRegister()   //注册消息//非线程安全
 	DoStart()      //启动完成//非线程安全
 	DoOpen()       //开始服务//非线程安全
-	DoDestory()    //销毁数据//线程是否安全要看调用方是否是自己
+	DoDestroy()    //销毁数据//线程是否安全要看调用方是否是自己
 	init(string)   //GoRoutineLogic初始化
 	Close()        //关闭,线程是否安全要看调用方是否是自己
 	CloseCleanly() //关闭,线程是否安全要看调用方是否是自己
@@ -45,12 +45,12 @@ type IGoRoutine interface {
 	GetJobChan() chan ChannelContext
 	Send(handler_name string, sdata *M)
 	SendActor(handler_name string, sdata interface{})
-	SendBack(target IGoRoutine, handler_name string, sdata *M, Cb HanlderFunc)
+	SendBack(target IGoRoutine, handler_name string, sdata *M, Cb HandlerFunc)
 	Call(target IGoRoutine, handler_name string, sdata *M) (interface{}, bool)
 	CallActor(target string, handler_name string, sdata interface{}) (interface{}, bool)
-	RegisterGate(name string, call HanlderNetFunc)
+	RegisterGate(name string, call HandlerNetFunc)
 	UnRegisterGate(name string)
-	Register(name string, fun HanlderFunc)
+	Register(name string, fun HandlerFunc)
 	UnRegister(name string)
 	CallNetFunc(*M)
 	SetSync(sync bool)
@@ -84,7 +84,7 @@ type GoRoutineLogic struct {
 	jobChan      chan ChannelContext       //投递任务chan
 	actionChan   chan int                  //命令控制chan
 	chanNum      int                       //协程数量
-	NetHandler   map[string]HanlderNetFunc //net hanlder
+	NetHandler   map[string]HandlerNetFunc //net handler
 	goFun        bool                      //true:使用go执行Cmd,GoRoutineLogic非协程安全;false:协程安全
 	cRoLimitChan chan struct{}             //异步协程上限控制
 	execTime     int64
@@ -113,8 +113,8 @@ func (self *GoRoutineLogic) DoInit() bool {
 	//llog.Infof("%s DoInit", self.Name)
 	return true
 }
-func (self *GoRoutineLogic) DoRegsiter() {
-	//llog.Infof("%s DoRegsiter", self.Name)
+func (self *GoRoutineLogic) DoRegister() {
+	//llog.Infof("%s DoRegister", self.Name)
 }
 func (self *GoRoutineLogic) DoStart() {
 	//llog.Infof("%s DoStart", self.Name)
@@ -122,8 +122,8 @@ func (self *GoRoutineLogic) DoStart() {
 func (self *GoRoutineLogic) DoOpen() {
 	//llog.Infof("%s DoOpen", self.Name)
 }
-func (self *GoRoutineLogic) DoDestory() {
-	//llog.Infof("%s DoDestory", self.Name)
+func (self *GoRoutineLogic) DoDestroy() {
+	//llog.Infof("%s DoDestroy", self.Name)
 }
 func (self *GoRoutineLogic) GetName() string {
 	return self.Name
@@ -195,7 +195,7 @@ func (self *GoRoutineLogic) SelfStart(name string) {
 	self.SetInited(true)
 
 	//register handler msg
-	self.DoRegsiter()
+	self.DoRegister()
 
 	self.Run()
 
@@ -458,7 +458,7 @@ func (self *GoRoutineLogic) SendActor(handler_name string, sdata interface{}) {
 }
 
 // 投递任务,拥有回调
-func (self *GoRoutineLogic) SendBack(server IGoRoutine, handler_name string, sdata *M, Cb HanlderFunc) {
+func (self *GoRoutineLogic) SendBack(server IGoRoutine, handler_name string, sdata *M, Cb HandlerFunc) {
 	if self.started == 0 {
 		llog.Errorf("GoRoutineLogic.SendBack has not started: %s, %s, %v", self.Name, handler_name, sdata)
 		return
@@ -533,7 +533,7 @@ func (self *GoRoutineLogic) CallActor(target string, handler_name string, sdata 
 	return self.Call(igo, handler_name, m)
 }
 
-func (self *GoRoutineLogic) CallFunc(cb HanlderFunc, data *M) interface{} {
+func (self *GoRoutineLogic) CallFunc(cb HandlerFunc, data *M) interface{} {
 	defer util.Recover()
 	if data.Flag {
 		return cb(self, data.Data)
@@ -542,7 +542,7 @@ func (self *GoRoutineLogic) CallFunc(cb HanlderFunc, data *M) interface{} {
 	}
 }
 
-func (self *GoRoutineLogic) CallGoFunc(hd HanlderFunc, ct *ChannelContext) {
+func (self *GoRoutineLogic) CallGoFunc(hd HandlerFunc, ct *ChannelContext) {
 	self.execTime = base.TimeStamp()
 	ret := self.CallFunc(hd, &ct.Data)
 	endTime := base.TimeStamp()
@@ -556,13 +556,13 @@ func (self *GoRoutineLogic) CallGoFunc(hd HanlderFunc, ct *ChannelContext) {
 		select {
 		case ct.ReadChan <- retctx:
 		case <-time.After(CALL_RESP_TIMEOUT * time.Second):
-			llog.Warningf("GoRoutineLogic[%s]CallGoFunc resp timeout: hanlder = %s", self.Name, ct.Handler)
+			llog.Warningf("GoRoutineLogic[%s]CallGoFunc resp timeout: handler = %s", self.Name, ct.Handler)
 		}
 	}
 	<-self.cRoLimitChan
 }
 
-func (self *GoRoutineLogic) Register(name string, fun HanlderFunc) {
+func (self *GoRoutineLogic) Register(name string, fun HandlerFunc) {
 	self.Cmd[name] = fun
 }
 
@@ -570,7 +570,7 @@ func (self *GoRoutineLogic) UnRegister(name string) {
 	delete(self.Cmd, name)
 }
 
-func (self *GoRoutineLogic) RegisterGate(name string, call HanlderNetFunc) {
+func (self *GoRoutineLogic) RegisterGate(name string, call HandlerNetFunc) {
 	self.NetHandler[name] = call
 }
 
@@ -587,7 +587,7 @@ func (self *GoRoutineLogic) init(name string) {
 	self.actionChan = make(chan int, 1)
 	self.cRoLimitChan = make(chan struct{}, self.ChanSize*CHAN_LIMIT_TIMES)
 	self.Cmd = make(Cmdtype)
-	self.NetHandler = make(map[string]HanlderNetFunc)
+	self.NetHandler = make(map[string]HandlerNetFunc)
 	//self.timer = time.NewTimer(1<<63 - 1) //默认没有定时器
 	//self.timerCall = nil
 	self.rpcWaitchan = make(map[string]chan interface{})

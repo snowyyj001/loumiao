@@ -36,9 +36,9 @@ func (self *ClientServer) DoInit() bool {
 	return true
 }
 
-func (self *ClientServer) DoRegsiter() {
-	llog.Info("ClientServer DoRegsiter")
-	self.Register("ServerHanlder", gorpc.ServiceHandler)
+func (self *ClientServer) DoRegister() {
+	llog.Info("ClientServer DoRegister")
+	self.Register("Serverhandler", gorpc.ServiceHandler)
 }
 
 func (self *ClientServer) DoStart() {
@@ -46,8 +46,8 @@ func (self *ClientServer) DoStart() {
 	self.pService.Start()
 }
 
-func (self *ClientServer) DoDestory() {
-	llog.Info("ClientServer DoDestory")
+func (self *ClientServer) DoDestroy() {
+	llog.Info("ClientServer DoDestroy")
 }
 
 func PacketFunc(socketid int, buff []byte, nlen int) error {

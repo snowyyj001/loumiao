@@ -145,6 +145,7 @@ func (self *BitStream) ReadBits(bitCount int) []byte {
 	}
 	if bitCount+self.bitNum > self.bufSize {
 		Assert(false, "Out of range read")
+		return nil
 	}
 	stPtr := self.dataPtr[self.bitNum : self.bitNum+bitCount]
 	self.bitNum += bitCount

@@ -59,8 +59,8 @@ func (self *RpcGateServer) DoInit() bool {
 	return true
 }
 
-func (self *RpcGateServer) DoRegsiter() {
-	llog.Info("RpcGateServer DoRegsiter")
+func (self *RpcGateServer) DoRegister() {
+	llog.Info("RpcGateServer DoRegister")
 
 	self.Register("SendRpcMsgToServer", sendRpcMsgToServer)
 	self.Register("CloseServer", closeServer)
@@ -145,8 +145,8 @@ func (self *RpcGateServer) newServerDiscover(key, val string, dis bool) {
 	}
 }
 
-func (self *RpcGateServer) DoDestory() {
-	llog.Info("RpcGateServer DoDestory")
+func (self *RpcGateServer) DoDestroy() {
+	llog.Info("RpcGateServer DoDestroy")
 	nodemgr.ServerEnabled = false
 }
 
@@ -189,13 +189,13 @@ func (self *RpcGateServer) removeRpc(socketId int) {
 	delete(self.users_u, socketId)
 
 	//remove rpc handler
-	self.removeRpcHanlder(socketId)
+	self.removeRpchandler(socketId)
 
 	//reset node ststus
 	nodemgr.RemoveNodeById(uid)
 }
 
-func (self *RpcGateServer) removeRpcHanlder(socketid int) {
+func (self *RpcGateServer) removeRpchandler(socketid int) {
 	//remove rpc handler
 	for key, arr := range self.rpcMap {
 		for i, val := range arr {
@@ -212,7 +212,7 @@ func (self *RpcGateServer) getCluserServerSocketId(funcName string) int {
 	arr := self.rpcMap[funcName]
 	sz := len(arr)
 	if sz == 0 {
-		llog.Warningf("0.getCluserServerSocketId no rpc server hanlder finded %s", funcName)
+		llog.Warningf("0.getCluserServerSocketId no rpc server handler finded %s", funcName)
 		return 0
 	}
 	index := util.Random(sz) //choose a server by random

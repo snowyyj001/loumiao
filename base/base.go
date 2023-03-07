@@ -3,8 +3,8 @@ package base
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"io"
-	"log"
 	"math"
 	"math/rand"
 	"net"
@@ -15,7 +15,7 @@ import (
 
 func Assert(x bool, y string) {
 	if bool(x) == false {
-		log.Println("Assert: %s", y)
+		fmt.Println("Assert: ", y)
 	}
 }
 
