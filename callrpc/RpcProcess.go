@@ -2,6 +2,7 @@ package callrpc
 
 import (
 	"github.com/golang/protobuf/proto"
+	"github.com/snowyyj001/loumiao/gate"
 	"github.com/snowyyj001/loumiao/pbmsg"
 	"reflect"
 
@@ -48,19 +49,19 @@ func reqRpcCall(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	if ok == false {
 		return nil
 	}
-	m := &gorpc.M{Id: int(rpcmsg.SourceId), Name: session}
-	m.Param = util.BitOr(define.RPCMSG_FLAG_RESP, define.RPCMSG_FLAG_CALL)
+	var buffer []byte
+	flag := util.BitOr(define.RPCMSG_FLAG_RESP, define.RPCMSG_FLAG_CALL)
 	if resp == nil { //rpc调用出错了才会返回nil
 		bitstream = base.NewBitStreamS(base.BitStrLen(session))
 		bitstream.WriteString(session)
 		bitstream.WriteBytes(nil)
-		m.Data = bitstream.GetBuffer()
+		buffer = bitstream.GetBuffer()
 	} else if reflect.TypeOf(resp).Kind() == reflect.Slice { //bitstream
 		orgbuff := resp.([]byte)
 		bitstream = base.NewBitStreamS(len(orgbuff) + base.BitStrLen(session))
 		bitstream.WriteString(session)
 		bitstream.WriteBytes(orgbuff)
-		m.Data = bitstream.GetBuffer()
+		buffer = bitstream.GetBuffer()
 	} else {
 		orgbuff, err := message.Pack(resp.(proto.Message))
 		if err != nil {
@@ -69,8 +70,8 @@ func reqRpcCall(igo gorpc.IGoRoutine, data interface{}) interface{} {
 		bitstream = base.NewBitStreamS(len(orgbuff) + base.BitStrLen(session))
 		bitstream.WriteString(session)
 		bitstream.WriteBytes(orgbuff)
-		m.Data = bitstream.GetBuffer()
+		buffer = bitstream.GetBuffer()
 	}
-	gorpc.MGR.Send("GateServer", "SendRpc", m)
+	gate.SendRpc(int(rpcmsg.SourceId), session, buffer, flag)
 	return nil
 }

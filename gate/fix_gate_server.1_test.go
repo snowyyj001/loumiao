@@ -26,7 +26,7 @@ func sendRpc_hotfix(igo gorpc.IGoRoutine, data interface{}) interface{} {
 	llog.Debugf("GateServer sendRpc_hotfix: %v", data)
 
 	m := data.(*gorpc.M)
-	clientuid := This.getCluserRpcGateUid()
+	clientuid := This.getClusterRpcGateUid()
 	if clientuid <= 0 {
 		llog.Errorf("0.sendRpc no rpc gate server founded %s", m.Name)
 		return nil

@@ -23,7 +23,8 @@ var (
 	clogger     *go_logger.Logger //zap的控制台颜色输出效果不好，这里用go_logger
 	logger      *zap.Logger
 	sugarLogger *zap.SugaredLogger
-	logLevel    int
+
+	logLevel int
 	//remoteLog   *LogRemoteWrite
 
 	ReportMailhandler func(tag int, str string)

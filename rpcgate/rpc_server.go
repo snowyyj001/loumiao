@@ -130,10 +130,7 @@ func (self *RpcGateServer) serverStatusUpdate(key, val string, dis bool) {
 		return
 	}
 	if node.Uid > 0 && node.SocketActive == false {
-		_, ok := This.rpcUids.Load(node.Uid)
-		if ok {
-			gorpc.MGR.SendActor("GateServer", "CloseServer", node.Uid)
-		}
+		This.rpcUids.Delete(node.Uid)
 	}
 }
 
@@ -208,7 +205,7 @@ func (self *RpcGateServer) removeRpchandler(socketid int) {
 }
 
 // rpc调用的目标server选择
-func (self *RpcGateServer) getCluserServerSocketId(funcName string) int {
+func (self *RpcGateServer) getClusterServerSocketId(funcName string) int {
 	arr := self.rpcMap[funcName]
 	sz := len(arr)
 	if sz == 0 {

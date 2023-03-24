@@ -72,7 +72,7 @@ func innerLouMiaoRpcMsg(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	}
 	var rpcClientId int
 	if req.TargetId <= 0 {
-		rpcClientId = This.getCluserServerSocketId(req.FuncName)
+		rpcClientId = This.getClusterServerSocketId(req.FuncName)
 	} else {
 		rpcClientId = This.getClientId(int(req.TargetId))
 	}
@@ -94,7 +94,7 @@ func sendRpcMsgToServer(igo gorpc.IGoRoutine, data interface{}) interface{} {
 
 	var rpcClientId int
 	if target <= 0 {
-		rpcClientId = This.getCluserServerSocketId(funcName)
+		rpcClientId = This.getClusterServerSocketId(funcName)
 	} else {
 		rpcClientId = This.getClientId(target)
 	}

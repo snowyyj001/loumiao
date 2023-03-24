@@ -8,7 +8,6 @@ import (
 	"gopkg.in/yaml.v2"
 	"log"
 	"os"
-	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -132,19 +131,7 @@ func init() {
 	if f, err := os.Open("../config/cfg.yml"); err == nil {
 		yaml.NewDecoder(f).Decode(&globalCfg)
 		fmt.Println("global cfg", globalCfg)
-
-		if runtime.GOOS == "windows" {
-			ips := base.GetSelfIntraIp()
-			PUBLIC_IP_ADDR = ips[0]
-
-		} else {
-			if r, err, _ := base.HttpGet(globalCfg.NetCfg.Param); err == nil {
-				PUBLIC_IP_ADDR = r
-				PUBLIC_IP_ADDR = strings.Trim(PUBLIC_IP_ADDR, "\n")
-			} else {
-				fmt.Println("获取公网ip失败: ", globalCfg.NetCfg.Param)
-			}
-		}
+		PUBLIC_IP_ADDR = globalCfg.NetCfg.Param
 	}
 
 	if f, err := os.Open("config/cfg.yml"); err != nil {

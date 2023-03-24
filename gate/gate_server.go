@@ -21,30 +21,14 @@ import (
 
 var (
 	This       *GateServer
-	handlerMap map[string]string //goroutine unsafe
+	handlerMap map[string]string //goroutine unsafe,func name -> actor name
 )
-
-/*tokens, tokens_u, users_u说明
-当loumiao是account时:
-tokens: 没有用
-tokens_u: 没有用
-================================================================================
-当loumiao是gate时:
-tokens：key是client的socketid，Token.UserId是client的userid，Token.TokenId是client的tokenid，Token.WouldId是client所属的world uid，Token.ZoneUid是client所属的zone uid
-tokens_u：key是client的userid,value是client的socketid
-users_u: 没有用
-================================================================================
-当loumiao是server时:
-tokens：key是gate的socketid，Token.UserId是gate的uid，Token.TokenId是自己的uid(0代表该gate将要被关闭)
-tokens_u：key是gate的uid,value是socketid
-users_u: key是client的userid,value是gate的uid
-*/
 
 type GateServer struct {
 	gorpc.GoRoutineLogic
 
 	pService      network.ISocket
-	clients       map[int]*network.ClientSocket
+	clients       sync.Map //uid -> *network.ClientSocket
 	pInnerService network.ISocket
 	ServerType    int
 	//
@@ -59,11 +43,11 @@ type GateServer struct {
 	//only for CLIENT_CONNECT
 	uidAgents sync.Map //user id -> socket id
 	sidAgents sync.Map //socket id -> *agent.LouMiaoAgent
+	netMap    sync.Map //net func -> server type
 
 	//rpc相关
-	rpcMap   map[string]string //rpc functon -> actor name
-	rpcGates []int             //space for time, all rpcserver's uid
-	rpcUids  sync.Map          //rpc uid -> true
+	rpcMap  map[string]string //rpc function -> actor name
+	rpcUids sync.Map          //rpc uid -> true
 
 	//单个actor内的消息pub/sub
 	msgQueueMap map[string]*maps.Map
@@ -97,10 +81,9 @@ func (self *GateServer) DoInit() bool {
 		self.pInnerService.SetConnectType(network.SERVER_CONNECT)
 	}
 
-	self.clients = make(map[int]*network.ClientSocket)
+	//self.clients = make(map[int]*network.ClientSocket)
 
 	self.rpcMap = make(map[string]string)
-	self.rpcGates = make([]int, 0)
 	self.msgQueueMap = make(map[string]*maps.Map) //key -> [actorname,actorname,...]
 
 	handlerMap = make(map[string]string)
@@ -110,12 +93,7 @@ func (self *GateServer) DoInit() bool {
 
 func (self *GateServer) DoRegister() {
 	llog.Infof("%s DoRegister", self.Name)
-
-	//self.Register("SendClient", sendClient)
-	self.Register("NewClient", newClient)
-	self.Register("SendRpc", sendRpc)
-	self.Register("RecvPackMsgClient", recvPackMsgClient)
-	self.Register("CloseServer", closeServer)
+	
 	self.Register("Publish", publish)
 	self.Register("Subscribe", subscribe)
 
@@ -136,6 +114,8 @@ func (self *GateServer) DoRegister() {
 	self.RegisterSelfNet("LouMiaoKickOut", innerLouMiaoKickOut)
 
 	self.RegisterSelfNet("LouMiaoClientConnect", innerLouMiaoClientConnect)
+
+	self.RegisterSelfNet("LouMiaoNetRegister", innerLouMiaoNetRegister)
 }
 
 // begin communicate with other nodes
@@ -268,10 +248,7 @@ func (self *GateServer) serverStatusUpdate(key, val string, dis bool) {
 	}
 
 	if node.Uid > 0 && node.SocketActive == false && node.Type == config.ServerType_RPCGate {
-		_, ok := This.rpcUids.Load(node.Uid)
-		if ok {
-			gorpc.MGR.SendActor("GateServer", "CloseServer", node.Uid)
-		}
+		This.rpcUids.Delete(node.Uid)
 	}
 }
 
@@ -302,8 +279,7 @@ func (self *GateServer) newServerDiscover(key, val string, dis bool) {
 		if rpcClient == nil { //this conditation can be etcd reconnect
 			client := self.buildClient(node.Uid, node.SAddr)
 			if self.enableClient(client) {
-				m := &gorpc.M{Id: node.Uid, Data: client, Param: 0} //rpc client
-				gorpc.MGR.Send("GateServer", "NewClient", m)
+				newRpcClient(node.Uid, client)
 			} else {
 				node.SocketActive = false
 			}
@@ -314,11 +290,10 @@ func (self *GateServer) newServerDiscover(key, val string, dis bool) {
 		gateConn = gateConn || node.Type == config.ServerType_LOGINQUEUE //排队服
 		if gateConn {                                                    //目前只有这三个需要直接接受来自client的消息(其实这里没必要过滤，多一条socket连接没有任何影响)
 			rpcClient := self.GetRpcClient(node.Uid)
-			if rpcClient == nil { //this conditation can be etcd reconnect
+			if rpcClient == nil { //this condition can be etcd reconnect
 				client := self.buildClient(node.Uid, node.SAddr)
 				if self.enableClient(client) {
-					m := &gorpc.M{Id: node.Uid, Data: client, Param: 1} //client client
-					gorpc.MGR.Send("GateServer", "NewClient", m)
+					newGateClient(node.Uid, client)
 				} else {
 					node.SocketActive = false
 				}
@@ -354,7 +329,8 @@ func packetFunc_client(socketid int, buff []byte, nlen int) error {
 		return fmt.Errorf("packetFunc_client Decode error: %s", err.Error())
 		//This.closeClient(socketid)
 	} else {
-		if target == config.NET_NODE_TYPE || target <= 0 { //msg to me，client使用的是server type
+		ty, ok := This.netMap.Load(name)
+		if !ok { //msg to me，client使用的是server type
 			handler, ok := handlerMap[name]
 			if ok {
 				nm := &gorpc.M{Id: socketid, Name: name, Data: buffbody}
@@ -363,11 +339,8 @@ func packetFunc_client(socketid int, buff []byte, nlen int) error {
 				llog.Errorf("packetFunc_client handler is nil, drop it[%s]", name)
 			}
 		} else { //msg to other server
-			if config.NET_NODE_TYPE != config.ServerType_Gate { //only gate can forward msg
-				return fmt.Errorf("packetFunc_client target may be error: target=%d, mytype=%d, name=%s", target, config.NET_NODE_TYPE, name)
-			}
-			m := &gorpc.M{Id: socketid, Param: target, Data: buff}
-			gorpc.MGR.Send("GateServer", "RecvPackMsgClient", m)
+			target = ty.(int)
+			recvPackMsgClient(socketid, target, buff)
 		}
 	}
 	return nil
@@ -411,39 +384,27 @@ func (self *GateServer) buildClient(uid int, addr string) *network.ClientSocket 
 }
 
 func (self *GateServer) removeClient(uid int) {
-	_, ok := self.clients[uid]
-	if !ok {
-		return
+	if _, ok := self.clients.LoadAndDelete(uid); ok {
+		llog.Debugf("GateServer remove client: %d", uid)
+		self.rpcUids.Delete(uid)
 	}
-	llog.Debugf("GateServer removeRpc: %d", uid)
-
-	delete(self.clients, uid)
-
-	self.rpcGates = util.RemoveSlice(self.rpcGates, uid) //将这个gate的rpc调用移除
-	self.rpcUids.Delete(uid)
 }
 
 func (self *GateServer) GetRpcClient(uid int) *network.ClientSocket {
-	client, ok := self.clients[uid]
+	client, ok := self.clients.Load(uid)
 	if ok {
-		return client
+		return client.(*network.ClientSocket)
 	}
 	return nil
 }
 
 // rpc调用的gate选择
-func (self *GateServer) getCluserRpcGateUid() int {
-
-	sz := len(self.rpcGates)
-	if sz == 0 {
-		llog.Warning("0.getCluserGateUid no rpc gate server finded ")
-		return 0
-	} else {
-		index := util.Random(sz) //choose a gate by random
-		return self.rpcGates[index]
-	}
-
-	return 0
+func (self *GateServer) getClusterRpcGateUid() (uid int) {
+	self.rpcUids.Range(func(key, value any) bool {
+		uid = key.(int)
+		return false
+	})
+	return
 }
 
 // StopClientByUserId 关闭客户端
@@ -525,8 +486,15 @@ func (self *GateServer) GetUserSocketId(userid int) int {
 	return 0
 }
 
-func (self *GateServer) GetGateSocketId(userId int) int {
+func (self *GateServer) GetGateSocketIdByUserId(userId int) int {
 	if socketId, ok := self.userGateSockets.Load(userId); ok {
+		return socketId.(int)
+	}
+	return 0
+}
+
+func (self *GateServer) GetGateSocketIdByGateUid(gateUid int) int {
+	if socketId, ok := self.gatesSocketId.Load(gateUid); ok {
 		return socketId.(int)
 	}
 	return 0

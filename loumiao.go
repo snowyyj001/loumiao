@@ -182,20 +182,20 @@ func RegisterRpcHandler(igo gorpc.IGoRoutine, call gorpc.HandlerRpcFunc) {
 // @data: 函数参数,一个二进制buff或pb结构体
 // @target: 目标server的uid，如果target==0，则随机指定目标地址, 否则gate会把消息转发给指定的target服务
 func SendRpc(funcName string, data interface{}, target int) {
-	m := &gorpc.M{Id: target, Name: funcName}
+	var buffer []byte
 	if reflect.TypeOf(data).Kind() == reflect.Slice { //bitstream
-		m.Data = data
+		buffer = data.([]byte)
 	} else {
 		buff, err := message.PackProto(data.(proto.Message))
 		if err != nil {
 			llog.Errorf("SendRpc: %s", err.Error())
 			return
 		}
-		m.Data = buff
+		buffer = buff
 	}
 	llog.Debugf("SendRpc: %s, %d", funcName, target)
 	//base64str := base64.StdEncoding.EncodeToString([]byte(funcName))
-	gorpc.MGR.Send("GateServer", "SendRpc", m)
+	gate.SendRpc(target, funcName, buffer, 0)
 }
 
 // CallRpc 远程rpc调用
@@ -268,7 +268,7 @@ func SendActor(actorName string, actorHandler string, data interface{}) {
 
 // BindGate 绑定网关信息
 func BindGate(userid, gateid int) {
-	gate.BindGate(userid, gateid)
+	gate.BindClientGate(userid, gateid)
 }
 
 // Publish sub/pub系统，只在本节点服务内生效
@@ -331,4 +331,10 @@ func GetServerUid() int {
 // GetAreaId 服id
 func GetAreaId() int {
 	return config.NET_NODE_ID
+}
+
+// CloseServer 服uid
+func CloseServer(uid int) {
+	llog.Infof("CloseServer: %d", uid)
+	gate.CloseServer(uid)
 }

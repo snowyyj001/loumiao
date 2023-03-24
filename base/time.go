@@ -8,7 +8,8 @@ var (
 	timeOffset    time.Duration
 	StartTick     int64
 	NowTick       int64
-	Timestamp     int64 // 当前秒数
+	Timestamp     int64 // 当前毫秒数
+	TimestampSec  int64 // 当前秒数
 	TIME_LOCATION *time.Location
 )
 
@@ -29,6 +30,7 @@ func timerTick() {
 	StartTick = now.UnixNano() / 1000000
 	NowTick = StartTick
 	Timestamp = NowTick / 1000
+	TimestampSec = Timestamp / 1000
 	lastTimestamp := Timestamp
 	var ticker = time.NewTicker(time.Millisecond)
 	go func() {
@@ -38,6 +40,7 @@ func timerTick() {
 				now = TimeNow()
 				NowTick = now.UnixNano() / 1000000
 				Timestamp = NowTick / 1000
+				TimestampSec = Timestamp / 1000
 				if Timestamp != lastTimestamp {
 					lastTimestamp = Timestamp
 
@@ -152,12 +155,12 @@ func TimeStrFormat(mat string) string {
 
 // TimeStampSec 时间戳秒
 func TimeStampSec() int64 {
-	return Timestamp / 1000
+	return time.Now().Unix() / 1000
 }
 
 // TimeStamp 时间戳毫秒
 func TimeStamp() int64 {
-	return Timestamp
+	return time.Now().Unix()
 }
 
 // TimeStampTarget 指定日期的时间戳毫秒
@@ -176,4 +179,12 @@ func DifferDaysOnDate(now, old int64, offset int) int {
 	day1 := start.YearDay()
 	day2 := end.YearDay()
 	return day1 - day2
+}
+
+// 计算指定时区下当天开始时间
+func DayStartOnTimeZone(timeOffset int) int64 {
+	_, zone := TimeNow().Zone()
+	timeD := time.Duration(zone) * time.Second
+	checkTimeStart := TimeNow().Add(timeD).Add(0).Truncate(time.Hour * 24).Add(-timeD).Add(time.Hour * time.Duration(timeOffset))
+	return checkTimeStart.Unix()
 }

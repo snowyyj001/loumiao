@@ -1,5 +1,0 @@
-package msg
-
-func init() {
-
-}
