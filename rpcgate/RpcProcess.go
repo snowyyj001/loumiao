@@ -1,13 +1,13 @@
 package rpcgate
 
 import (
-	"github.com/snowyyj001/loumiao/define"
 	"github.com/snowyyj001/loumiao/gorpc"
+	"github.com/snowyyj001/loumiao/ldefine"
 	"github.com/snowyyj001/loumiao/llog"
+	"github.com/snowyyj001/loumiao/lutil"
 	"github.com/snowyyj001/loumiao/message"
 	"github.com/snowyyj001/loumiao/nodemgr"
 	"github.com/snowyyj001/loumiao/pbmsg"
-	"github.com/snowyyj001/loumiao/util"
 )
 
 // client connect
@@ -54,8 +54,8 @@ func innerLouMiaoRpcMsg(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	if message.UnPackProto(req, data) != nil {
 		return
 	}
-	llog.Debugf("0.innerLouMiaoRpcMsg=%s, socurce=%d, target=%d, Flag=%d", req.FuncName, req.SourceId, req.TargetId, req.Flag)
-	if util.HasBit(int(req.Flag), define.RPCMSG_FLAG_BROAD) {
+	llog.Debugf("0.innerLouMiaoRpcMsg=%s, source=%d, target=%d, Flag=%d", req.FuncName, req.SourceId, req.TargetId, req.Flag)
+	if lutil.HasBit(int(req.Flag), ldefine.RPCMSG_FLAG_BROAD) {
 		if req.TargetId == 0 {
 			for _, sid := range This.clients_u {
 				//This.pInnerService.SendById(sid, buff)
@@ -72,7 +72,7 @@ func innerLouMiaoRpcMsg(igo gorpc.IGoRoutine, socketId int, data []byte) {
 	}
 	var rpcClientId int
 	if req.TargetId <= 0 {
-		rpcClientId = This.getCluserServerSocketId(req.FuncName)
+		rpcClientId = This.getClusterServerSocketId(req.FuncName)
 	} else {
 		rpcClientId = This.getClientId(int(req.TargetId))
 	}
@@ -94,7 +94,7 @@ func sendRpcMsgToServer(igo gorpc.IGoRoutine, data interface{}) interface{} {
 
 	var rpcClientId int
 	if target <= 0 {
-		rpcClientId = This.getCluserServerSocketId(funcName)
+		rpcClientId = This.getClusterServerSocketId(funcName)
 	} else {
 		rpcClientId = This.getClientId(target)
 	}

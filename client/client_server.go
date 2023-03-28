@@ -3,8 +3,8 @@ package client
 
 import (
 	"fmt"
-	"github.com/snowyyj001/loumiao/config"
 	"github.com/snowyyj001/loumiao/gorpc"
+	"github.com/snowyyj001/loumiao/lconfig"
 	"github.com/snowyyj001/loumiao/llog"
 	"github.com/snowyyj001/loumiao/message"
 	"github.com/snowyyj001/loumiao/network"
@@ -27,7 +27,7 @@ func (self *ClientServer) DoInit() bool {
 
 	self.pService = new(network.ClientSocket)
 	//self.client.SetClientId(self.m_ClientId)
-	self.pService.Init(config.NET_GATE_SADDR)
+	self.pService.Init(lconfig.NET_GATE_SADDR)
 	self.pService.SetConnectType(network.SERVER_CONNECT)
 	self.pService.BindPacketFunc(PacketFunc)
 

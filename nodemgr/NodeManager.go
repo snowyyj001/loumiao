@@ -3,19 +3,18 @@ package nodemgr
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/snowyyj001/loumiao/lconfig"
+	"github.com/snowyyj001/loumiao/lutil"
 	"math"
 	"strings"
 	"sync"
 
 	"github.com/snowyyj001/loumiao/llog"
-
-	"github.com/snowyyj001/loumiao/config"
-	"github.com/snowyyj001/loumiao/util"
 )
 
-//负载均衡策略都是挑选number最小的
-//gate和accout目前有监控服务器信息,account挑选gate和world给客户端使用
-//gate挑选zone给客户端使用
+// 负载均衡策略都是挑选number最小的
+// gate和accout目前有监控服务器信息,account挑选gate和world给客户端使用
+// gate挑选zone给客户端使用
 var (
 	node_Map      map[string]*NodeInfo //服务器信息
 	saddr_uid_Map map[int]string       //saddr -> uid
@@ -44,7 +43,7 @@ func AddNode(node *NodeInfo) {
 	node_Map[node.SAddr] = node
 	saddr_uid_Map[node.Uid] = node.SAddr
 
-	if node.Uid == config.SERVER_NODE_UID {
+	if node.Uid == lconfig.SERVER_NODE_UID {
 		SelfNode = node
 	}
 }
@@ -57,7 +56,7 @@ func RemoveNodeById(uid int) {
 		delete(node_Map, saddr)
 		delete(saddr_uid_Map, uid)
 	}
-	if uid == config.SERVER_NODE_UID {
+	if uid == lconfig.SERVER_NODE_UID {
 		SelfNode = nil
 	}
 }
@@ -81,7 +80,7 @@ func GetNodeByAddr(saddr string) *NodeInfo {
 	return node
 }
 
-//服务状态更新，间隔GAME_LEASE_TIME/3
+// 服务状态更新，间隔GAME_LEASE_TIME/3
 func NodeStatusUpdate(key string, val string, dis bool) *NodeInfo {
 	if !dis {
 		return nil
@@ -122,7 +121,7 @@ func NodeStatusUpdate(key string, val string, dis bool) *NodeInfo {
 	return node
 }
 
-//服发现
+// 服发现
 func NodeDiscover(key string, val string, dis bool) *NodeInfo {
 	arrStr := strings.Split(key, "/")
 	if len(arrStr) < 3 {
@@ -158,7 +157,7 @@ func CalcWorldServerNumber() int {
 	nodeLock.RLock()
 	num := 0
 	for _, node := range node_Map {
-		if node.SocketActive && node.Type == config.ServerType_World {
+		if node.SocketActive && node.Type == lconfig.ServerType_World {
 			num += node.Number
 		}
 	}
@@ -210,7 +209,7 @@ func GetBalanceServerById(atype, areaid int) *NodeInfo {
 	}
 	sz := len(nodes)
 	if sz > 0 {
-		node := nodes[util.Random(1000)%sz]
+		node := nodes[lutil.Random(1000)%sz]
 		return node
 
 	} else {
@@ -218,7 +217,7 @@ func GetBalanceServerById(atype, areaid int) *NodeInfo {
 	}
 }
 
-//pick a server by random
+// pick a server by random
 func GetBalanceServer(atype int) *NodeInfo {
 	//pick the gate
 	defer nodeLock.RUnlock()
@@ -232,7 +231,7 @@ func GetBalanceServer(atype int) *NodeInfo {
 	}
 	sz := len(nodes)
 	if sz > 0 {
-		node := nodes[util.Random(1000)%sz]
+		node := nodes[lutil.Random(1000)%sz]
 		return node
 
 	} else {
@@ -240,7 +239,7 @@ func GetBalanceServer(atype int) *NodeInfo {
 	}
 }
 
-//挑选一个人数最少的server
+// 挑选一个人数最少的server
 func GetBalanceServerByNum(atype int) *NodeInfo {
 	//pick the gate
 	defer nodeLock.RUnlock()
@@ -262,7 +261,7 @@ func GetBalanceServerByNum(atype int) *NodeInfo {
 	}
 	sz := len(nodes)
 	if sz > 0 {
-		node := nodes[util.Random(1000)%sz]
+		node := nodes[lutil.Random(1000)%sz]
 		return node
 
 	} else {
@@ -293,7 +292,7 @@ func DisableNode(uid int) {
 	if node != nil {
 		node.SocketActive = false
 	}
-	if uid == config.SERVER_NODE_UID {
+	if uid == lconfig.SERVER_NODE_UID {
 		ServerEnabled = false
 	}
 }
@@ -302,53 +301,53 @@ func DisableNode(uid int) {
 //generate a server uid, ip+port <--> uid
 func GetServerUid(cli etcd.IEtcdBase, key string) int {
 
-	sk := fmt.Sprintf("%s%s", define.ETCD_NODEINFO, key)
-	gresp, err := cli.Get(sk)
-	if err != nil {
-		llog.Fatal("GetServerUid get failed " + err.Error())
-	}
-	if len(gresp.Kvs) > 0 { //server has been assigned value
-		node := config.NetNode{}
-		err = json.Unmarshal(gresp.Kvs[0].Value, &node)
+		sk := fmt.Sprintf("%s%s", define.ETCD_NODEINFO, key)
+		gresp, err := cli.Get(sk)
 		if err != nil {
-			llog.Fatal("GetServerUid etcd value bad " + string(gresp.Kvs[0].Value))
+			llog.Fatal("GetServerUid get failed " + err.Error())
 		}
-		NodeUid = node.Uid
-		//llog.Debugf("GetServerUid %s, %v", key, node)
-		return node.Uid
-	}
+		if len(gresp.Kvs) > 0 { //server has been assigned value
+			node := config.NetNode{}
+			err = json.Unmarshal(gresp.Kvs[0].Value, &node)
+			if err != nil {
+				llog.Fatal("GetServerUid etcd value bad " + string(gresp.Kvs[0].Value))
+			}
+			NodeUid = node.Uid
+			//llog.Debugf("GetServerUid %s, %v", key, node)
+			return node.Uid
+		}
 
-	var session *concurrency.Session
-	session, err = concurrency.NewSession(cli.GetClient())
-	if err != nil {
-		llog.Fatal("GetServerUid NewSession failed " + err.Error())
-	}
-	m := concurrency.NewMutex(session, define.ETCD_LOCKUID)
-	if err = m.Lock(context.TODO()); err != nil {
-		llog.Fatal("GetServerUid NewMutex failed " + err.Error())
-	}
-	var topvalue int
-	if config.Cfg.NetCfg.Uid != 0 { //手工分配了uid
-		topvalue = config.Cfg.NetCfg.Uid
-	} else {
-		sk_reserve := fmt.Sprintf("%s%s", define.ETCD_LOCKUID, "0")
-		gresp, err = cli.Get(sk_reserve)
-		if len(gresp.Kvs) == 0 {
-			topvalue = 1
-			cli.Put(sk_reserve, util.Itoa(topvalue), false) //init value
-		} else {
-			topvalue = util.Atoi(string(gresp.Kvs[0].Value)) + 1 //inc value
-			cli.Put(sk_reserve, util.Itoa(topvalue), false)      //inc value
+		var session *concurrency.Session
+		session, err = concurrency.NewSession(cli.GetClient())
+		if err != nil {
+			llog.Fatal("GetServerUid NewSession failed " + err.Error())
 		}
+		m := concurrency.NewMutex(session, define.ETCD_LOCKUID)
+		if err = m.Lock(context.TODO()); err != nil {
+			llog.Fatal("GetServerUid NewMutex failed " + err.Error())
+		}
+		var topvalue int
+		if config.Cfg.NetCfg.Uid != 0 { //手工分配了uid
+			topvalue = config.Cfg.NetCfg.Uid
+		} else {
+			sk_reserve := fmt.Sprintf("%s%s", define.ETCD_LOCKUID, "0")
+			gresp, err = cli.Get(sk_reserve)
+			if len(gresp.Kvs) == 0 {
+				topvalue = 1
+				cli.Put(sk_reserve, util.Itoa(topvalue), false) //init value
+			} else {
+				topvalue = util.Atoi(string(gresp.Kvs[0].Value)) + 1 //inc value
+				cli.Put(sk_reserve, util.Itoa(topvalue), false)      //inc value
+			}
+		}
+		config.Cfg.NetCfg.Uid = topvalue
+		obj, _ := json.Marshal(&config.Cfg.NetCfg)
+		jsonstr := string(obj)
+		cli.Put(sk, jsonstr, false) //set value
+		m.Unlock(context.TODO())
+		NodeUid = topvalue
+		return topvalue
 	}
-	config.Cfg.NetCfg.Uid = topvalue
-	obj, _ := json.Marshal(&config.Cfg.NetCfg)
-	jsonstr := string(obj)
-	cli.Put(sk, jsonstr, false) //set value
-	m.Unlock(context.TODO())
-	NodeUid = topvalue
-	return topvalue
-}
 */
 func PackNodeInfos(group string, stype int) []byte {
 	st := struct {
@@ -363,6 +362,6 @@ func PackNodeInfos(group string, stype int) []byte {
 	}
 
 	buffer, err := json.Marshal(&st)
-	util.CheckErr(err)
+	lutil.CheckErr(err)
 	return buffer
 }

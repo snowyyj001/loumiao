@@ -2,8 +2,8 @@
 package gorpc
 
 import (
-	"github.com/snowyyj001/loumiao/base"
-	"github.com/snowyyj001/loumiao/util"
+	"github.com/snowyyj001/loumiao/lbase"
+	"github.com/snowyyj001/loumiao/lutil"
 	"sync"
 	"time"
 	"unsafe"
@@ -240,7 +240,7 @@ func (self *GoRoutineLogic) RunTicker(delta int, f func(int64)) {
 		return
 	}
 	caller := new(RoutineTimer)
-	caller.lastCallTime = base.TimeStamp()
+	caller.lastCallTime = lbase.TimeStamp()
 	caller.timerCall = func(dt int64) { //try catch errors here, do not effect woker
 		f(dt)
 	}
@@ -272,7 +272,7 @@ func (self *GoRoutineLogic) RunTimer(delta int, f func(int64)) {
 		return
 	}
 	caller := new(RoutineTimer)
-	caller.lastCallTime = base.TimeStamp()
+	caller.lastCallTime = lbase.TimeStamp()
 	caller.timerCall = func(dt int64) { //try catch errors here, do not effect woker
 		f(dt)
 	}
@@ -286,7 +286,7 @@ func (self *GoRoutineLogic) RunTimer(delta int, f func(int64)) {
 
 // 工作队列
 func (self *GoRoutineLogic) woker() {
-	defer util.Recover()
+	defer lutil.Recover()
 	//utm := base.TimeStamp()
 	//utmPre := utm
 
@@ -306,9 +306,9 @@ func (self *GoRoutineLogic) woker() {
 						self.cRoLimitChan <- struct{}{}
 						go self.CallGoFunc(hd, &ct)
 					} else {
-						self.execTime = base.TimeStamp()
+						self.execTime = lbase.TimeStamp()
 						ret := self.CallFunc(hd, &ct.Data)
-						endTime := base.TimeStamp()
+						endTime := lbase.TimeStamp()
 						if endTime-self.execTime > ACTOR_EXEC_LONG {
 							llog.Warningf("GoRoutineLogic exec long time: %s, %d", ct.Handler, endTime-self.execTime)
 						}
@@ -338,9 +338,9 @@ func (self *GoRoutineLogic) woker() {
 			}
 			caller, ok := self.timerFuncs[index]
 			if ok {
-				nt := base.TimeStamp()
+				nt := lbase.TimeStamp()
 				if self.goFun {
-					util.Go(func() {
+					lutil.Go(func() {
 						caller.timerCall(nt - caller.lastCallTime)
 					})
 				} else {
@@ -358,7 +358,7 @@ func (self *GoRoutineLogic) woker() {
 				delete(self.delayJobs, index)
 				self.delayJobLock.Unlock()
 				if self.goFun {
-					util.Go(func() {
+					lutil.Go(func() {
 						caller.timerCall(0)
 						self.HasCrashMsg = true
 					})
@@ -437,9 +437,9 @@ func (self *GoRoutineLogic) Send(handler_name string, sdata *M) {
 		return
 	}
 	left := self.LeftJobNumber()
-	if left > self.GetWarnChanLen() && self.GetWarningTime() < base.TimeStampSec() {
+	if left > self.GetWarnChanLen() && self.GetWarningTime() < lbase.TimeStampSec() {
 		llog.Errorf("GoRoutineLogic.Send:[src=%s,target=%s (chan may overlow[now=%d, max=%d])] func=%s", self.Name, self.GetName(), self.LeftJobNumber(), self.GetChanLen(), handler_name)
-		self.SetWarningTime(base.TimeStampSec() + CHAN_OVERLOW)
+		self.SetWarningTime(lbase.TimeStampSec() + CHAN_OVERLOW)
 	}
 	if left > self.GetChanLen() {
 		llog.Errorf("GoRoutineLogic.Send:[src=%s,target=%s (chan overlow[now=%d, max=%d])] func=%s", self.Name, self.GetName(), self.LeftJobNumber(), self.GetChanLen(), handler_name)
@@ -468,9 +468,9 @@ func (self *GoRoutineLogic) SendBack(server IGoRoutine, handler_name string, sda
 		return
 	}
 	left := server.LeftJobNumber()
-	if left > server.GetWarnChanLen() && server.GetWarningTime() < base.TimeStampSec() {
+	if left > server.GetWarnChanLen() && server.GetWarningTime() < lbase.TimeStampSec() {
 		llog.Noticef("GoRoutineLogic.SendBack:[src=%s,target=%s (chan may overlow[now=%d, max=%d])] func=%s", self.Name, server.GetName(), server.LeftJobNumber(), server.GetChanLen(), handler_name)
-		server.SetWarningTime(base.TimeStampSec() + CHAN_OVERLOW)
+		server.SetWarningTime(lbase.TimeStampSec() + CHAN_OVERLOW)
 	}
 	if left > server.GetChanLen() {
 		llog.Noticef("GoRoutineLogic.SendBack:[src=%s,target=%s (chan overlow[now=%d, max=%d])] func=%s", self.Name, server.GetName(), server.LeftJobNumber(), server.GetChanLen(), handler_name)
@@ -490,9 +490,9 @@ func (self *GoRoutineLogic) Call(server IGoRoutine, handler_name string, sdata *
 		return nil, false
 	}
 	left := server.LeftJobNumber()
-	if left > server.GetWarnChanLen() && server.GetWarningTime() > base.TimeStampSec() {
+	if left > server.GetWarnChanLen() && server.GetWarningTime() > lbase.TimeStampSec() {
 		llog.Noticef("GoRoutineLogic.Call:[src=%s,target=%s (chan may overlow[now=%d, max=%d])] func=%s", self.Name, server.GetName(), server.LeftJobNumber(), server.GetChanLen(), handler_name)
-		server.SetWarningTime(base.TimeStampSec() + CHAN_OVERLOW)
+		server.SetWarningTime(lbase.TimeStampSec() + CHAN_OVERLOW)
 	}
 
 	if left > server.GetChanLen() {
@@ -507,11 +507,11 @@ func (self *GoRoutineLogic) Call(server IGoRoutine, handler_name string, sdata *
 		self.callNum--
 	}()
 	self.callNum++
-	before := base.TimeStamp()
+	before := lbase.TimeStamp()
 	server.GetJobChan() <- job
 	select {
 	case rdata := <-readChan:
-		after := base.TimeStamp()
+		after := lbase.TimeStamp()
 		if after-before > CHAN_CALL_LONG {
 			llog.Noticef("GoRoutineLogic.Call:[src=%s,target=%s (use too long[time=%d])] func=%s", self.Name, server.GetName(), after-before, handler_name)
 		}
@@ -534,7 +534,7 @@ func (self *GoRoutineLogic) CallActor(target string, handler_name string, sdata 
 }
 
 func (self *GoRoutineLogic) CallFunc(cb HandlerFunc, data *M) interface{} {
-	defer util.Recover()
+	defer lutil.Recover()
 	if data.Flag {
 		return cb(self, data.Data)
 	} else {
@@ -543,9 +543,9 @@ func (self *GoRoutineLogic) CallFunc(cb HandlerFunc, data *M) interface{} {
 }
 
 func (self *GoRoutineLogic) CallGoFunc(hd HandlerFunc, ct *ChannelContext) {
-	self.execTime = base.TimeStamp()
+	self.execTime = lbase.TimeStamp()
 	ret := self.CallFunc(hd, &ct.Data)
-	endTime := base.TimeStamp()
+	endTime := lbase.TimeStamp()
 	if endTime-self.execTime > ACTOR_EXEC_LONG {
 		llog.Warningf("GoRoutineLogic CallGoFunc exec long time: %s, %d", ct.Handler, endTime-self.execTime)
 	}

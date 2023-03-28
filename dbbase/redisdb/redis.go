@@ -3,7 +3,9 @@ package redisdb
 
 import (
 	"fmt"
-	"github.com/snowyyj001/loumiao/base"
+	"github.com/snowyyj001/loumiao/lbase"
+	"github.com/snowyyj001/loumiao/lconfig"
+	"github.com/snowyyj001/loumiao/lutil"
 	"math/rand"
 	"runtime"
 	"strconv"
@@ -11,9 +13,7 @@ import (
 
 	"github.com/gomodule/redigo/redis"
 
-	"github.com/snowyyj001/loumiao/config"
 	"github.com/snowyyj001/loumiao/llog"
-	"github.com/snowyyj001/loumiao/util"
 )
 
 var (
@@ -40,7 +40,7 @@ func Dial(url, pass string) error {
 				llog.Errorf("redis[%s] ping error: %s", url, err.Error())
 				//这里重连
 				llog.Infof("redis begin reconnected")
-				util.Go(func() {
+				lutil.Go(func() {
 					for {
 						err = DialDefault()
 						if err != nil {
@@ -71,11 +71,11 @@ func Dial(url, pass string) error {
 
 // 连接数据库,使用config-redis默认参数
 func DialDefault() error {
-	llog.Debugf("redis DialDefault: %s", config.Cfg.RedisUri)
+	llog.Debugf("redis DialDefault: %s", lconfig.Cfg.RedisUri)
 	var uri, pass string
-	uri = config.Cfg.RedisUri[0]
-	if len(config.Cfg.RedisUri) > 1 {
-		pass = config.Cfg.RedisUri[1]
+	uri = lconfig.Cfg.RedisUri[0]
+	if len(lconfig.Cfg.RedisUri) > 1 {
+		pass = lconfig.Cfg.RedisUri[1]
 	}
 	return Dial(uri, pass)
 }
@@ -137,14 +137,14 @@ func AcquireLock(key string, expiretime int) int {
 	}
 	ret, err := db.Do("SET", key, val, "NX", "PX", et)
 	if ret == nil {
-		nt := base.TimeStamp()
+		nt := lbase.TimeStamp()
 		for {
 			time.Sleep(30 * time.Millisecond) //等待30ms再次尝试
 			ret, err = db.Do("SET", key, val, "NX", "PX", et)
 			if ret != nil {
 				break
 			}
-			if base.TimeStamp()-nt > int64(et) {
+			if lbase.TimeStamp()-nt > int64(et) {
 				break
 			}
 		}
@@ -737,7 +737,7 @@ func AcquireLeader(prefix string, value int) (isleader bool) {
 	isleader = false
 	val := AcquireLock(prefix, 1000)
 	if val > 0 { //拿到锁了
-		key := "leader:" + prefix + ":" + util.Itoa(value)
+		key := "leader:" + prefix + ":" + lutil.Itoa(value)
 		val, _ = GetInt(key)
 		if val != value { //还未被设置
 			Set(key, value)

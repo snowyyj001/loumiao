@@ -1,11 +1,11 @@
 package gorpc
 
 import (
+	"github.com/snowyyj001/loumiao/lutil"
 	"github.com/snowyyj001/loumiao/timer"
 	"sync"
 
 	"github.com/snowyyj001/loumiao/llog"
-	"github.com/snowyyj001/loumiao/util"
 )
 
 const (
@@ -53,7 +53,7 @@ func (self *GoRoutinePool) AddRoutine(rou IGoRoutine, name int64) bool {
 		llog.Errorf("GoRoutinePool AddRoutine error: %d has already been added", name)
 		return false
 	}
-	rou.SetName(util.Itoa64(name))
+	rou.SetName(lutil.Itoa64(name))
 	self.go_name_Tmp[name] = rou
 	self.actorLock.Unlock()
 	self.mMinitor.Store(name, rou)
@@ -142,7 +142,7 @@ func (self *GoRoutinePool) RangeRoutine(handler func(igo IGoRoutine)) {
 func (self *GoRoutinePool) Start(igo IGoRoutine, name int64) bool {
 
 	//GoRoutineLogic
-	igo.init(util.Itoa64(name))
+	igo.init(lutil.Itoa64(name))
 
 	//init some data
 	if igo.DoInit() == true {

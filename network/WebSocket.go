@@ -1,8 +1,8 @@
 package network
 
 import (
+	"github.com/snowyyj001/loumiao/lutil"
 	"github.com/snowyyj001/loumiao/nodemgr"
-	"github.com/snowyyj001/loumiao/util"
 	"net/http"
 	"sync"
 	"sync/atomic"
@@ -72,7 +72,7 @@ func (self *WebSocket) Start() bool {
 	http.HandleFunc("/ws", serveWs)
 	self.m_httpServer = &http.Server{Addr: self.m_sAddr}
 	succ := true
-	util.Go(func() {
+	lutil.Go(func() {
 		err := self.m_httpServer.ListenAndServe()
 		if err != nil {
 			succ = false
@@ -163,6 +163,11 @@ func (self *WebSocket) LoadClient() *WebSocketClient {
 	s.m_MaxReceiveBufferSize = self.m_MaxReceiveBufferSize
 	s.m_MaxSendBufferSize = self.m_MaxSendBufferSize
 	return s
+}
+
+func (self *WebSocket) Send(buffer []byte) int {
+	llog.Error("WebSocket should not call this func")
+	return 0
 }
 
 func (self *WebSocket) SendById(id int, buff []byte) int {

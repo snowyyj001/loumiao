@@ -2,8 +2,8 @@ package kcpgate
 
 import (
 	"fmt"
-	"github.com/snowyyj001/loumiao/config"
 	"github.com/snowyyj001/loumiao/gorpc"
+	"github.com/snowyyj001/loumiao/lconfig"
 	"github.com/snowyyj001/loumiao/llog"
 	"github.com/snowyyj001/loumiao/message"
 	"github.com/snowyyj001/loumiao/network"
@@ -31,7 +31,7 @@ func (self *KcpGateServer) DoInit() bool {
 	self.pService.Init(self.ListenStr)
 	self.pService.BindPacketFunc(packetFunc)
 	self.pService.SetConnectType(network.CLIENT_CONNECT)
-	self.pService.SetMaxClients(config.NET_MAX_CONNS)
+	self.pService.SetMaxClients(lconfig.NET_MAX_CONNS)
 
 	if self.InitFunc != nil {
 		self.InitFunc()
@@ -55,7 +55,7 @@ func (self *KcpGateServer) DoRegister() {
 func (self *KcpGateServer) DoStart() {
 	llog.Info("KcpGateServer DoStart")
 
-	self.Id = config.Cfg.NetCfg.Uid
+	self.Id = lconfig.Cfg.NetCfg.Uid
 	if self.pService.Start() == false {
 		llog.Fatalf("KcpGateServer start error")
 	}
@@ -83,8 +83,8 @@ func packetFunc(socketid int, buff []byte, nlen int) error {
 		return fmt.Errorf("KcpGateServer packetFunc Decode error: %s", err.Error())
 		//This.closeClient(socketid)
 	}
-	if target != config.NET_NODE_TYPE && target > 0 {
-		return fmt.Errorf("KcpGateServer packetFunc target error: target = %d, my = %d, name = %s", target, config.NET_NODE_TYPE, name)
+	if target != lconfig.NET_NODE_TYPE && target > 0 {
+		return fmt.Errorf("KcpGateServer packetFunc target error: target = %d, my = %d, name = %s", target, lconfig.NET_NODE_TYPE, name)
 		//This.closeClient(socketid)
 	}
 	handler, ok := handler_Map[name]

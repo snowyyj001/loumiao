@@ -3,10 +3,9 @@ package message
 import (
 	"encoding/binary"
 	_ "fmt"
+	"github.com/snowyyj001/loumiao/lconfig"
 	"reflect"
 	"sync"
-
-	"github.com/snowyyj001/loumiao/config"
 )
 
 const (
@@ -24,8 +23,8 @@ type MsgPool struct {
 
 type ClassNewHandler func() interface{}
 
-//消息结构创建不缓存了，经测试反射性能也还可以，见reflect_test.go
-//开放了decode接口给逻辑层，已经不需要decode了，逻辑层根据消息直接创建对应的结构体
+// 消息结构创建不缓存了，经测试反射性能也还可以，见reflect_test.go
+// 开放了decode接口给逻辑层，已经不需要decode了，逻辑层根据消息直接创建对应的结构体
 var (
 	//Packet_CreateFactorStringMap map[string]*MsgPool
 	Packet_CreateFactorStringMap map[string]ClassNewHandler
@@ -41,10 +40,10 @@ func init() {
 	filterWarning["DISCONNECT"] = true
 	filterWarning["C_CONNECT"] = true
 	filterWarning["C_DISCONNECT"] = true
-	MaxPacketSize = config.NET_BUFFER_SIZE
+	MaxPacketSize = lconfig.NET_BUFFER_SIZE
 }
 
-//注册消息
+// 注册消息
 func RegisterPacket(packet interface{}) {
 	packetName := GetMessageName(packet)
 	//fmt.Println("RegisterPacket", packetName)
@@ -86,7 +85,7 @@ func PutPakcet(name string, data interface{}) {
 }
 */
 
-//替换消息包的target字段(5,6字节)
+// 替换消息包的target字段(5,6字节)
 func ReplacePakcetTarget(target int32, buff []byte) {
 	tmp := uint16(target)
 	binary.BigEndian.PutUint16(buff[4:], tmp)

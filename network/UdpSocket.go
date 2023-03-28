@@ -2,11 +2,11 @@ package network
 
 import (
 	"encoding/binary"
-	"github.com/snowyyj001/loumiao/base"
-	"github.com/snowyyj001/loumiao/config"
+	"github.com/snowyyj001/loumiao/lbase"
+	"github.com/snowyyj001/loumiao/lconfig"
 	"github.com/snowyyj001/loumiao/llog"
+	"github.com/snowyyj001/loumiao/lutil"
 	"github.com/snowyyj001/loumiao/nodemgr"
-	"github.com/snowyyj001/loumiao/util"
 	"net"
 	"strings"
 	"sync"
@@ -69,7 +69,7 @@ func (self *UdpServerSocket) Start() bool {
 	// udp server
 	listenUdp, err := net.ListenUDP("udp", &net.UDPAddr{
 		IP:   net.ParseIP(arr[0]),
-		Port: util.Atoi(arr[1]),
+		Port: lutil.Atoi(arr[1]),
 	})
 	if err != nil {
 		llog.Fatalf("ListenUDP %v", err)
@@ -81,10 +81,10 @@ func (self *UdpServerSocket) Start() bool {
 	//延迟，监听关闭
 	//defer ln.Close()
 	self.m_nState = SSF_ACCEPT
-	util.Go(func() {
+	lutil.Go(func() {
 		udpserverRoutine()
 	})
-	util.Go(func() {
+	lutil.Go(func() {
 		handlerUdpMsg()
 	})
 	return true
@@ -144,7 +144,7 @@ func (self *UdpServerSocket) SendById(id int, buff []byte) int {
 	if pClient != nil {
 		ThisUdpServerSocket.mUpdConn.WriteTo(buff, pClient.RemoteAddr)
 	} else {
-		if !config.SERVER_RELEASE {
+		if !lconfig.SERVER_RELEASE {
 			llog.Warningf("UdpServerSocket SendById: no client [%d]", id)
 		}
 
@@ -194,7 +194,7 @@ func handlerUdpMsg() {
 }
 
 func udpserverRoutine() {
-	defer util.Recover()
+	defer lutil.Recover()
 	var buff = make([]byte, ThisUdpServerSocket.m_MaxReceiveBufferSize)
 	for {
 		n, udpAddr, err := ThisUdpServerSocket.mUpdConn.ReadFromUDP(buff)
@@ -212,7 +212,7 @@ func udpserverRoutine() {
 			}
 		}
 
-		clientid := int(base.BytesToInt64(buff, binary.BigEndian))
+		clientid := int(lbase.BytesToInt64(buff, binary.BigEndian))
 		if n <= 10 {
 			continue
 		}

@@ -2,14 +2,14 @@ package network
 
 import (
 	"encoding/binary"
-	"github.com/snowyyj001/loumiao/util"
+	"github.com/snowyyj001/loumiao/lbase"
+	"github.com/snowyyj001/loumiao/lconfig"
+	"github.com/snowyyj001/loumiao/lutil"
 	"net"
 	"sync"
 
-	"github.com/snowyyj001/loumiao/base"
 	"github.com/xtaci/kcp-go"
 
-	"github.com/snowyyj001/loumiao/config"
 	"github.com/snowyyj001/loumiao/llog"
 
 	"github.com/gorilla/websocket"
@@ -202,14 +202,14 @@ func (self *Socket) GetMaxSendBufferSize() int {
 func (self *Socket) SetConnectType(nType int) {
 	self.m_nConnectType = nType
 	if self.m_nConnectType == SERVER_CONNECT { //user for inner
-		self.m_MaxSendBufferSize = config.NET_CLUSTER_BUFFER_SIZE
-		self.m_MaxReceiveBufferSize = config.NET_CLUSTER_BUFFER_SIZE
+		self.m_MaxSendBufferSize = lconfig.NET_CLUSTER_BUFFER_SIZE
+		self.m_MaxReceiveBufferSize = lconfig.NET_CLUSTER_BUFFER_SIZE
 	} else {
-		self.m_MaxSendBufferSize = config.NET_BUFFER_SIZE
-		self.m_MaxReceiveBufferSize = config.NET_BUFFER_SIZE
+		self.m_MaxSendBufferSize = lconfig.NET_BUFFER_SIZE
+		self.m_MaxReceiveBufferSize = lconfig.NET_BUFFER_SIZE
 	}
 	self.m_pInBuffer = make([]byte, self.m_MaxReceiveBufferSize) //预先申请一份内存来换取临时申请，减少gc但每个socket会申请2倍的m_MaxReceiveBufferSize内存大小
-	self.m_WriteChan = make(chan []byte, config.NET_MAX_WRITE_CHANSIZE)
+	self.m_WriteChan = make(chan []byte, lconfig.NET_MAX_WRITE_CHANSIZE)
 }
 
 func (self *Socket) SetUdpConn(conn net.Conn) {
@@ -248,7 +248,7 @@ func (self *Socket) HandlePacket(Id int, buff []byte, nlen int) error {
 }
 
 func (self *Socket) ReceivePacket(Id int, dat []byte) bool {
-	defer util.Recover()
+	defer lutil.Recover()
 	//	llog.Debugf("收到消息包 %v %d", dat, len(dat))
 	copy(self.m_pInBuffer[self.m_pInBufferLen:], dat)
 	self.m_pInBufferLen += len(dat)
@@ -257,7 +257,7 @@ func (self *Socket) ReceivePacket(Id int, dat []byte) bool {
 			break
 		}
 		mbuff1 := self.m_pInBuffer[0:4]
-		nLen := int(base.BytesToUInt32(mbuff1, binary.BigEndian)) //消息总长度
+		nLen := int(lbase.BytesToUInt32(mbuff1, binary.BigEndian)) //消息总长度
 		//	llog.Debugf("当前消息包长度 %d", nLen, self.m_pInBufferLen)
 		//	t, n, _, e := message.UnPackHead(self.m_pInBuffer, self.m_pInBufferLen)
 		//	llog.Debugf("当前消息包名字 ", t, n, e)

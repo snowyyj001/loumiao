@@ -2,8 +2,8 @@ package network
 
 import (
 	"github.com/snowyyj001/loumiao/llog"
+	"github.com/snowyyj001/loumiao/lutil"
 	"github.com/snowyyj001/loumiao/message"
-	"github.com/snowyyj001/loumiao/util"
 	"net"
 	"strings"
 )
@@ -34,7 +34,7 @@ func (self *UdpClient) Start() bool {
 	}
 
 	if self.Connect() {
-		util.Go(func() {
+		lutil.Go(func() {
 			clientUdpRoutine(self)
 		})
 		return true
@@ -76,7 +76,7 @@ func (self *UdpClient) Connect() bool {
 	arr := strings.Split(self.m_sAddr, ":")
 	udpConn, err := net.DialUDP("udp", nil, &net.UDPAddr{
 		IP:   net.ParseIP(arr[0]),
-		Port: util.Atoi(arr[1]),
+		Port: lutil.Atoi(arr[1]),
 	})
 	if err != nil {
 		llog.Errorf("UdpClient address error: %s, %s", self.m_sAddr, err.Error())
@@ -101,7 +101,7 @@ func (self *UdpClient) OnNetFail(int) {
 }
 
 func clientUdpRoutine(pClient *UdpClient) {
-	defer util.Recover()
+	defer lutil.Recover()
 	var buff = make([]byte, pClient.m_MaxReceiveBufferSize)
 	for {
 		n, err := pClient.m_Conn.Read(buff)

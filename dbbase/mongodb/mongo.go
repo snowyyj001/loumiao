@@ -4,9 +4,9 @@ package mongodb
 import (
 	"context"
 	"fmt"
-	"github.com/snowyyj001/loumiao/config"
+	"github.com/snowyyj001/loumiao/lconfig"
 	"github.com/snowyyj001/loumiao/llog"
-	"github.com/snowyyj001/loumiao/util"
+	"github.com/snowyyj001/loumiao/lutil"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -27,7 +27,7 @@ var (
 )
 
 func connectDB() error {
-	uri := fmt.Sprintf("mongodb://%s", config.Cfg.DBUri)
+	uri := fmt.Sprintf("mongodb://%s", lconfig.Cfg.DBUri)
 	llog.Debugf("mongo Dial: %s", uri)
 	clientOpts := options.Client().ApplyURI(uri)
 	client, err := mongo.Connect(context.TODO(), clientOpts)
@@ -53,7 +53,7 @@ func DialDefault() error {
 		llog.Fatalf("connectDB: %s", err.Error())
 	}
 
-	util.Go(func() { //每秒钟检测一次数据库连接状态
+	lutil.Go(func() { //每秒钟检测一次数据库连接状态
 		for {
 			if mClient != nil {
 				//ctx, _ := context.WithTimeout(context.Background(), CONN_TIMEOUT*time.Second)

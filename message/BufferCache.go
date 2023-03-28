@@ -3,7 +3,7 @@ package message
 import (
 	"sync"
 
-	"github.com/snowyyj001/loumiao/base/vector"
+	"github.com/snowyyj001/loumiao/lbase/vector"
 	"github.com/snowyyj001/loumiao/timer"
 )
 

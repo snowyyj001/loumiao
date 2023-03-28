@@ -2,7 +2,7 @@ package network
 
 import (
 	"github.com/snowyyj001/loumiao/llog"
-	"github.com/snowyyj001/loumiao/util"
+	"github.com/snowyyj001/loumiao/lutil"
 	"io"
 	"net"
 
@@ -40,7 +40,7 @@ func (self *ClientSocket) Start() bool {
 
 	if self.Connect() {
 		self.m_Conn.(*net.TCPConn).SetNoDelay(true)
-		util.Go(func() {
+		lutil.Go(func() {
 			clientRoutine(self)
 		})
 
@@ -114,7 +114,7 @@ func (self *ClientSocket) OnNetFail(int) {
 }
 
 func clientRoutine(pClient *ClientSocket) bool {
-	defer util.Recover()
+	defer lutil.Recover()
 	if pClient.m_Conn == nil {
 		llog.Errorf("client has no conn: %s", pClient.m_sAddr)
 		return false

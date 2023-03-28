@@ -2,8 +2,8 @@ package network
 
 import (
 	"github.com/snowyyj001/loumiao/llog"
+	"github.com/snowyyj001/loumiao/lutil"
 	"github.com/snowyyj001/loumiao/message"
-	"github.com/snowyyj001/loumiao/util"
 	"io"
 )
 
@@ -79,7 +79,7 @@ func (self *ServerSocketClient) Close() {
 
 // write msg
 func serverWriteRoutine(pClient *ServerSocketClient) bool {
-	defer util.Recover()
+	defer lutil.Recover()
 	if pClient.m_Conn == nil {
 		return false
 	}
@@ -109,7 +109,7 @@ func serverWriteRoutine(pClient *ServerSocketClient) bool {
 
 // read msg
 func serverReadRoutine(pClient *ServerSocketClient) bool {
-	defer util.Recover()
+	defer lutil.Recover()
 	if pClient.m_Conn == nil {
 		return false
 	}
@@ -146,10 +146,10 @@ func serverReadRoutine(pClient *ServerSocketClient) bool {
 }
 
 func serverClientRoutine(pClient *ServerSocketClient) {
-	util.Go(func() {
+	lutil.Go(func() {
 		serverReadRoutine(pClient)
 	})
-	util.Go(func() {
+	lutil.Go(func() {
 		serverWriteRoutine(pClient)
 	})
 }

@@ -3,8 +3,8 @@ package network
 import (
 	"github.com/gorilla/websocket"
 	"github.com/snowyyj001/loumiao/llog"
+	"github.com/snowyyj001/loumiao/lutil"
 	"github.com/snowyyj001/loumiao/message"
-	"github.com/snowyyj001/loumiao/util"
 )
 
 type IWebSocketClient interface {
@@ -70,7 +70,7 @@ func (self *WebSocketClient) Close() {
 	self.Socket.Close()
 }
 func wsServerClientWriteRoutine(pClient *WebSocketClient) bool {
-	defer util.Recover()
+	defer lutil.Recover()
 	if pClient.m_Conn == nil {
 		return false
 	}
@@ -99,7 +99,7 @@ func wsServerClientWriteRoutine(pClient *WebSocketClient) bool {
 }
 
 func wsServerClientReadRoutine(pClient *WebSocketClient) bool {
-	defer util.Recover()
+	defer lutil.Recover()
 	if pClient.m_WsConn == nil {
 		return false
 	}
@@ -136,10 +136,10 @@ func wsServerClientReadRoutine(pClient *WebSocketClient) bool {
 }
 
 func wsServerClientRoutine(pClient *WebSocketClient) {
-	util.Go(func() {
+	lutil.Go(func() {
 		wsServerClientReadRoutine(pClient)
 	})
-	util.Go(func() {
+	lutil.Go(func() {
 		wsServerClientWriteRoutine(pClient)
 	})
 }

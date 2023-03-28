@@ -5,13 +5,12 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"github.com/snowyyj001/loumiao/base"
-	"github.com/snowyyj001/loumiao/config"
-
-	"github.com/snowyyj001/loumiao/llog"
-	"github.com/snowyyj001/loumiao/util"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/snowyyj001/loumiao/lbase"
+	"github.com/snowyyj001/loumiao/lconfig"
+	"github.com/snowyyj001/loumiao/llog"
+	"github.com/snowyyj001/loumiao/lutil"
 )
 
 //消息pack,unpack格式
@@ -70,14 +69,14 @@ func EncodeProBuff(target int, name string, packet interface{}) ([]byte, int) {
 
 func DecodeProBuff(uid int, buff []byte, length int) (error, int, string, interface{}) {
 	mbuff1 := buff[4:6]
-	target := int(base.BytesToUInt16(mbuff1, binary.BigEndian))
+	target := int(lbase.BytesToUInt16(mbuff1, binary.BigEndian))
 
 	if target > 0 && target != uid { //do not need decode anymore, a msg to other server
 		return nil, target, "", nil
 	}
 
 	mbuff1 = buff[6:8]
-	nameLen := base.BytesToUInt16(mbuff1, binary.BigEndian)
+	nameLen := lbase.BytesToUInt16(mbuff1, binary.BigEndian)
 	if nameLen <= 0 {
 		return fmt.Errorf("DecodeProBuff: msgname len is illegal: %d", nameLen), 0, "", nil
 	}
@@ -103,7 +102,7 @@ func DecodeProBuff(uid int, buff []byte, length int) (error, int, string, interf
 		return fmt.Errorf("DecodeProBuff: packet[%s] may not registered, uid=%d,target=%d", msgName, uid, target), 0, "", nil
 	}
 	err := proto.Unmarshal(buff[8+nameLen:length], packet.(proto.Message))
-	if util.CheckErr(err) {
+	if lutil.CheckErr(err) {
 		llog.Errorf("DecodeProBuff: Unmarshal[%s] error", msgName)
 		return err, target, "", nil
 	}
@@ -121,7 +120,7 @@ func EncodeJson(target int, name string, packet interface{}) ([]byte, int) {
 	if packet != nil {
 		buff, err = json.Marshal(packet)
 	}
-	if util.CheckErr(err) {
+	if lutil.CheckErr(err) {
 		return nil, 0
 	}
 
@@ -140,14 +139,14 @@ func EncodeJson(target int, name string, packet interface{}) ([]byte, int) {
 
 func DecodeJson(uid int, buff []byte, length int) (error, int, string, interface{}) {
 	mbuff1 := buff[4:6]
-	target := int(base.BytesToUInt16(mbuff1, binary.BigEndian))
+	target := int(lbase.BytesToUInt16(mbuff1, binary.BigEndian))
 
 	if target > 0 && target != uid { //do not need decode anymore, a msg to other server
 		return nil, target, "", nil
 	}
 
 	mbuff1 = buff[6:8]
-	nameLen := base.BytesToUInt16(mbuff1, binary.BigEndian)
+	nameLen := lbase.BytesToUInt16(mbuff1, binary.BigEndian)
 	if nameLen <= 0 {
 		return fmt.Errorf("DecodeJson: msgname len is illegal: %d", nameLen), 0, "", nil
 	}
@@ -168,7 +167,7 @@ func DecodeJson(uid int, buff []byte, length int) (error, int, string, interface
 		return fmt.Errorf("DecodeJson: packet[%s] may not registered, uid=%d,target=%d", msgName, uid, target), 0, "", nil
 	}
 	err := json.Unmarshal(buff[8+nameLen:length], packet)
-	if util.CheckErr(err) {
+	if lutil.CheckErr(err) {
 		llog.Errorf("DecodeJson: Unmarshal[%s] error", msgName)
 		return err, target, "", nil
 	}
@@ -188,10 +187,10 @@ var UnPack func(packet interface{}, buff []byte) error
 // @ret: targetid, 消息名, 包体, error
 func UnPackHead(buff []byte, length int) (int, string, []byte, error) {
 	mbuff1 := buff[4:6]
-	target := int(base.BytesToUInt16(mbuff1, binary.BigEndian))
+	target := int(lbase.BytesToUInt16(mbuff1, binary.BigEndian))
 
 	mbuff1 = buff[6:8]
-	nameLen := base.BytesToUInt16(mbuff1, binary.BigEndian)
+	nameLen := lbase.BytesToUInt16(mbuff1, binary.BigEndian)
 	if nameLen <= 0 {
 		return 0, "", nil, fmt.Errorf("UnPackHead: msgname len is illegal: %d", nameLen)
 	}
@@ -250,7 +249,7 @@ func UnPackUdp(buffer []byte) (uint16, int64, []byte) {
 }
 
 func DoInit() {
-	if config.NET_PROTOCOL == "JSON" {
+	if lconfig.NET_PROTOCOL == "JSON" {
 		Encode = EncodeJson
 		Decode = DecodeJson
 		Pack = PackJson

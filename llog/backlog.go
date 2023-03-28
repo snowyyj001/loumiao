@@ -3,19 +3,18 @@ package llog
 import (
 	"archive/zip"
 	"fmt"
+	"github.com/snowyyj001/loumiao/lconfig"
 	"io"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
-
-	"github.com/snowyyj001/loumiao/config"
 )
 
-//压缩文件
-//files 文件数组，可以是不同dir下的文件或者文件夹
-//dest 压缩文件存放地址
+// 压缩文件
+// files 文件数组，可以是不同dir下的文件或者文件夹
+// dest 压缩文件存放地址
 func compress(filenames []string, dest string) error {
 	d, e := os.Create(dest)
 	if e != nil {
@@ -76,7 +75,7 @@ func doCompress(file *os.File, prefix string, zw *zip.Writer) error {
 	return nil
 }
 
-//将旧的文件压缩到zip中备份
+// 将旧的文件压缩到zip中备份
 func dealLogs(filename string) {
 	var files []string
 
@@ -85,7 +84,7 @@ func dealLogs(filename string) {
 		return
 	}
 
-	filepath.Walk(fmt.Sprintf("logs/%s", config.SERVER_NAME), func(pathname string, f os.FileInfo, err error) error {
+	filepath.Walk(fmt.Sprintf("logs/%s", lconfig.SERVER_NAME), func(pathname string, f os.FileInfo, err error) error {
 		if f == nil {
 			return err
 		}
@@ -93,11 +92,11 @@ func dealLogs(filename string) {
 			return nil
 		}
 		if runtime.GOOS == "windows" {
-			if strings.HasPrefix(pathname, fmt.Sprintf("logs\\%s\\%s.", config.SERVER_NAME, config.SERVER_NAME)) && strings.HasSuffix(pathname, ".llog") {
+			if strings.HasPrefix(pathname, fmt.Sprintf("logs\\%s\\%s.", lconfig.SERVER_NAME, lconfig.SERVER_NAME)) && strings.HasSuffix(pathname, ".llog") {
 				files = append(files, pathname)
 			}
 		} else {
-			if strings.HasPrefix(pathname, fmt.Sprintf("logs/%s/%s.", config.SERVER_NAME, config.SERVER_NAME)) && strings.HasSuffix(pathname, ".llog") {
+			if strings.HasPrefix(pathname, fmt.Sprintf("logs/%s/%s.", lconfig.SERVER_NAME, lconfig.SERVER_NAME)) && strings.HasSuffix(pathname, ".llog") {
 				files = append(files, pathname)
 			}
 		}
@@ -105,6 +104,6 @@ func dealLogs(filename string) {
 		return nil
 	})
 	strtime := time.Now().Format("2006-01-02.15.04.05") //":"不能作为文件名
-	zipfile := fmt.Sprintf("logs/%s/%s-%s.zip", config.SERVER_NAME, config.SERVER_NAME, strtime)
+	zipfile := fmt.Sprintf("logs/%s/%s-%s.zip", lconfig.SERVER_NAME, lconfig.SERVER_NAME, strtime)
 	compress(files, zipfile)
 }

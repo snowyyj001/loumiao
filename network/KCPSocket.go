@@ -2,8 +2,8 @@ package network
 
 import (
 	"github.com/snowyyj001/loumiao/llog"
+	"github.com/snowyyj001/loumiao/lutil"
 	"github.com/snowyyj001/loumiao/nodemgr"
-	"github.com/snowyyj001/loumiao/util"
 	"github.com/xtaci/kcp-go"
 	"sync"
 	"sync/atomic"
@@ -84,7 +84,7 @@ func (self *KcpSocket) Start() bool {
 	llog.Infof("KcpSocket 启动监听，等待链接！%s", self.m_sAddr)
 	self.m_Listen = ln
 	self.m_nState = SSF_ACCEPT
-	util.Go(func() {
+	lutil.Go(func() {
 		kcpRoutine(self)
 	})
 	return true
@@ -210,7 +210,7 @@ func (self *KcpSocket) AddClinet(kcpConn *kcp.UDPSession, addr string, connectTy
 }
 
 func kcpRoutine(server *KcpSocket) {
-	defer util.Recover()
+	defer lutil.Recover()
 	for {
 		kcpConn, err := server.m_Listen.AcceptKCP()
 		if err != nil {

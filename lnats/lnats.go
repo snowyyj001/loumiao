@@ -3,16 +3,16 @@ package lnats
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/snowyyj001/loumiao/define"
+	"github.com/snowyyj001/loumiao/lbase"
+	"github.com/snowyyj001/loumiao/lconfig"
+	"github.com/snowyyj001/loumiao/ldefine"
 	"github.com/snowyyj001/loumiao/llog"
-	"github.com/snowyyj001/loumiao/util"
-	"github.com/snowyyj001/loumiao/util/ratelimiter"
+	"github.com/snowyyj001/loumiao/lutil"
+	"github.com/snowyyj001/loumiao/lutil/ratelimiter"
 	"strings"
 	"time"
 
-	nats "github.com/nats-io/nats.go"
-	"github.com/snowyyj001/loumiao/base"
-	"github.com/snowyyj001/loumiao/config"
+	"github.com/nats-io/nats.go"
 )
 
 var (
@@ -101,7 +101,7 @@ func SubscribeTagAsync(topic string, prefix string, call func([]byte)) error {
 func SubscribeAsync(topic string, call func([]byte)) error {
 	// Subscribe
 	_, err := lnc.Subscribe(topic, func(m *nats.Msg) {
-		defer util.Recover()
+		defer lutil.Recover()
 		call(m.Data)
 	})
 	return err
@@ -125,7 +125,7 @@ func PublishString(topic, message string) error {
 
 // 发布消息
 func PublishInt(topic string, message int) error {
-	return lnc.Publish(topic, base.Int64ToBytesDefault(int64(message)))
+	return lnc.Publish(topic, lbase.Int64ToBytesDefault(int64(message)))
 }
 
 // 请求消息
@@ -140,7 +140,7 @@ func Request(topic string, message []byte, waittime int) []byte {
 // 回复消息
 func Response(topic string, call func([]byte) []byte) error {
 	_, err := lnc.Subscribe(topic, func(m *nats.Msg) {
-		defer util.Recover()
+		defer lutil.Recover()
 		data := call(m.Data)
 		m.Respond(data)
 	})
@@ -161,7 +161,7 @@ func RequestTag(topic string, prefix string, message []byte, waittime int) ([]by
 func ResponseTag(topic string, prefix string, call func([]byte) []byte) error {
 	newtopic := FormatTopic(topic, prefix)
 	_, err := lnc.Subscribe(newtopic, func(m *nats.Msg) {
-		defer util.Recover()
+		defer lutil.Recover()
 		data := call(m.Data)
 		m.Respond(data)
 	})
@@ -171,7 +171,7 @@ func ResponseTag(topic string, prefix string, call func([]byte) []byte) error {
 // 回复消息带分组
 func QueueResponse(topic string, queue string, call func([]byte) []byte) error {
 	_, err := lnc.QueueSubscribe(topic, queue, func(m *nats.Msg) {
-		defer util.Recover()
+		defer lutil.Recover()
 		data := call(m.Data)
 		m.Respond(data)
 	})
@@ -182,7 +182,7 @@ func QueueResponse(topic string, queue string, call func([]byte) []byte) error {
 func QueueResponseTag(topic string, prefix string, queue string, call func([]byte) []byte) error {
 	newtopic := FormatTopic(topic, prefix)
 	_, err := lnc.QueueSubscribe(newtopic, queue, func(m *nats.Msg) {
-		defer util.Recover()
+		defer lutil.Recover()
 		data := call(m.Data)
 		m.Respond(data)
 	})
@@ -190,8 +190,8 @@ func QueueResponseTag(topic string, prefix string, queue string, call func([]byt
 }
 
 func Init() {
-	target := strings.Join(config.Cfg.NatsAddr, ",")
-	name := nats.Name(config.NET_GATE_SADDR)
+	target := strings.Join(lconfig.Cfg.NatsAddr, ",")
+	name := nats.Name(lconfig.NET_GATE_SADDR)
 
 	nc, err := nats.Connect(target, name,
 		nats.DisconnectErrHandler(func(nc *nats.Conn, err error) {
@@ -234,7 +234,7 @@ func Init() {
 
 // 上报服务器关键信息
 func ReportMail(tag int, str string) {
-	defer util.Recover()
+	defer lutil.Recover()
 	//这里说一下golang有意思的事情，errorLimiter为nil的话，是不会在241行报错的，会在RateLimiter的Acquire内部使用self时报错，这和其他语言例如cpp是不一样的
 	if errorLimiter == nil {
 		return
@@ -246,11 +246,11 @@ func ReportMail(tag int, str string) {
 		Content string `json:"content"` //邮件内容
 	}{}
 	reqParam.Tag = tag
-	reqParam.Id = config.NET_NODE_ID
-	reqParam.Content = fmt.Sprintf("uid: %d \nname: %s\nhost: %s\r\ncontent: %s", config.SERVER_NODE_UID, config.SERVER_NAME, config.NET_GATE_SADDR, str)
+	reqParam.Id = lconfig.NET_NODE_ID
+	reqParam.Content = fmt.Sprintf("uid: %d \nname: %s\nhost: %s\r\ncontent: %s", lconfig.SERVER_NODE_UID, lconfig.SERVER_NAME, lconfig.NET_GATE_SADDR, str)
 	buffer, err := json.Marshal(&reqParam)
 	if err == nil {
-		Publish(define.TOPIC_SERVER_MAIL, buffer)
+		Publish(ldefine.TOPIC_SERVER_MAIL, buffer)
 	}
 }
 

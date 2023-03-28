@@ -1,8 +1,8 @@
 package network
 
 import (
+	"github.com/snowyyj001/loumiao/lutil"
 	"github.com/snowyyj001/loumiao/nodemgr"
-	"github.com/snowyyj001/loumiao/util"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -73,7 +73,7 @@ func (self *ServerSocket) Start() bool {
 	//延迟，监听关闭
 	//defer ln.Close()
 	self.m_nState = SSF_ACCEPT
-	util.Go(func() {
+	lutil.Go(func() {
 		serverRoutine(self)
 	})
 	return true
@@ -152,6 +152,11 @@ func (self *ServerSocket) LoadClient() *ServerSocketClient {
 	return s
 }
 
+func (self *ServerSocket) Send(buffer []byte) int {
+	llog.Error("ServerSocket should not call this func")
+	return 0
+}
+
 func (self *ServerSocket) SendById(id int, buff []byte) int {
 	pClient := self.GetClientById(id)
 	if pClient != nil {
@@ -196,7 +201,7 @@ func (self *ServerSocket) SetMaxClients(maxnum int) {
 }
 
 func serverRoutine(server *ServerSocket) {
-	defer util.Recover()
+	defer lutil.Recover()
 	var tempDelay time.Duration
 	for {
 		tcpConn, err := server.m_Listen.AcceptTCP()

@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"github.com/natefinch/lumberjack"
 	go_logger "github.com/phachon/go-logger"
-	"github.com/snowyyj001/loumiao/config"
-	"github.com/snowyyj001/loumiao/define"
+	"github.com/snowyyj001/loumiao/lconfig"
+	"github.com/snowyyj001/loumiao/ldefine"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -23,7 +23,8 @@ var (
 	clogger     *go_logger.Logger //zap的控制台颜色输出效果不好，这里用go_logger
 	logger      *zap.Logger
 	sugarLogger *zap.SugaredLogger
-	logLevel    int
+
+	logLevel int
 	//remoteLog   *LogRemoteWrite
 
 	ReportMailhandler func(tag int, str string)
@@ -118,10 +119,10 @@ func getEncoder() zapcore.Encoder {
 func init() {
 	//os.Mkdir("logs", os.ModePerm)
 	//os.Mkdir(fmt.Sprintf("logs/%s", config.SERVER_NAME), os.ModePerm)
-	SetLevel(config.GAME_LOG_LEVEL)
-	filename := fmt.Sprintf("./logs/%s/%s.log", config.SERVER_TYPE_NAME, config.SERVER_NAME)
+	SetLevel(lconfig.GAME_LOG_LEVEL)
+	filename := fmt.Sprintf("./logs/%s/%s.log", lconfig.SERVER_TYPE_NAME, lconfig.SERVER_NAME)
 	core := zapcore.NewCore(getEncoder(), getLogWriter(filename), zapcore.DebugLevel)
-	if config.GAME_LOG_CONLOSE {
+	if lconfig.GAME_LOG_CONLOSE {
 		logger = zap.New(core)
 
 		clogger = go_logger.NewLogger()
@@ -141,7 +142,7 @@ func init() {
 
 // llog Panic level
 func Panic(msg string) {
-	ReportMailhandler(define.MAIL_TYPE_ERR, msg)
+	ReportMailhandler(ldefine.MAIL_TYPE_ERR, msg)
 	logger.Panic(msg)
 }
 
@@ -153,7 +154,7 @@ func Panicf(format string, a ...interface{}) {
 
 // llog error level
 func Error(msg string) {
-	go ReportMailhandler(define.MAIL_TYPE_ERR, msg)
+	go ReportMailhandler(ldefine.MAIL_TYPE_ERR, msg)
 	logger.Error(msg)
 	if clogger != nil {
 		clogger.Error(msg)
@@ -168,7 +169,7 @@ func Errorf(format string, a ...interface{}) {
 
 // llog notice level
 func Notice(msg string) {
-	go ReportMailhandler(define.MAIL_TYPE_WARING, msg)
+	go ReportMailhandler(ldefine.MAIL_TYPE_WARING, msg)
 	logger.Warn(msg)
 	if clogger != nil {
 		clogger.Notice(msg)
@@ -234,7 +235,7 @@ func Debugf(format string, a ...interface{}) {
 
 // llog Fatal
 func Fatal(msg string) {
-	ReportMailhandler(define.MAIL_TYPE_ERR, msg)
+	ReportMailhandler(ldefine.MAIL_TYPE_ERR, msg)
 	logger.Fatal(msg)
 }
 
@@ -254,7 +255,7 @@ func Tp_SetLevel(data []byte) {
 		Level int `json:"level"`
 	}{}
 	if err := json.Unmarshal(data, reqParam); err == nil {
-		if reqParam.Uid == config.SERVER_NODE_UID {
+		if reqParam.Uid == lconfig.SERVER_NODE_UID {
 			Infof("Tp_SetLevel: oldlevel=%d, newlevel=%d", logLevel, reqParam.Level)
 			SetLevel(reqParam.Level)
 		}

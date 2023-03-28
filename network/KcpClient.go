@@ -2,8 +2,8 @@ package network
 
 import (
 	"github.com/snowyyj001/loumiao/llog"
+	"github.com/snowyyj001/loumiao/lutil"
 	"github.com/snowyyj001/loumiao/message"
-	"github.com/snowyyj001/loumiao/util"
 	"github.com/xtaci/kcp-go"
 	"io"
 	"time"
@@ -36,7 +36,7 @@ func (self *KcpClient) Start() bool {
 	}
 
 	if self.Connect() {
-		util.Go(func() {
+		lutil.Go(func() {
 			clientKcpRoutine(self)
 		})
 		return true
@@ -139,7 +139,7 @@ func (self *KcpClient) OnNetFail(int) {
 }
 
 func clientKcpRoutine(pClient *KcpClient) bool {
-	defer util.Recover()
+	defer lutil.Recover()
 	if pClient.m_KcpConn == nil {
 		return false
 	}

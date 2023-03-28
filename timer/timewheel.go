@@ -1,7 +1,7 @@
 package timer
 
 import (
-	"github.com/snowyyj001/loumiao/util"
+	"github.com/snowyyj001/loumiao/lutil"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -230,7 +230,7 @@ func LoumiaoStartTimer() {
 	addTimerChan = make(chan *TimeNode, 2000)
 
 	go func() {
-		defer util.Recover()
+		defer lutil.Recover()
 		for {
 			//llog.Debugf("woker run: %s", self.Name)
 			select {

@@ -2,12 +2,12 @@ package udpgate
 
 import (
 	"fmt"
-	"github.com/snowyyj001/loumiao/config"
 	"github.com/snowyyj001/loumiao/gorpc"
+	"github.com/snowyyj001/loumiao/lconfig"
 	"github.com/snowyyj001/loumiao/llog"
+	"github.com/snowyyj001/loumiao/lutil"
 	"github.com/snowyyj001/loumiao/message"
 	"github.com/snowyyj001/loumiao/network"
-	"github.com/snowyyj001/loumiao/util"
 	"strings"
 	"sync"
 )
@@ -51,7 +51,7 @@ func (self *UdpGateServer) DoInit() bool {
 	self.pService.Init(fmt.Sprintf("0.0.0.0:%s", arr[1]))
 	self.pService.BindPacketFunc(packetFunc)
 	self.pService.SetConnectType(network.CLIENT_CONNECT)
-	self.pService.SetMaxClients(config.NET_MAX_CONNS)
+	self.pService.SetMaxClients(lconfig.NET_MAX_CONNS)
 
 	messagesChan = make(chan *UdpSendSt, CHAN_SEND_LEN)
 
@@ -68,13 +68,13 @@ func (self *UdpGateServer) DoRegister() {
 func (self *UdpGateServer) DoStart() {
 	llog.Info("UdpGateServer DoStart")
 
-	self.Id = config.Cfg.NetCfg.Uid
+	self.Id = lconfig.Cfg.NetCfg.Uid
 	if self.pService.Start() == false {
 		llog.Fatalf("UdpGateServer start error")
 	}
-	llog.Infof("UdpGateServer DoStart success: name=%s,saddr=%s,uid=%d", self.Name, config.SERVER_PLATFORM, config.SERVER_NODE_UID)
+	llog.Infof("UdpGateServer DoStart success: name=%s,saddr=%s,uid=%d", self.Name, lconfig.SERVER_PLATFORM, lconfig.SERVER_NODE_UID)
 
-	util.Go(func() {
+	lutil.Go(func() {
 		BufferSend()
 	})
 }
@@ -104,7 +104,7 @@ func UnRegisterHandler(userId int) {
 
 // goroutine unsafe,此时已不涉及map的修改，直处理了，不用再去RecvPackMsg中处理
 func packetFunc(socketid int, buff []byte, nlen int) error {
-	defer util.Recover()
+	defer lutil.Recover()
 	llog.Debugf("udp packetFunc: socketid=%d", socketid)
 	msgId, clientId, body := message.UnPackUdp(buff)
 	rwMutex.RLock()
@@ -113,7 +113,7 @@ func packetFunc(socketid int, buff []byte, nlen int) error {
 	if ok {
 		actor.Handler(actor.Igo, int(clientId), body)
 	} else {
-		if !config.SERVER_RELEASE {
+		if !lconfig.SERVER_RELEASE {
 			llog.Warningf("UdpGateServer packetFunc handler is nil, drop it[%d][%d]", msgId, socketid)
 		}
 

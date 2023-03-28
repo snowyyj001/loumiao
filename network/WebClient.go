@@ -1,7 +1,7 @@
 package network
 
 import (
-	"github.com/snowyyj001/loumiao/util"
+	"github.com/snowyyj001/loumiao/lutil"
 	"net/url"
 	"sync"
 
@@ -38,7 +38,7 @@ func (self *WebClient) Start() bool {
 	}
 
 	if self.Connect() {
-		util.Go(func() {
+		lutil.Go(func() {
 			wsclientRoutine(self)
 		})
 	} else {
@@ -107,7 +107,7 @@ func (self *WebClient) OnNetFail(int) {
 }
 
 func wsclientRoutine(pClient *WebClient) bool {
-	defer util.Recover()
+	defer lutil.Recover()
 	if pClient.m_WsConn == nil {
 		return false
 	}

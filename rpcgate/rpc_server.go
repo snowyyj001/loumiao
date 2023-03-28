@@ -3,19 +3,19 @@ package rpcgate
 
 import (
 	"fmt"
+	"github.com/snowyyj001/loumiao/lconfig"
+	"github.com/snowyyj001/loumiao/ldefine"
 	"github.com/snowyyj001/loumiao/lnats"
+	"github.com/snowyyj001/loumiao/lutil"
 	"sync"
 
 	"github.com/snowyyj001/loumiao/message"
 
-	"github.com/snowyyj001/loumiao/config"
-	"github.com/snowyyj001/loumiao/define"
 	"github.com/snowyyj001/loumiao/etcd"
 	"github.com/snowyyj001/loumiao/gorpc"
 	"github.com/snowyyj001/loumiao/llog"
 	"github.com/snowyyj001/loumiao/network"
 	"github.com/snowyyj001/loumiao/nodemgr"
-	"github.com/snowyyj001/loumiao/util"
 )
 
 var (
@@ -46,8 +46,8 @@ func (self *RpcGateServer) DoInit() bool {
 	This = self
 
 	self.pInnerService = new(network.ServerSocket)
-	self.pInnerService.(*network.ServerSocket).SetMaxClients(config.NET_MAX_RPC_CONNS)
-	self.pInnerService.Init(config.NET_LISTEN_SADDR)
+	self.pInnerService.(*network.ServerSocket).SetMaxClients(lconfig.NET_MAX_RPC_CONNS)
+	self.pInnerService.Init(lconfig.NET_LISTEN_SADDR)
 	self.pInnerService.BindPacketFunc(packetFunc_rpc)
 	self.pInnerService.SetConnectType(network.SERVER_CONNECT)
 
@@ -85,17 +85,17 @@ func (self *RpcGateServer) DoStart() {
 
 	//etcd client
 	err := etcd.NewClient()
-	if util.CheckErr(err) {
-		llog.Fatalf("etcd connect failed: %v", config.Cfg.EtcdAddr)
+	if lutil.CheckErr(err) {
+		llog.Fatalf("etcd connect failed: %v", lconfig.Cfg.EtcdAddr)
 	}
 
 	nodemgr.ServerEnabled = true
 	//etcd.Client.PutStatus() //服务如果异常关闭，是没有撤销租约的，在三秒内重启会保留上次状态，这里强制刷新一下
 
 	llog.Debug("ServerSocket.Start i")
-	util.Assert(self.pInnerService.Start(), fmt.Sprintf("GateServer listen failed: saddr=%s", self.pInnerService.GetSAddr()))
+	lutil.Assert(self.pInnerService.Start(), fmt.Sprintf("GateServer listen failed: saddr=%s", self.pInnerService.GetSAddr()))
 
-	llog.Infof("RpcGateServer DoStart success: name=%s,saddr=%s,uid=%d", self.Name, config.NET_GATE_SADDR, config.SERVER_NODE_UID)
+	llog.Infof("RpcGateServer DoStart success: name=%s,saddr=%s,uid=%d", self.Name, lconfig.NET_GATE_SADDR, lconfig.SERVER_NODE_UID)
 }
 
 // begin start socket servie
@@ -103,12 +103,12 @@ func (self *RpcGateServer) DoOpen() {
 
 	//server discover
 	//watch status, for balance
-	err := etcd.Client.WatchCommon(fmt.Sprintf("%s%d", define.ETCD_NODESTATUS, config.NET_NODE_ID), self.serverStatusUpdate)
+	err := etcd.Client.WatchCommon(fmt.Sprintf("%s%d", ldefine.ETCD_NODESTATUS, lconfig.NET_NODE_ID), self.serverStatusUpdate)
 	if err != nil {
 		llog.Fatalf("etcd watch ETCD_NODESTATUS error : %s", err.Error())
 	}
 	//watch all node, just for account, to gate balance
-	err = etcd.Client.WatchCommon(fmt.Sprintf("%s%d", define.ETCD_NODEINFO, config.NET_NODE_ID), self.newServerDiscover)
+	err = etcd.Client.WatchCommon(fmt.Sprintf("%s%d", ldefine.ETCD_NODEINFO, lconfig.NET_NODE_ID), self.newServerDiscover)
 	if err != nil {
 		llog.Fatalf("etcd watch NET_GATE_SADDR error : %s", err.Error())
 	}
@@ -118,9 +118,9 @@ func (self *RpcGateServer) DoOpen() {
 		llog.Fatalf("etcd PutNode error %v", err)
 	}
 	nodemgr.ServerEnabled = true
-	llog.Infof("RpcGateServer DoOpen success: name=%s, saddr=%s, uid=%d", self.Name, config.NET_GATE_SADDR, config.SERVER_NODE_UID)
+	llog.Infof("RpcGateServer DoOpen success: name=%s, saddr=%s, uid=%d", self.Name, lconfig.NET_GATE_SADDR, lconfig.SERVER_NODE_UID)
 
-	lnats.ReportMail(define.MAIL_TYPE_START, "服务器完成启动")
+	lnats.ReportMail(ldefine.MAIL_TYPE_START, "服务器完成启动")
 }
 
 // goroutine unsafe
@@ -130,10 +130,7 @@ func (self *RpcGateServer) serverStatusUpdate(key, val string, dis bool) {
 		return
 	}
 	if node.Uid > 0 && node.SocketActive == false {
-		_, ok := This.rpcUids.Load(node.Uid)
-		if ok {
-			gorpc.MGR.SendActor("GateServer", "CloseServer", node.Uid)
-		}
+		This.rpcUids.Delete(node.Uid)
 	}
 }
 
@@ -160,7 +157,7 @@ func packetFunc_rpc(socketid int, buff []byte, nlen int) error {
 		return fmt.Errorf("packetFunc_rpc Decode error: %s", err.Error())
 		//This.closeClient(socketid)
 	} else {
-		if target == config.SERVER_NODE_UID || target <= 0 { //server使用的是server uid
+		if target == lconfig.SERVER_NODE_UID || target <= 0 { //server使用的是server uid
 			handler, ok := handler_Map[name]
 			if ok {
 				nm := &gorpc.M{Id: socketid, Name: name, Data: buffbody}
@@ -169,7 +166,7 @@ func packetFunc_rpc(socketid int, buff []byte, nlen int) error {
 				llog.Errorf("packetFunc_rpc handler is nil, drop it[%s]", name)
 			}
 		} else {
-			llog.Errorf("packetFunc_rpc target may be error: targetuid=%d, myuid=%d, name=%s", target, config.SERVER_NODE_UID, name)
+			llog.Errorf("packetFunc_rpc target may be error: targetuid=%d, myuid=%d, name=%s", target, lconfig.SERVER_NODE_UID, name)
 		}
 	}
 	return nil
@@ -208,14 +205,14 @@ func (self *RpcGateServer) removeRpchandler(socketid int) {
 }
 
 // rpc调用的目标server选择
-func (self *RpcGateServer) getCluserServerSocketId(funcName string) int {
+func (self *RpcGateServer) getClusterServerSocketId(funcName string) int {
 	arr := self.rpcMap[funcName]
 	sz := len(arr)
 	if sz == 0 {
 		llog.Warningf("0.getCluserServerSocketId no rpc server handler finded %s", funcName)
 		return 0
 	}
-	index := util.Random(sz) //choose a server by random
+	index := lutil.Random(sz) //choose a server by random
 	sid := arr[index]
 	return sid
 }

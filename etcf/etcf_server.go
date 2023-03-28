@@ -3,17 +3,17 @@ package etcf
 
 import (
 	"fmt"
-	"github.com/snowyyj001/loumiao/base"
+	"github.com/snowyyj001/loumiao/lbase"
+	"github.com/snowyyj001/loumiao/lconfig"
+	"github.com/snowyyj001/loumiao/lutil"
 	"github.com/snowyyj001/loumiao/pbmsg"
 	"strings"
 	"sync"
 
-	"github.com/snowyyj001/loumiao/config"
 	"github.com/snowyyj001/loumiao/gorpc"
 	"github.com/snowyyj001/loumiao/llog"
 	"github.com/snowyyj001/loumiao/message"
 	"github.com/snowyyj001/loumiao/network"
-	"github.com/snowyyj001/loumiao/util"
 )
 
 /*
@@ -50,8 +50,8 @@ func (self *EtcfServer) DoInit() bool {
 	This = self
 
 	self.pInnerService = new(network.ServerSocket)
-	self.pInnerService.(*network.ServerSocket).SetMaxClients(config.NET_MAX_CONNS)
-	self.pInnerService.Init(config.NET_LISTEN_SADDR)
+	self.pInnerService.(*network.ServerSocket).SetMaxClients(lconfig.NET_MAX_CONNS)
+	self.pInnerService.Init(lconfig.NET_LISTEN_SADDR)
 	self.pInnerService.BindPacketFunc(packetFunc)
 	self.pInnerService.SetConnectType(network.SERVER_CONNECT)
 
@@ -100,7 +100,7 @@ func (self *EtcfServer) DoRegister() {
 func (self *EtcfServer) DoStart() {
 	llog.Info("EtcfServer DoStart")
 
-	util.Assert(self.pInnerService.Start(), fmt.Sprintf("EtcfServer listen failed: saddr=%s", self.pInnerService.GetSAddr()))
+	lutil.Assert(self.pInnerService.Start(), fmt.Sprintf("EtcfServer listen failed: saddr=%s", self.pInnerService.GetSAddr()))
 
 	//self.RunTimer(1000, self.update_1000)
 }
@@ -115,9 +115,9 @@ func (self *EtcfServer) DoDestroy() {
 func (self *EtcfServer) update_1000(dt int64) {
 	//llog.Debugf("%s update_1000: %d", self.Name, dt)
 	for sid, stmp := range self.mStoreValuesLeaseTime {
-		if base.TimeStampSec()-stmp >= LEASE_SERVER_TIMEOUT { //超时
+		if lbase.TimeStampSec()-stmp >= LEASE_SERVER_TIMEOUT { //超时
 			uid, _ := siduid_Map[sid]
-			llog.Warningf("EtcfServer.update_1000: lease timeout, sid = %d, uid = %d, timeout = %d", sid, uid, base.TimeStampSec()-stmp)
+			llog.Warningf("EtcfServer.update_1000: lease timeout, sid = %d, uid = %d, timeout = %d", sid, uid, lbase.TimeStampSec()-stmp)
 			//self.removeAllLeaseById(sid)
 			//delete(self.mStoreValuesLeaseTime, sid)
 		}
@@ -164,7 +164,7 @@ func (self *EtcfServer) removeAllLeaseById(sid int) {
 func (self *EtcfServer) removeAllWatchById(sid int) {
 	llog.Debugf("EtcfServer removeAllWatchById: socketid = %d", sid)
 	for _, vals := range self.mWatchKeys {
-		for k, _ := range vals {
+		for k := range vals {
 			if k == sid {
 				delete(vals, k)
 				break
@@ -196,7 +196,7 @@ func (self *EtcfServer) broadCastValue(prefix string, value string) {
 
 	for key, vals := range self.mWatchKeys {
 		if strings.HasPrefix(prefix, key) {
-			for sid, _ := range vals {
+			for sid := range vals {
 				This.pInnerService.SendById(sid, buff)
 			}
 		}

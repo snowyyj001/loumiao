@@ -5,14 +5,14 @@ import (
 	"bytes"
 	"encoding/gob"
 	"fmt"
-	"github.com/snowyyj001/loumiao/util"
+	"github.com/snowyyj001/loumiao/lconfig"
+	"github.com/snowyyj001/loumiao/lutil"
 	"gorm.io/gorm/clause"
 	"hash/crc32"
 	"reflect"
 	"sync"
 	"time"
 
-	"github.com/snowyyj001/loumiao/config"
 	"github.com/snowyyj001/loumiao/llog"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -31,7 +31,7 @@ var (
 	SLen     int
 	SIndex   int
 	mLock    sync.Mutex
-	logLevel logger.LogLevel = logger.Info
+	logLevel = logger.Info
 )
 
 /*
@@ -111,7 +111,7 @@ func STble(tname string) *gorm.DB {
 func Dial(tbs []interface{}) error {
 
 	//account:pass@tcp(url)/dbname
-	uri := fmt.Sprintf("%s?charset=utf8&parseTime=True&loc=Local", config.Cfg.DBUri)
+	uri := fmt.Sprintf("%s?charset=utf8&parseTime=True&loc=Local", lconfig.Cfg.DBUri)
 	llog.Debugf("mysql Dial: %s", uri)
 	engine, err := gorm.Open(mysql.Open(uri), &gorm.Config{
 		NamingStrategy: schema.NamingStrategy{
@@ -133,7 +133,7 @@ func Dial(tbs []interface{}) error {
 		create(Master, tbs)
 	}
 
-	util.Go(func() { //每秒钟检测一次数据库连接状态
+	lutil.Go(func() { //每秒钟检测一次数据库连接状态
 		for {
 			sqlDB, _ := Master.DB()
 			if err := sqlDB.Ping(); err != nil {
@@ -148,7 +148,7 @@ func Dial(tbs []interface{}) error {
 			for i := 0; i < SLen; i++ {
 				sqlDB, _ := Slaves[i].DB()
 				if err := sqlDB.Ping(); err != nil {
-					llog.Errorf("mysql slave[%s] db ping error: %s", config.Cfg.DBUri, err.Error())
+					llog.Errorf("mysql slave[%s] db ping error: %s", lconfig.Cfg.DBUri, err.Error())
 					Slaves[i] = Master
 				}
 			}
@@ -156,7 +156,7 @@ func Dial(tbs []interface{}) error {
 		}
 	})
 
-	llog.Infof("mysql dail success: %v", config.Cfg.DBUri)
+	llog.Infof("mysql dail success: %v", lconfig.Cfg.DBUri)
 
 	return nil
 }

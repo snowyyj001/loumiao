@@ -3,15 +3,15 @@ package etcf
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/snowyyj001/loumiao/config"
-	"github.com/snowyyj001/loumiao/define"
+	"github.com/snowyyj001/loumiao/lconfig"
+	"github.com/snowyyj001/loumiao/ldefine"
 	"github.com/snowyyj001/loumiao/llog"
+	"github.com/snowyyj001/loumiao/lutil"
 	"github.com/snowyyj001/loumiao/message"
 	"github.com/snowyyj001/loumiao/network"
 	"github.com/snowyyj001/loumiao/nodemgr"
 	"github.com/snowyyj001/loumiao/pbmsg"
 	"github.com/snowyyj001/loumiao/timer"
-	"github.com/snowyyj001/loumiao/util"
 	"strings"
 	"sync"
 	"time"
@@ -45,8 +45,8 @@ func newEtcfClient() (*EtcfClient, error) {
 	Client.Init()
 	err := Client.Start(false)
 
-	Client.etcdKey = fmt.Sprintf("%s%d/%s", define.ETCD_NODEINFO, config.NET_NODE_ID, config.NET_GATE_SADDR)
-	Client.statusKey = fmt.Sprintf("%s%d/%s", define.ETCD_NODESTATUS, config.NET_NODE_ID, config.NET_GATE_SADDR)
+	Client.etcdKey = fmt.Sprintf("%s%d/%s", ldefine.ETCD_NODEINFO, lconfig.NET_NODE_ID, lconfig.NET_GATE_SADDR)
+	Client.statusKey = fmt.Sprintf("%s%d/%s", ldefine.ETCD_NODESTATUS, lconfig.NET_NODE_ID, lconfig.NET_GATE_SADDR)
 
 	return Client, err
 }
@@ -87,11 +87,11 @@ func (self *EtcfClient) Start(reconnect bool) error {
 		self.pInnerService.Stop()
 	}
 	client := new(network.ClientSocket)
-	client.SetClientId(config.SERVER_NODE_UID)
-	client.Init(config.Cfg.EtcdAddr[0]) //不支持集群，想要集群使用etcd
+	client.SetClientId(lconfig.SERVER_NODE_UID)
+	client.Init(lconfig.Cfg.EtcdAddr[0]) //不支持集群，想要集群使用etcd
 	client.SetConnectType(network.CHILD_CONNECT)
 	client.BindPacketFunc(packetClientFunc)
-	client.Uid = config.SERVER_NODE_UID
+	client.Uid = lconfig.SERVER_NODE_UID
 
 	self.pInnerService = client
 
@@ -128,7 +128,7 @@ func PutStatus() error {
 
 // 写服务信息
 func PutNode() error {
-	obj, _ := json.Marshal(&config.Cfg.NetCfg)
+	obj, _ := json.Marshal(&lconfig.Cfg.NetCfg)
 	return PutService(Client.etcdKey, string(obj))
 }
 
@@ -150,7 +150,7 @@ func leaseCallBack(dt int64) bool {
 		return true
 	}
 	req := &pbmsg.LouMiaoLease{}
-	req.Uid = int32(config.SERVER_NODE_UID)
+	req.Uid = int32(lconfig.SERVER_NODE_UID)
 
 	buff, _ := message.EncodeProBuff(0, "LouMiaoLease", req)
 	Client.pInnerService.Send(buff)
@@ -359,7 +359,7 @@ func WatchKey(prefix string, handler func(string, string, bool)) bool {
 	req := &pbmsg.LouMiaoWatchKey{}
 	req.Prefix = prefix
 	req.Opcode = pbmsg.LouMiaoWatchKey_ADD
-	req.Uid = int32(config.SERVER_NODE_UID)
+	req.Uid = int32(lconfig.SERVER_NODE_UID)
 
 	buff, _ := message.EncodeProBuff(0, "LouMiaoWatchKey", req)
 	Client.pInnerService.Send(buff)
@@ -378,7 +378,7 @@ func RemoveKey(prefix string) {
 	req := &pbmsg.LouMiaoWatchKey{}
 	req.Prefix = prefix
 	req.Opcode = pbmsg.LouMiaoWatchKey_DEL
-	req.Uid = int32(config.SERVER_NODE_UID)
+	req.Uid = int32(lconfig.SERVER_NODE_UID)
 
 	buff, _ := message.EncodeProBuff(0, "LouMiaoWatchKey", req)
 	Client.pInnerService.Send(buff)
@@ -488,7 +488,7 @@ func packetClientFunc(socketid int, buff []byte, nlen int) error {
 	} else {
 		handler, ok := handler_client_Map[name]
 		if ok {
-			util.Go(func() {
+			lutil.Go(func() {
 				handler(socketid, buffbody)
 			})
 		} else {

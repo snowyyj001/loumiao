@@ -3,8 +3,12 @@ package loumiao
 import (
 	"fmt"
 	"github.com/golang/protobuf/proto"
-	"github.com/snowyyj001/loumiao/gate"
 	"github.com/snowyyj001/loumiao/kcpgate"
+	"github.com/snowyyj001/loumiao/lbase"
+	"github.com/snowyyj001/loumiao/lconfig"
+	"github.com/snowyyj001/loumiao/ldefine"
+	"github.com/snowyyj001/loumiao/lgate"
+	"github.com/snowyyj001/loumiao/lutil"
 	"github.com/snowyyj001/loumiao/udpgate"
 	"net/http"
 	_ "net/http/pprof"
@@ -14,15 +18,11 @@ import (
 	"syscall"
 
 	"github.com/snowyyj001/loumiao/callrpc"
-	"github.com/snowyyj001/loumiao/define"
 	"github.com/snowyyj001/loumiao/nodemgr"
 
-	"github.com/snowyyj001/loumiao/base"
-	"github.com/snowyyj001/loumiao/config"
 	"github.com/snowyyj001/loumiao/gorpc"
 	"github.com/snowyyj001/loumiao/llog"
 	"github.com/snowyyj001/loumiao/message"
-	"github.com/snowyyj001/loumiao/util"
 )
 
 var c chan os.Signal
@@ -56,13 +56,13 @@ func Start(igo gorpc.IGoRoutine, name string, sync bool) {
 
 // 开启游戏
 func Run() {
-	defer util.Recover()
+	defer lutil.Recover()
 
-	util.DumpPid()
+	lutil.DumpPid()
 
-	if config.SERVER_DEBUGPORT > 0 {
+	if lconfig.SERVER_DEBUGPORT > 0 {
 		go func() {
-			http.ListenAndServe(fmt.Sprintf("0.0.0.0:%d", config.SERVER_DEBUGPORT), nil)
+			http.ListenAndServe(fmt.Sprintf("0.0.0.0:%d", lconfig.SERVER_DEBUGPORT), nil)
 		}()
 	}
 
@@ -73,7 +73,7 @@ func Run() {
 	if igo != nil {
 		igo.DoOpen()
 	}
-	llog.Infof("loumiao start success: %s", config.SERVER_NAME)
+	llog.Infof("loumiao start success: %s", lconfig.SERVER_NAME)
 	//}, true)
 
 	c = make(chan os.Signal, 1)
@@ -95,7 +95,7 @@ func Stop() {
 // RegisterNetHandler 注册网络消息,对于内部server节点来说HandlerNetFunc的第二个参数clientid就是userid
 func RegisterNetHandler(igo gorpc.IGoRoutine, name string, call gorpc.HandlerNetFunc) {
 	//gorpc.MGR.Send("GateServer", "RegisterNet", &gorpc.M{Id: 0, Name: name, Data: igo.GetName()})
-	gate.RegisterNet(igo, name, false)
+	lgate.RegisterNet(igo, name, false)
 	igo.RegisterGate(name, call)
 }
 
@@ -136,7 +136,7 @@ func SendClient(clientid int, data interface{}) {
 	if n == 0 {
 		return
 	}
-	gate.SendClient(clientid, buff)
+	lgate.SendClient(clientid, buff)
 }
 
 // SendClients 广播给客户端消息
@@ -147,7 +147,7 @@ func SendClients(ids []int, data interface{}) {
 		return
 	}
 	for _, clientid := range ids {
-		gate.SendClient(clientid, buff)
+		lgate.SendClient(clientid, buff)
 	}
 }
 
@@ -158,13 +158,13 @@ func BroadCastClients(data interface{}) {
 	if n == 0 {
 		return
 	}
-	gate.BroadCastClients(buff)
+	lgate.BroadCastClients(buff)
 }
 
 // RegisterRpcHandler 注册rpc消息
 func RegisterRpcHandler(igo gorpc.IGoRoutine, call gorpc.HandlerRpcFunc) {
-	util.Assert(nodemgr.ServerEnabled == false, "RegisterRpcHandler can not register after server started")
-	funcName := util.RpcFuncName(call)
+	lutil.Assert(nodemgr.ServerEnabled == false, "RegisterRpcHandler can not register after server started")
+	funcName := lutil.RpcFuncName(call)
 	//llog.Debugf("funcName = %s", funcName)
 	//rpc send
 	igo.Register(funcName, func(igo gorpc.IGoRoutine, data interface{}) interface{} {
@@ -174,7 +174,7 @@ func RegisterRpcHandler(igo gorpc.IGoRoutine, call gorpc.HandlerRpcFunc) {
 	igo.RegisterGate(funcName, func(igo gorpc.IGoRoutine, clientId int, buffer []byte) {
 		call(buffer)
 	})
-	gate.RegisterNet(igo, funcName, true)
+	lgate.RegisterNet(igo, funcName, true)
 }
 
 // SendRpc 远程rpc调用
@@ -182,20 +182,20 @@ func RegisterRpcHandler(igo gorpc.IGoRoutine, call gorpc.HandlerRpcFunc) {
 // @data: 函数参数,一个二进制buff或pb结构体
 // @target: 目标server的uid，如果target==0，则随机指定目标地址, 否则gate会把消息转发给指定的target服务
 func SendRpc(funcName string, data interface{}, target int) {
-	m := &gorpc.M{Id: target, Name: funcName}
+	var buffer []byte
 	if reflect.TypeOf(data).Kind() == reflect.Slice { //bitstream
-		m.Data = data
+		buffer = data.([]byte)
 	} else {
 		buff, err := message.PackProto(data.(proto.Message))
 		if err != nil {
 			llog.Errorf("SendRpc: %s", err.Error())
 			return
 		}
-		m.Data = buff
+		buffer = buff
 	}
 	llog.Debugf("SendRpc: %s, %d", funcName, target)
 	//base64str := base64.StdEncoding.EncodeToString([]byte(funcName))
-	gorpc.MGR.Send("GateServer", "SendRpc", m)
+	lgate.SendRpc(target, funcName, buffer, 0)
 }
 
 // CallRpc 远程rpc调用
@@ -205,31 +205,33 @@ func SendRpc(funcName string, data interface{}, target int) {
 // @target: 目标server的uid，如果target==0，则随机指定目标地址, 否则gate会把消息转发给指定的target服务
 // return: 返回的[]byte结果或nil
 func CallRpc(igo gorpc.IGoRoutine, funcName string, data interface{}, target int) ([]byte, bool) {
-	m := &gorpc.M{Id: target, Name: funcName}
-	m.Param = define.RPCMSG_FLAG_CALL
+	//m := &gorpc.M{Id: target, Name: funcName}
+	//m.Param = ldefine.RPCMSG_FLAG_CALL
 	session := igo.GetName()
+	var buffer []byte
 	if data == nil {
-		m.Data = []byte{}
+		buffer = []byte{}
 	} else if reflect.TypeOf(data).Kind() == reflect.Slice { //bitstream
-		orgbuff := data.([]byte)
-		bitstream := base.NewBitStreamS(len(orgbuff) + base.BitStrLen(session))
+		orgBuff := data.([]byte)
+		bitstream := lbase.NewBitStreamS(len(orgBuff) + lbase.BitStrLen(session))
 		bitstream.WriteString(session)
-		bitstream.WriteBytes(orgbuff)
-		m.Data = bitstream.GetBuffer()
+		bitstream.WriteBytes(orgBuff)
+		buffer = bitstream.GetBuffer()
 	} else {
-		orgbuff, err := message.PackProto(data.(proto.Message))
+		orgBuff, err := message.PackProto(data.(proto.Message))
 		if err != nil {
 			llog.Errorf("CallRpc: %s", err.Error())
 			return nil, false
 		}
-		bitstream := base.NewBitStreamS(len(orgbuff) + base.BitStrLen(session))
+		bitstream := lbase.NewBitStreamS(len(orgBuff) + lbase.BitStrLen(session))
 		bitstream.WriteString(session)
-		bitstream.WriteBytes(orgbuff)
-		m.Data = bitstream.GetBuffer()
+		bitstream.WriteBytes(orgBuff)
+		buffer = bitstream.GetBuffer()
 	}
 	//llog.Debugf("CallRpc: session=%s, funcName=%s, target=%d", session, funcName, target)
 	//base64str := base64.StdEncoding.EncodeToString([]byte(funcName))
-	gorpc.MGR.Send("GateServer", "SendRpc", m)
+	SendRpc(funcName, buffer, target)
+	lgate.SendRpc(target, funcName, buffer, ldefine.RPCMSG_FLAG_CALL)
 
 	resp, ok := igo.CallActor("CallRpcServer", "CallRpc", session)
 	if resp == nil || !ok { //既然调用call了就是为了返回数据，nil是不能接受的
@@ -243,15 +245,15 @@ func CallRpc(igo gorpc.IGoRoutine, funcName string, data interface{}, target int
 // RpcBoolResult 构造一个rpc result返回结果
 func RpcBoolResult(ret bool) []byte {
 	if ret {
-		return base.IntToBytes(1)
+		return lbase.IntToBytes(1)
 	} else {
-		return base.IntToBytes(0)
+		return lbase.IntToBytes(0)
 	}
 }
 
 // RpcBoolResultOK rpc的返回结果
 func RpcBoolResultOK(data []byte, ok bool) bool {
-	if ok && base.BytesToInt(data) == 1 {
+	if ok && lbase.BytesToInt(data) == 1 {
 		return true
 	}
 	return false
@@ -266,9 +268,9 @@ func SendActor(actorName string, actorHandler string, data interface{}) {
 	gorpc.MGR.Send(actorName, actorHandler, m)
 }
 
-// BindGate 绑定网关信息
-func BindGate(userid, gateid int) {
-	gate.BindGate(userid, gateid)
+// BindClientGate 绑定网关信息
+func BindClientGate(userid, gateid int) {
+	lgate.BindClientGate(userid, gateid)
 }
 
 // Publish sub/pub系统，只在本节点服务内生效
@@ -300,13 +302,13 @@ func Subscribe(igo gorpc.IGoRoutine, key string, call gorpc.HandlerFunc) { //订
 	name := igo.GetName()
 	var handler string
 	if call != nil {
-		handler = util.RpcFuncName(call)
+		handler = lutil.RpcFuncName(call)
 		igo.Register(handler, call)
 	} else {
 		handler = ""
 	}
 
-	bitstream := base.NewBitStreamS(base.BitStrLen(name) + base.BitStrLen(key) + base.BitStrLen(handler) + 1)
+	bitstream := lbase.NewBitStreamS(lbase.BitStrLen(name) + lbase.BitStrLen(key) + lbase.BitStrLen(handler) + 1)
 	bitstream.WriteString(name)
 	bitstream.WriteString(key)
 	bitstream.WriteString(handler)
@@ -315,20 +317,26 @@ func Subscribe(igo gorpc.IGoRoutine, key string, call gorpc.HandlerFunc) { //订
 
 // GetSocketNum 获取socket的连接数
 func GetSocketNum() int {
-	return gate.GetSocketNum()
+	return lgate.GetSocketNum()
 }
 
 // GetUserGate 获取玩家所属gate id
 func GetUserGate(userId int) int {
-	return gate.GetGateId(userId)
+	return lgate.GetGateId(userId)
 }
 
 // GetServerUid 本节点服务uid
 func GetServerUid() int {
-	return config.SERVER_NODE_UID
+	return lconfig.SERVER_NODE_UID
 }
 
 // GetAreaId 服id
 func GetAreaId() int {
-	return config.NET_NODE_ID
+	return lconfig.NET_NODE_ID
+}
+
+// CloseServer 服uid
+func CloseServer(uid int) {
+	llog.Infof("CloseServer: %d", uid)
+	lgate.CloseServer(uid)
 }

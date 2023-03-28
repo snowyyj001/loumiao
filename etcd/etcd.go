@@ -4,13 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/snowyyj001/loumiao/util"
-
+	"github.com/snowyyj001/loumiao/lconfig"
+	"github.com/snowyyj001/loumiao/ldefine"
+	"github.com/snowyyj001/loumiao/lutil"
 	"sync"
 	"time"
 
-	"github.com/snowyyj001/loumiao/config"
-	"github.com/snowyyj001/loumiao/define"
 	"github.com/snowyyj001/loumiao/etcf"
 	"github.com/snowyyj001/loumiao/llog"
 	"github.com/snowyyj001/loumiao/nodemgr"
@@ -166,7 +165,7 @@ func (self *EtcdBase) SetLease(timeNum int64, keepalive bool) error {
 		self.canclefunc = cancelFunc
 		self.keepAliveChan = leaseRespChan
 
-		util.Go(func() {
+		lutil.Go(func() {
 			self.listenLeaseRespChan()
 		})
 	}
@@ -316,7 +315,7 @@ func (self *ClientDis) WatchCommon(prefix string, handler func(string, string, b
 	self.otherFunc.Store(prefix, handler)
 	self.extractOthers(handler, resp)
 
-	util.Go(func() {
+	lutil.Go(func() {
 		self.watcher(prefix)
 	})
 	return nil
@@ -355,7 +354,7 @@ func (self *ClientDis) leaseCallBack(success bool) {
 		llog.Errorf("etcd lease 续租失败")
 	T:
 		llog.Debug("尝试重新续租")
-		err := self.SetLease(int64(config.GAME_LEASE_TIME), true)
+		err := self.SetLease(int64(lconfig.GAME_LEASE_TIME), true)
 		if err != nil {
 			llog.Debugf("尝试重新续租失败: err=%s", err.Error())
 			time.Sleep(time.Second)
@@ -377,7 +376,7 @@ func (self *ClientDis) PutStatus() error {
 }
 
 func (self *ClientDis) PutNode() error {
-	obj, _ := json.Marshal(&config.Cfg.NetCfg)
+	obj, _ := json.Marshal(&lconfig.Cfg.NetCfg)
 	return self.PutService(self.etcdKey, string(obj))
 }
 
@@ -388,7 +387,7 @@ func (self *ClientDis) SetValue(prefix, val string) error {
 // 创建服务发现
 func NewEtcd() (*ClientDis, error) {
 	conf := clientv3.Config{
-		Endpoints:   config.Cfg.EtcdAddr,
+		Endpoints:   lconfig.Cfg.EtcdAddr,
 		DialTimeout: 3 * time.Second,
 	}
 	if client, err := clientv3.New(conf); err == nil {
@@ -400,14 +399,14 @@ func NewEtcd() (*ClientDis, error) {
 			This = nil
 			return nil, err
 		}
-		llog.Infof("etcd connect success: %v", config.Cfg.EtcdAddr)
+		llog.Infof("etcd connect success: %v", lconfig.Cfg.EtcdAddr)
 		disEtcd := &ClientDis{
 			EtcdBase: EtcdBase{client: client},
 		}
-		disEtcd.etcdKey = fmt.Sprintf("%s%d/%s", define.ETCD_NODEINFO, config.NET_NODE_ID, config.NET_GATE_SADDR)
-		disEtcd.statusKey = fmt.Sprintf("%s%d/%s", define.ETCD_NODESTATUS, config.NET_NODE_ID, config.NET_GATE_SADDR)
+		disEtcd.etcdKey = fmt.Sprintf("%s%d/%s", ldefine.ETCD_NODEINFO, lconfig.NET_NODE_ID, lconfig.NET_GATE_SADDR)
+		disEtcd.statusKey = fmt.Sprintf("%s%d/%s", ldefine.ETCD_NODESTATUS, lconfig.NET_NODE_ID, lconfig.NET_GATE_SADDR)
 		disEtcd.SetLeasefunc(disEtcd.leaseCallBack)
-		disEtcd.SetLease(int64(config.GAME_LEASE_TIME), true)
+		disEtcd.SetLease(int64(lconfig.GAME_LEASE_TIME), true)
 
 		return disEtcd, nil
 	} else {

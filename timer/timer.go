@@ -1,7 +1,7 @@
 package timer
 
 import (
-	"github.com/snowyyj001/loumiao/util"
+	"github.com/snowyyj001/loumiao/lutil"
 	"time"
 )
 
@@ -28,7 +28,7 @@ func NewTimer(dt int, cb func(dt int64) bool, repeat bool) *Timer {
 
 	go func(t *Timer) {
 		defer func() {
-			util.Recover()
+			lutil.Recover()
 			t.t2.Stop()
 		}()
 		utm := time.Now().UnixNano() / int64(time.Millisecond)
@@ -74,7 +74,7 @@ func NewTicker(dt int, cb func(dt int64) bool) *Timer {
 
 	go func(timer *Timer) {
 		defer func() {
-			util.Recover()
+			lutil.Recover()
 			timer.t1.Stop()
 		}()
 		utm := time.Now().UnixNano() / int64(time.Millisecond)
@@ -115,7 +115,7 @@ func DelayJob(dt int64, cb func(), sync bool) {
 		cb()
 	} else {
 		go func() {
-			defer util.Recover()
+			defer lutil.Recover()
 			<-time.After(time.Duration(dt) * time.Millisecond)
 			cb()
 		}()
