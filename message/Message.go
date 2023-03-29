@@ -1,9 +1,9 @@
 package message
 
 import (
-	"encoding/binary"
 	_ "fmt"
 	"github.com/snowyyj001/loumiao/lconfig"
+	"github.com/snowyyj001/loumiao/lutil"
 	"reflect"
 	"sync"
 )
@@ -13,6 +13,10 @@ const (
 	MSGNAME_SIZE = 36 //消息名最大长度
 
 	Flag_RPC int = 1 << 0
+)
+
+var (
+	ENCRYPTION_KEY uint32 = 123 //消息报加密key
 )
 
 type MsgPool struct {
@@ -77,7 +81,7 @@ func GetPakcet(name string) interface{} {
 }
 
 /*
-func PutPakcet(name string, data interface{}) {
+func PutPacket(name string, data interface{}) {
 	packetFunc, exist := Packet_CreateFactorStringMap[name]
 	if exist {
 		packetFunc.cache.Put(data)
@@ -85,8 +89,28 @@ func PutPakcet(name string, data interface{}) {
 }
 */
 
-// 替换消息包的target字段(5,6字节)
-func ReplacePakcetTarget(target int32, buff []byte) {
-	tmp := uint16(target)
-	binary.BigEndian.PutUint16(buff[4:], tmp)
+func EnableEncryptDecrypt() {
+	ENCRYPTION_KEY = uint32(lutil.Random(10000))
+}
+
+func EncryptBuffer(buff []byte, sz int) {
+	if ENCRYPTION_KEY == 0 {
+		return
+	}
+	buff[5] = 1
+	for i := 6; i < sz; i++ {
+		buff[i] = byte(uint32(buff[i]) ^ ENCRYPTION_KEY)
+	}
+}
+
+func DecryptBuffer(buff []byte, sz int) {
+	if ENCRYPTION_KEY == 0 {
+		return
+	}
+	if buff[5] == 0 {
+		return
+	}
+	for i := 6; i < sz; i++ {
+		buff[i] = byte(uint32(buff[i]) ^ ENCRYPTION_KEY)
+	}
 }

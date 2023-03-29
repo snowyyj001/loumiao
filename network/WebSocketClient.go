@@ -2,6 +2,7 @@ package network
 
 import (
 	"github.com/gorilla/websocket"
+	"github.com/snowyyj001/loumiao/lconfig"
 	"github.com/snowyyj001/loumiao/llog"
 	"github.com/snowyyj001/loumiao/lutil"
 	"github.com/snowyyj001/loumiao/message"
@@ -87,8 +88,14 @@ func wsServerClientWriteRoutine(pClient *WebSocketClient) bool {
 
 		select {
 		case m := <-pClient.m_WriteChan:
+			if lconfig.NET_NODE_TYPE == lconfig.ServerType_Gate {
+				message.EncryptBuffer(m, len(m))
+			}
 			pClient.sendClient(m)
 		case <-bMsg.c:
+			if lconfig.NET_NODE_TYPE == lconfig.ServerType_Gate {
+				message.EncryptBuffer(bMsg.buffer, len(bMsg.buffer))
+			}
 			pClient.sendClient(bMsg.buffer)
 			pClient.m_broadMsgId++
 			bMsg = broadMsgArray[pClient.m_broadMsgId]
@@ -111,19 +118,22 @@ func wsServerClientReadRoutine(pClient *WebSocketClient) bool {
 			break
 		}
 
-		mt, message, err := pClient.m_WsConn.ReadMessage()
+		mt, buff, err := pClient.m_WsConn.ReadMessage()
 		if err != nil {
 			llog.Infof("远程链接：%s已经关闭！%v\n", pClient.GetSAddr(), err)
 			pClient.OnNetFail(1)
 			break
 		}
 		if mt != websocket.BinaryMessage {
-			llog.Infof("远程read内容格式错误: %s！ %s", pClient.GetSAddr(), string(message))
+			llog.Infof("远程read内容格式错误: %s！ %s", pClient.GetSAddr(), string(buff))
 			pClient.OnNetFail(2)
 			break
 		}
 
-		ok := pClient.ReceivePacket(pClient.m_ClientId, message)
+		if lconfig.NET_NODE_TYPE == lconfig.ServerType_Gate {
+			message.DecryptBuffer(buff, len(buff))
+		}
+		ok := pClient.ReceivePacket(pClient.m_ClientId, buff)
 		if !ok {
 			llog.Errorf("远程ReceivePacket错误: %s！", pClient.GetSAddr())
 			pClient.OnNetFail(3)

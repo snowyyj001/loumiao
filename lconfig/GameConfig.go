@@ -10,7 +10,7 @@ var (
 
 	NET_MAX_CONNS           = 50000            //最大连接数
 	NET_MAX_RPC_CONNS       = 1024             //rpc最大连接数
-	NET_BUFFER_SIZE         = 1024 * 32        //最大消息包长度32k(对外)
+	NET_BUFFER_SIZE         = 1024 * 1024 * 2  //最大消息包长度2M(对外)
 	NET_CLUSTER_BUFFER_SIZE = 16 * 1024 * 1024 //最大消息包长度16M(对内)
 	NET_MAX_NUMBER          = 10000            //pcu
 	NET_MAX_WRITE_CHANSIZE  = 20000            //socket写缓冲

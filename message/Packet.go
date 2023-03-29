@@ -17,7 +17,7 @@ import (
 //消息buffer以大端传输
 //4+2+2+name+msg
 //1，2，3，4字节代表消息报总长度
-//5，6字节代表目标服务器类型/目标服务器uid
+//5，6字节代表目标服务器uid/压缩标签，加密标签
 //7，8字节代表消息名长度
 
 // Encode target: 目标服务器类型/id
@@ -70,10 +70,6 @@ func EncodeProBuff(target int, name string, packet interface{}) ([]byte, int) {
 func DecodeProBuff(uid int, buff []byte, length int) (error, int, string, interface{}) {
 	mbuff1 := buff[4:6]
 	target := int(lbase.BytesToUInt16(mbuff1, binary.BigEndian))
-
-	if target > 0 && target != uid { //do not need decode anymore, a msg to other server
-		return nil, target, "", nil
-	}
 
 	mbuff1 = buff[6:8]
 	nameLen := lbase.BytesToUInt16(mbuff1, binary.BigEndian)

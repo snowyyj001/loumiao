@@ -1,6 +1,7 @@
 package network
 
 import (
+	"github.com/snowyyj001/loumiao/lconfig"
 	"github.com/snowyyj001/loumiao/llog"
 	"github.com/snowyyj001/loumiao/lutil"
 	"github.com/snowyyj001/loumiao/message"
@@ -96,8 +97,14 @@ func serverWriteRoutine(pClient *ServerSocketClient) bool {
 
 		select {
 		case m := <-pClient.m_WriteChan:
+			if lconfig.NET_NODE_TYPE == lconfig.ServerType_Gate {
+				message.EncryptBuffer(m, len(m))
+			}
 			pClient.sendClient(m)
 		case <-bMsg.c:
+			if lconfig.NET_NODE_TYPE == lconfig.ServerType_Gate {
+				message.EncryptBuffer(bMsg.buffer, len(bMsg.buffer))
+			}
 			pClient.sendClient(bMsg.buffer)
 			pClient.m_broadMsgId++
 			bMsg = broadMsgArray[pClient.m_broadMsgId]
@@ -132,6 +139,9 @@ func serverReadRoutine(pClient *ServerSocketClient) bool {
 			break
 		}
 		if n > 0 {
+			if lconfig.NET_NODE_TYPE == lconfig.ServerType_Gate {
+				message.DecryptBuffer(buff, n)
+			}
 			ok := pClient.ReceivePacket(pClient.m_ClientId, buff[:n])
 			if !ok {
 				llog.Errorf("远程ReceivePacket错误: %s！", pClient.GetSAddr())
