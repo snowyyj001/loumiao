@@ -30,12 +30,11 @@ type ETKeyValue struct {
 }
 
 const (
-	GET_VALUE_TIMEOUT   = 3    //GetValue超时时间,秒
-	WRITE_VALUE_TIMEOUT = 30   //写操作超时时间,毫秒
-	LEASE_TIME          = 1000 //租约心跳时间,毫秒
-	PUT_STATUS_TIME     = 2    //刷新服务状态时间
-
-	LEASE_SERVER_TIMEOUT = 5 //租约超时时间，秒
+	GET_VALUE_TIMEOUT    = 3    //GetValue超时时间,秒
+	WRITE_VALUE_TIMEOUT  = 30   //写操作超时时间,毫秒
+	LEASE_TIME           = 1000 //租约心跳时间,毫秒
+	PUT_STATUS_TIME      = 2    //刷新服务状态时间
+	LEASE_SERVER_TIMEOUT = 5    //租约超时时间，秒
 )
 
 func newEtcfClient() (*EtcfClient, error) {

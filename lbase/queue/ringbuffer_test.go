@@ -2,7 +2,7 @@ package queue_test
 
 import (
 	"fmt"
-	"github.com/snowyyj001/loumiao/base/queue"
+	"github.com/snowyyj001/loumiao/lbase/queue"
 	"sync"
 	"testing"
 	"time"

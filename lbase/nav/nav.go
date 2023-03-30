@@ -2,8 +2,9 @@ package detour
 
 import (
 	"fmt"
-	"github.com/snowyyj001/loumiao/base/lmath"
-	"github.com/snowyyj001/loumiao/base/vector"
+	"github.com/snowyyj001/loumiao/lbase"
+	"github.com/snowyyj001/loumiao/lbase/lmath"
+	"github.com/snowyyj001/loumiao/lbase/vector"
 	"io/ioutil"
 	"math"
 	"strings"

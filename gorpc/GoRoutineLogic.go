@@ -438,11 +438,11 @@ func (self *GoRoutineLogic) Send(handler_name string, sdata *M) {
 	}
 	left := self.LeftJobNumber()
 	if left > self.GetWarnChanLen() && self.GetWarningTime() < lbase.TimeStampSec() {
-		llog.Errorf("GoRoutineLogic.Send:[src=%s,target=%s (chan may overlow[now=%d, max=%d])] func=%s", self.Name, self.GetName(), self.LeftJobNumber(), self.GetChanLen(), handler_name)
+		llog.Errorf("GoRoutineLogic.Send:[src=%s,target=%s (chan may overflow[now=%d, max=%d])] func=%s", self.Name, self.GetName(), self.LeftJobNumber(), self.GetChanLen(), handler_name)
 		self.SetWarningTime(lbase.TimeStampSec() + CHAN_OVERLOW)
 	}
 	if left > self.GetChanLen() {
-		llog.Errorf("GoRoutineLogic.Send:[src=%s,target=%s (chan overlow[now=%d, max=%d])] func=%s", self.Name, self.GetName(), self.LeftJobNumber(), self.GetChanLen(), handler_name)
+		llog.Errorf("GoRoutineLogic.Send:[src=%s,target=%s (chan overflow[now=%d, max=%d])] func=%s", self.Name, self.GetName(), self.LeftJobNumber(), self.GetChanLen(), handler_name)
 	}
 	job := ChannelContext{Handler: handler_name}
 	if sdata != nil {

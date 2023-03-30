@@ -1,8 +1,8 @@
 package detour
 
 import (
-	"github.com/snowyyj001/loumiao/base/lmath"
-	"github.com/snowyyj001/loumiao/base/vector"
+	"github.com/snowyyj001/loumiao/lbase/lmath"
+	"github.com/snowyyj001/loumiao/lbase/vector"
 	"testing"
 )
 

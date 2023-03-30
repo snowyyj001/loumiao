@@ -1,7 +1,7 @@
 package aoi
 
 import (
-	"github.com/snowyyj001/loumiao/base/lmath"
+	"github.com/snowyyj001/loumiao/lbase/lmath"
 	"sync"
 )
 

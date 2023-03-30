@@ -1,6 +1,7 @@
 package lmath
 
 import (
+	"github.com/snowyyj001/loumiao/lbase"
 	"math"
 )
 
@@ -35,7 +36,7 @@ func M_point3F_normalize_C(p []float32) {
 }
 
 func M_point3F_normalize_f_C(p []float32, val float32) {
-	factor := val / float32(math.Sqrt(float64(p[0]*p[0] + p[1]*p[1] + p[2]*p[2])))
+	factor := val / float32(math.Sqrt(float64(p[0]*p[0]+p[1]*p[1]+p[2]*p[2])))
 	p[0] *= factor
 	p[1] *= factor
 	p[2] *= factor
@@ -115,7 +116,7 @@ func M_matF_identity_C(m []float32) {
 }
 
 func M_matF_set_euler_C(e []float32, result []float32) {
-	AXIS_X, AXIS_Y, AXIS_Z := 1 << 0, 1 << 1, 1 << 2
+	AXIS_X, AXIS_Y, AXIS_Z := 1<<0, 1<<1, 1<<2
 	axis := 0
 	if e[0] != 0.0 {
 		axis |= AXIS_X

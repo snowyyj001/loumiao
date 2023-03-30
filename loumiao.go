@@ -211,7 +211,7 @@ func CallRpc(igo gorpc.IGoRoutine, funcName string, data interface{}, target int
 	var buffer []byte
 	if data == nil {
 		buffer = []byte{}
-	} else if reflect.TypeOf(data).Kind() == reflect.Slice { //bitstream
+	} else if reflect.TypeOf(data).Kind() == reflect.Slice { //bitstream or original []byte
 		orgBuff := data.([]byte)
 		bitstream := lbase.NewBitStreamS(len(orgBuff) + lbase.BitStrLen(session))
 		bitstream.WriteString(session)
@@ -242,8 +242,8 @@ func CallRpc(igo gorpc.IGoRoutine, funcName string, data interface{}, target int
 	return resp.([]byte), ok
 }
 
-// RpcBoolResult 构造一个rpc result返回结果
-func RpcBoolResult(ret bool) []byte {
+// RpcResult 构造一个rpc result返回结果
+func RpcResult(ret bool) []byte {
 	if ret {
 		return lbase.IntToBytes(1)
 	} else {
@@ -251,8 +251,8 @@ func RpcBoolResult(ret bool) []byte {
 	}
 }
 
-// RpcBoolResultOK rpc的返回结果
-func RpcBoolResultOK(data []byte, ok bool) bool {
+// RpcResultOK rpc的返回结果
+func RpcResultOK(data []byte, ok bool) bool {
 	if ok && lbase.BytesToInt(data) == 1 {
 		return true
 	}

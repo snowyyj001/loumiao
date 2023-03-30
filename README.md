@@ -75,6 +75,12 @@ loumiao.SendRpc("matchserver/pvp.joinMatchRoom", pack, 0)
 ```
 resp, ok := loumiao.CallRpc(this, "dbserver/game.loadUserData", stream.GetBuffer(), 0)
 ```
+玩家数据落地，world绑定了dbserver
+```
+ret, ok := loumiao.CallRpc(self, "dbserver/save.safeSaveUserData", b, define.CheckDbServerUid())
+return loumiao.RpcResultOK(ret, ok)
+```
+
 
 ## 如何创建一个服务节点
 

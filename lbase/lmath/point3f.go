@@ -1,6 +1,7 @@
 package lmath
 
 import (
+	"github.com/snowyyj001/loumiao/lbase"
 	"math"
 	"unsafe"
 )
@@ -67,13 +68,13 @@ func (this *Point3F) MagnitudeSafe() float32 {
 
 func (this *Point3F) Equal(p *Point3F) bool {
 	return (math.Abs(float64(this.X-p.X)) < POINT_EPSILON) &&
-			(math.Abs(float64(this.Y-p.Y)) < POINT_EPSILON) &&
-			(math.Abs(float64(this.Z-p.Z)) < POINT_EPSILON)
+		(math.Abs(float64(this.Y-p.Y)) < POINT_EPSILON) &&
+		(math.Abs(float64(this.Z-p.Z)) < POINT_EPSILON)
 }
 
 func (this *Point3F) Equal1(p *Point3F) bool {
 	return (math.Abs(float64(this.X-p.X)) < 600) &&
-			(math.Abs(float64(this.Y-p.Y)) < 600)
+		(math.Abs(float64(this.Y-p.Y)) < 600)
 }
 
 func (this *Point3F) Neg() {
