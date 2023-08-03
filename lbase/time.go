@@ -188,3 +188,16 @@ func DayStartOnTimeZone(timeOffset int) int64 {
 	checkTimeStart := TimeNow().Add(timeD).Add(0).Truncate(time.Hour * 24).Add(-timeD).Add(time.Hour * time.Duration(timeOffset))
 	return checkTimeStart.Unix()
 }
+
+// 是否在星期的某一天
+// @nowTime 当前时间 @day周几(1~7) @hour每天几点算第一天
+func IsTheWeekDay(nowTime time.Time, day, hour int32) bool {
+	_, timeOffset := nowTime.Zone()
+	timeD := time.Duration(timeOffset) * time.Second
+	checkTimeStart := nowTime.Add(timeD).Truncate(time.Hour * 24 * 7).Add(-timeD).Add(time.Hour * time.Duration((day-1)*24+hour))
+	checkTimeEnd := nowTime.Add(timeD).Truncate(time.Hour * 24 * 7).Add(-timeD).Add(time.Hour * time.Duration((day)*24+hour))
+	if nowTime.After(checkTimeStart) && nowTime.Before(checkTimeEnd) {
+		return true
+	}
+	return false
+}

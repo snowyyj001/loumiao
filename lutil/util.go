@@ -17,8 +17,12 @@ import (
 	"time"
 )
 
+var (
+	myRd *rand2.Rand
+)
+
 func init() {
-	rand2.Seed(time.Now().UnixNano())
+	myRd = rand2.New(rand2.NewSource(time.Now().Unix()))
 }
 
 func Recover() {
@@ -45,22 +49,22 @@ func RpcFuncName(call interface{}) string {
 
 // 随机数[0,n)
 func Random(n int) int {
-	return int(rand2.Int31n(int32(n)))
+	return int(myRd.Int31n(int32(n)))
 }
 
 // 随机数[n1,n2)
 func Randomd(n1, n2 int) int {
-	return n1 + int(rand2.Int31n(int32(n2-n1)))
+	return n1 + int(myRd.Int31n(int32(n2-n1)))
 }
 
 // 随机数[0,n)
 func Random64(n int64) int64 {
-	return rand2.Int63n(n)
+	return myRd.Int63n(n)
 }
 
 // 随机数[n1,n2)
 func Randomd64(n1, n2 int64) int64 {
-	return n1 + rand2.Int63n(n2-n1)
+	return n1 + myRd.Int63n(n2-n1)
 }
 
 // Clamp 截断

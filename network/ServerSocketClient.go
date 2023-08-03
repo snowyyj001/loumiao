@@ -29,7 +29,6 @@ func (self *ServerSocketClient) Start() bool {
 	if self.pServer == nil {
 		return false
 	}
-	self.m_bShuttingDown = false
 	self.m_nState = SSF_CONNECT
 	//self.m_Conn.(*net.TCPConn).SetNoDelay(true)		//default is true，禁用Nagle算法
 	//self.m_Conn.(*net.TCPConn).SetKeepAlive(true)		//default is enable，链接检测
@@ -66,16 +65,14 @@ func (self *ServerSocketClient) OnNetConn() {
 func (self *ServerSocketClient) OnNetFail(errcode int) {
 	buff, nLen := message.Encode(0, "DISCONNECT", nil)
 	self.HandlePacket(self.m_ClientId, buff, nLen)
-	self.Close()
 }
 
-func (self *ServerSocketClient) Close() {
-
+func (self *ServerSocketClient) Stop() {
 	if self.pServer != nil {
-		self.pServer.DelClinet(self)
+		self.pServer.DelClient(self)
 		self.pServer = nil
 	}
-	self.Socket.Close()
+	self.m_WriteChan <- []byte{}
 }
 
 // write msg
@@ -87,16 +84,11 @@ func serverWriteRoutine(pClient *ServerSocketClient) bool {
 
 	bMsg := broadMsgArray[pClient.m_broadMsgId]
 	for {
-		if pClient.m_bShuttingDown {
-			break
-		}
-
-		if pClient.m_nState == SSF_SHUT_DOWN {
-			break
-		}
-
 		select {
 		case m := <-pClient.m_WriteChan:
+			if len(m) == 0 {
+				goto EndLabel
+			}
 			if lconfig.NET_NODE_TYPE == lconfig.ServerType_Gate {
 				message.EncryptBuffer(m, len(m))
 			}
@@ -111,6 +103,8 @@ func serverWriteRoutine(pClient *ServerSocketClient) bool {
 		}
 	}
 
+EndLabel:
+	pClient.Close()
 	return true
 }
 
@@ -122,11 +116,6 @@ func serverReadRoutine(pClient *ServerSocketClient) bool {
 	}
 	var buff = make([]byte, pClient.m_MaxReceiveBufferSize)
 	for {
-		if pClient.m_bShuttingDown {
-			llog.Infof("远程链接：%s已经被关闭！", pClient.GetSAddr())
-			pClient.OnNetFail(0)
-			break
-		}
 		n, err := pClient.m_Conn.Read(buff)
 		if err == io.EOF {
 			llog.Infof("远程m_Conn：%s已经关闭！", pClient.GetSAddr())

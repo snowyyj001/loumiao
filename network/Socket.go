@@ -7,6 +7,7 @@ import (
 	"github.com/snowyyj001/loumiao/lutil"
 	"net"
 	"sync"
+	"sync/atomic"
 
 	"github.com/xtaci/kcp-go"
 
@@ -64,7 +65,7 @@ type (
 		m_WsConn               *websocket.Conn
 		m_KcpConn              *kcp.UDPSession
 		m_sAddr                string
-		m_nState               int
+		m_nState               int32
 		m_nConnectType         int
 		m_MaxReceiveBufferSize int
 		m_MaxSendBufferSize    int
@@ -75,10 +76,9 @@ type (
 		m_AcceptedNum  int
 		m_ConnectedNum int
 
-		m_SendTimes     int
-		m_ReceiveTimes  int
-		m_bShuttingDown bool
-		m_PacketFunc    HandleFunc
+		m_SendTimes    int
+		m_ReceiveTimes int
+		m_PacketFunc   HandleFunc
 
 		m_pInBufferLen int
 		m_pInBuffer    []byte
@@ -139,11 +139,11 @@ func (self *Socket) OnNetFail(int) {
 }
 
 func (self *Socket) GetState() int {
-	return self.m_nState
+	return int(self.m_nState)
 }
 
 func (self *Socket) SetState(state int) {
-	self.m_nState = state
+	self.m_nState = int32(state)
 }
 
 func (self *Socket) Send(buffer []byte) int {
@@ -170,14 +170,16 @@ func (self *Socket) Clear() {
 	self.m_Conn = nil
 	self.m_WsConn = nil
 	self.m_KcpConn = nil
-	self.m_bShuttingDown = true
 	self.m_nConnectType = -1
 }
 
 func (self *Socket) Close() {
-	if self.m_nState == SSF_SHUT_DOWN {
+	if !atomic.CompareAndSwapInt32(&self.m_nState, SSF_CONNECT, SSF_SHUT_DOWN) {
 		return
 	}
+
+	self.m_WriteChan <- []byte{}
+
 	if self.m_Conn != nil {
 		self.m_Conn.Close()
 	}
@@ -188,7 +190,6 @@ func (self *Socket) Close() {
 		self.m_KcpConn.Close()
 	}
 	self.Clear()
-
 }
 
 func (self *Socket) GetMaxReceiveBufferSize() int {

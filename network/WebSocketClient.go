@@ -30,7 +30,6 @@ func (self *WebSocketClient) Start() bool {
 	if self.pServer == nil {
 		return false
 	}
-	self.m_bShuttingDown = false
 	self.m_nState = SSF_ACCEPT
 
 	//self.m_WsConn.SetReadDeadline(time.Now().Add(10 * time.Second))
@@ -52,24 +51,22 @@ func (self *WebSocketClient) sendClient(buff []byte) int {
 
 func (self *WebSocketClient) OnNetConn() {
 	buff, nLen := message.Encode(0, "CONNECT", nil)
-	//bufflittle := common.BigEngianToLittle(buff, nLen)
 	self.HandlePacket(self.m_ClientId, buff, nLen)
 }
 
 func (self *WebSocketClient) OnNetFail(error int) {
 	buff, nLen := message.Encode(0, "DISCONNECT", nil)
-	//bufflittle := common.BigEngianToLittle(buff, nLen)
 	self.HandlePacket(self.m_ClientId, buff, nLen)
-	self.Close()
 }
 
-func (self *WebSocketClient) Close() {
+func (self *WebSocketClient) Stop() {
 	if self.pServer != nil {
-		self.pServer.DelClinet(self)
+		self.pServer.DelClient(self)
 		self.pServer = nil
 	}
-	self.Socket.Close()
+	self.m_WriteChan <- []byte{}
 }
+
 func wsServerClientWriteRoutine(pClient *WebSocketClient) bool {
 	defer lutil.Recover()
 	if pClient.m_Conn == nil {
@@ -78,16 +75,11 @@ func wsServerClientWriteRoutine(pClient *WebSocketClient) bool {
 
 	bMsg := broadMsgArray[pClient.m_broadMsgId]
 	for {
-		if pClient.m_bShuttingDown {
-			break
-		}
-
-		if pClient.m_nState == SSF_SHUT_DOWN {
-			break
-		}
-
 		select {
 		case m := <-pClient.m_WriteChan:
+			if m == nil || len(m) == 0 {
+				goto EndLabel
+			}
 			if lconfig.NET_NODE_TYPE == lconfig.ServerType_Gate {
 				message.EncryptBuffer(m, len(m))
 			}
@@ -102,6 +94,8 @@ func wsServerClientWriteRoutine(pClient *WebSocketClient) bool {
 		}
 	}
 
+EndLabel:
+	pClient.Close()
 	return true
 }
 
@@ -112,12 +106,6 @@ func wsServerClientReadRoutine(pClient *WebSocketClient) bool {
 	}
 
 	for {
-		if pClient.m_bShuttingDown {
-			llog.Infof("远程链接：%s已经被关闭！", pClient.GetSAddr())
-			pClient.OnNetFail(0)
-			break
-		}
-
 		mt, buff, err := pClient.m_WsConn.ReadMessage()
 		if err != nil {
 			llog.Infof("远程链接：%s已经关闭！%v\n", pClient.GetSAddr(), err)

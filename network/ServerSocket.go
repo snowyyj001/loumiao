@@ -18,29 +18,27 @@ type IServerSocket interface {
 	GetClientById(int) *ServerSocketClient
 	LoadClient() *ServerSocketClient
 	AddClinet(*net.TCPConn, string, int) *ServerSocketClient
-	DelClinet(*ServerSocketClient) bool
+	DelClient(*ServerSocketClient) bool
 	StopClient(int)
 	ClientRemoteAddr(clientid int) string
 }
 
 type ServerSocket struct {
 	Socket
-	m_nClientCount  int
-	mMaxClients     int
-	mMinClients     int
-	m_nIdSeed       int64
-	m_bShuttingDown bool
-	m_ClientList    map[int]*ServerSocketClient
-	m_ClientLocker  *sync.RWMutex
-	m_Listen        *net.TCPListener
-	m_Lock          sync.Mutex
+	m_nClientCount int
+	mMaxClients    int
+	mMinClients    int
+	m_nIdSeed      int64
+	m_ClientList   map[int]*ServerSocketClient
+	m_ClientLocker *sync.RWMutex
+	m_Listen       *net.TCPListener
+	m_Lock         sync.Mutex
 }
 
 func (self *ServerSocket) Init(saddr string) bool {
 	self.Socket.Init(saddr)
 	self.m_ClientList = make(map[int]*ServerSocketClient)
 	self.m_ClientLocker = &sync.RWMutex{}
-	self.m_bShuttingDown = true
 	self.m_nState = SSF_INIT
 	return true
 }
@@ -50,7 +48,6 @@ func (self *ServerSocket) Start() bool {
 		llog.Error("ServerSocket.Start error : unkonwen socket type")
 		return false
 	}
-	self.m_bShuttingDown = false
 
 	if self.m_sAddr == "" {
 		llog.Error("ServerSocket Start error, saddr is null")
@@ -129,7 +126,7 @@ func (self *ServerSocket) AddClinet(tcpConn *net.TCPConn, addr string, connectTy
 	return nil
 }
 
-func (self *ServerSocket) DelClinet(pClient *ServerSocketClient) bool {
+func (self *ServerSocket) DelClient(pClient *ServerSocketClient) bool {
 	self.m_ClientLocker.Lock()
 	delete(self.m_ClientList, pClient.m_ClientId)
 	llog.Debugf("客户端：已断开连接[%d]", pClient.m_ClientId)
@@ -141,7 +138,7 @@ func (self *ServerSocket) DelClinet(pClient *ServerSocketClient) bool {
 func (self *ServerSocket) StopClient(id int) {
 	pClinet := self.GetClientById(id)
 	if pClinet != nil {
-		pClinet.Close()
+		pClinet.Stop()
 	}
 }
 

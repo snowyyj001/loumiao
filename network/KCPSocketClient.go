@@ -29,7 +29,6 @@ func (self *KCPSocketClient) Start() bool {
 	if self.m_pServer == nil {
 		return false
 	}
-	self.m_bShuttingDown = false
 	self.m_nState = SSF_CONNECT
 
 	self.OnNetConn()
@@ -82,12 +81,11 @@ func (self *KCPSocketClient) OnNetConn() {
 func (self *KCPSocketClient) OnNetFail(errcode int) {
 	buff, nLen := message.Encode(0, "DISCONNECT", nil)
 	self.HandlePacket(self.m_ClientId, buff, nLen)
-	self.Close()
 }
 
-func (self *KCPSocketClient) Close() {
+func (self *KCPSocketClient) Stop() {
 	if self.m_pServer != nil {
-		self.m_pServer.DelClinet(self)
+		self.m_pServer.DelClient(self)
 		self.m_pServer = nil
 	}
 	self.Socket.Close()
@@ -101,12 +99,6 @@ func kcpclientRoutine(pClient *KCPSocketClient) bool {
 	}
 	var buff = make([]byte, pClient.m_MaxReceiveBufferSize)
 	for {
-		if pClient.m_bShuttingDown {
-			llog.Infof("KCPSocketClient远程链接：%s已经被关闭！", pClient.GetSAddr())
-			pClient.OnNetFail(0)
-			break
-		}
-
 		n, err := pClient.m_KcpConn.Read(buff)
 		if err != nil {
 			llog.Infof("KCPSocketClient远程read错误: %s！ %s", pClient.GetSAddr(), err.Error())

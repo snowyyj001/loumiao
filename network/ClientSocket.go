@@ -33,7 +33,6 @@ func (self *ClientSocket) Start() bool {
 		llog.Error("ClientSocket.Start error : unkonwen socket type")
 		return false
 	}
-	self.m_bShuttingDown = false
 	if self.m_sAddr == "" {
 		return false
 	}
@@ -50,10 +49,6 @@ func (self *ClientSocket) Start() bool {
 }
 
 func (self *ClientSocket) Stop() bool {
-	if self.m_bShuttingDown {
-		return true
-	}
-	self.m_bShuttingDown = true
 	self.Close()
 	return true
 }
@@ -121,10 +116,6 @@ func clientRoutine(pClient *ClientSocket) bool {
 	}
 	var buff = make([]byte, pClient.m_MaxReceiveBufferSize)
 	for {
-		if pClient.m_bShuttingDown {
-			pClient.OnNetFail(3)
-			break
-		}
 		//llog.Debugf("clientRoutine begin read 000: %s", pClient.m_sAddr)
 		n, err := pClient.m_Conn.Read(buff)
 		//llog.Debugf("clientRoutine begin read 111: %d", n, pClient.m_sAddr)

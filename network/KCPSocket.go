@@ -113,7 +113,7 @@ func (self *KcpSocket) ClientRemoteAddr(clientid int) string {
 	return ""
 }
 
-func (self *KcpSocket) DelClinet(pClient *KCPSocketClient) bool {
+func (self *KcpSocket) DelClient(pClient *KCPSocketClient) bool {
 	self.m_ClientLocker.Lock()
 	delete(self.m_ClientList, pClient.m_ClientId)
 	llog.Debugf("KcpSocket 客户端：%s已断开连接[%d]", pClient.m_KcpConn.RemoteAddr().String(), pClient.m_ClientId)

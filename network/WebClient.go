@@ -31,7 +31,6 @@ func (self *WebClient) Start() bool {
 		llog.Error("WebClient.Start error : unkonwen socket type")
 		return false
 	}
-	self.m_bShuttingDown = false
 
 	if self.m_sAddr == "" {
 		return false
@@ -39,7 +38,7 @@ func (self *WebClient) Start() bool {
 
 	if self.Connect() {
 		lutil.Go(func() {
-			wsclientRoutine(self)
+			wsClientRoutine(self)
 		})
 	} else {
 		llog.Errorf("WebClient.Start error : can not connect %s", self.m_sAddr)
@@ -50,10 +49,6 @@ func (self *WebClient) Start() bool {
 }
 
 func (self *WebClient) Stop() bool {
-	if self.m_bShuttingDown {
-		return true
-	}
-	self.m_bShuttingDown = true
 	self.Close()
 	return true
 }
@@ -106,17 +101,13 @@ func (self *WebClient) OnNetFail(int) {
 	self.Close()
 }
 
-func wsclientRoutine(pClient *WebClient) bool {
+func wsClientRoutine(pClient *WebClient) bool {
 	defer lutil.Recover()
 	if pClient.m_WsConn == nil {
 		return false
 	}
 
 	for {
-		if pClient.m_bShuttingDown {
-			break
-		}
-
 		mt, message, err := pClient.m_WsConn.ReadMessage()
 
 		if err != nil {

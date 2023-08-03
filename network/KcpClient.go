@@ -30,7 +30,6 @@ func (self *KcpClient) Start() bool {
 		llog.Error("KcpClient.Start error : unknown socket type")
 		return false
 	}
-	self.m_bShuttingDown = false
 	if self.m_sAddr == "" {
 		return false
 	}
@@ -145,9 +144,6 @@ func clientKcpRoutine(pClient *KcpClient) bool {
 	}
 	var buff = make([]byte, pClient.m_MaxReceiveBufferSize)
 	for {
-		if pClient.m_bShuttingDown {
-			break
-		}
 		n, err := pClient.m_KcpConn.Read(buff)
 		if err == io.EOF {
 			llog.Debugf("0.KcpClient远程链接：%s已经关闭: %s", pClient.m_KcpConn.RemoteAddr().String(), err.Error())

@@ -28,7 +28,7 @@ func (self *UdpClient) Start() bool {
 		llog.Error("UdpClient.Start error : unkonwen socket type")
 		return false
 	}
-	self.m_bShuttingDown = false
+
 	if self.m_sAddr == "" {
 		return false
 	}
@@ -43,10 +43,7 @@ func (self *UdpClient) Start() bool {
 }
 
 func (self *UdpClient) Stop() bool {
-	if self.m_bShuttingDown {
-		return true
-	}
-	self.m_bShuttingDown = true
+
 	self.Close()
 	return true
 }

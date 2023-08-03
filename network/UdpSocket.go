@@ -23,7 +23,7 @@ type IUdpServerSocket interface {
 	GetClientById(int) *UdpSocketClient
 	LoadClient() *UdpSocketClient
 	AddClinet(*net.TCPConn, string, int) *UdpSocketClient
-	DelClinet(*UdpSocketClient) bool
+	DelClient(*UdpSocketClient) bool
 	StopClient(int)
 	ClientRemoteAddr(clientid int) string
 }
@@ -121,7 +121,7 @@ func (self *UdpServerSocket) AddClient(clientId int, addr *net.UDPAddr) *UdpSock
 	return nil
 }
 
-func (self *UdpServerSocket) DelClinet(clientid int) bool {
+func (self *UdpServerSocket) DelClient(clientid int) bool {
 	defer self.m_ClientLocker.Unlock()
 	self.m_ClientLocker.Lock()
 	delete(self.mClientList, clientid)
